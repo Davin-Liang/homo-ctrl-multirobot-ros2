@@ -9,6 +9,8 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+from launch_ros.substitutions import FindPackageShare
 
 
 def _opaque_setup(context, *args, **kwargs):
@@ -78,8 +80,32 @@ def _opaque_setup(context, *args, **kwargs):
         [get_package_share_directory("homo_multirobot_urdf"), "urdf", "mini_omni_robot.xacro"]
     )
 
-    robot1_urdf = Command(["xacro", " ", xacro_path, " ", "prefix:=", robot1_prefix])
-    robot2_urdf = Command(["xacro", " ", xacro_path, " ", "prefix:=", robot2_prefix])
+    robot1_urdf = Command(
+        [
+            "xacro",
+            " ",
+            xacro_path,
+            " ",
+            "prefix:=",
+            robot1_prefix,
+            " ",
+            "ros_namespace:=",
+            robot1_namespace,
+        ]
+    )
+    robot2_urdf = Command(
+        [
+            "xacro",
+            " ",
+            xacro_path,
+            " ",
+            "prefix:=",
+            robot2_prefix,
+            " ",
+            "ros_namespace:=",
+            robot2_namespace,
+        ]
+    )
 
     robot_state_pub_robot1 = Node(
         package="robot_state_publisher",
@@ -87,7 +113,10 @@ def _opaque_setup(context, *args, **kwargs):
         output="screen",
         namespace=robot1_namespace,
         parameters=[
-            {"use_sim_time": use_sim_time, "robot_description": robot1_urdf},
+            {
+                "use_sim_time": use_sim_time,
+                "robot_description": ParameterValue(robot1_urdf, value_type=str),
+            },
         ],
     )
 
@@ -97,7 +126,10 @@ def _opaque_setup(context, *args, **kwargs):
         output="screen",
         namespace=robot2_namespace,
         parameters=[
-            {"use_sim_time": use_sim_time, "robot_description": robot2_urdf},
+            {
+                "use_sim_time": use_sim_time,
+                "robot_description": ParameterValue(robot2_urdf, value_type=str),
+            },
         ],
     )
 
@@ -116,6 +148,69 @@ def _opaque_setup(context, *args, **kwargs):
         output="screen",
         namespace=robot2_namespace,
         parameters=[{"use_sim_time": use_sim_time}],
+    )
+
+    r1_prefix = context.perform_substitution(LaunchConfiguration("robot1_prefix"))
+    r2_prefix = context.perform_substitution(LaunchConfiguration("robot2_prefix"))
+    child_r1_base_footprint = f"{r1_prefix}base_footprint"
+    child_r2_base_footprint = f"{r2_prefix}base_footprint"
+
+    publish_world_tf = LaunchConfiguration("publish_world_tf")
+    use_rviz = LaunchConfiguration("use_rviz")
+    rviz_config = LaunchConfiguration("rviz_config")
+
+    # 将两车 URDF 根 link 挂到 world，便于 RViz Fixed Frame 使用 world（与 spawn 初始位姿一致；无里程计时为近似）
+    static_tf_world_robot1 = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        output="log",
+        arguments=[
+            "--x",
+            robot1_x,
+            "--y",
+            robot1_y,
+            "--z",
+            robot1_z,
+            "--yaw",
+            robot1_yaw,
+            "--frame-id",
+            "world",
+            "--child-frame-id",
+            child_r1_base_footprint,
+        ],
+        parameters=[{"use_sim_time": use_sim_time}],
+        condition=IfCondition(publish_world_tf),
+    )
+    static_tf_world_robot2 = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        output="log",
+        arguments=[
+            "--x",
+            robot2_x,
+            "--y",
+            robot2_y,
+            "--z",
+            robot2_z,
+            "--yaw",
+            robot2_yaw,
+            "--frame-id",
+            "world",
+            "--child-frame-id",
+            child_r2_base_footprint,
+        ],
+        parameters=[{"use_sim_time": use_sim_time}],
+        condition=IfCondition(publish_world_tf),
+    )
+
+    rviz = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        output="screen",
+        arguments=["-d", rviz_config],
+        parameters=[{"use_sim_time": use_sim_time}],
+        condition=IfCondition(use_rviz),
     )
 
     gazebo_ros_share = get_package_share_directory("gazebo_ros")
@@ -192,8 +287,11 @@ def _opaque_setup(context, *args, **kwargs):
             robot_state_pub_robot2,
             joint_state_pub_robot1,
             joint_state_pub_robot2,
+            static_tf_world_robot1,
+            static_tf_world_robot2,
             spawn_robot1,
             spawn_robot2,
+            rviz,
         ]
     )
     return actions
@@ -202,6 +300,9 @@ def _opaque_setup(context, *args, **kwargs):
 def generate_launch_description():
     default_world = PathJoinSubstitution(
         [get_package_share_directory("homo_multirobot_gazebo"), "worlds", "empty.world"]
+    )
+    default_rviz_config = PathJoinSubstitution(
+        [FindPackageShare("homo_multirobot_gazebo"), "rviz", "two_robots_sim.rviz"]
     )
 
     return LaunchDescription(
@@ -234,6 +335,21 @@ def generate_launch_description():
             DeclareLaunchArgument("robot2_y", default_value="0.0"),
             DeclareLaunchArgument("robot2_z", default_value="0.0"),
             DeclareLaunchArgument("robot2_yaw", default_value="0.0"),
+            DeclareLaunchArgument(
+                "publish_world_tf",
+                default_value="true",
+                description="发布 world -> <prefix>base_footprint 静态 TF，便于 RViz 使用 Fixed Frame=world。若已有 Gazebo/里程计发布同名 TF，请设为 false。",
+            ),
+            DeclareLaunchArgument(
+                "use_rviz",
+                default_value="true",
+                description="是否同时启动 RViz2（加载 two_robots_sim.rviz）。",
+            ),
+            DeclareLaunchArgument(
+                "rviz_config",
+                default_value=default_rviz_config,
+                description="RViz2 配置文件路径。",
+            ),
             OpaqueFunction(function=_opaque_setup),
         ]
     )
