@@ -12,6 +12,7 @@
 |------|------|
 | **`homo_multirobot_urdf`** | `mini_omni_robot.xacro`、STL mesh、单机 RViz 展示 launch |
 | **`homo_multirobot_gazebo`** | 空世界、双机 spawn、可选 RViz 配置与 `world` 静态 TF |
+| **`omnidirectional_controllers`** | 引入的上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
 
 各包内另有 **`README.md`** 与 **`BUG_RECORD.md`**，用于细节与排障。
 
@@ -47,6 +48,7 @@ sudo apt install -y ros-humble-gazebo-ros ros-humble-gazebo-plugins \
     homo-ctrl-multirobot-ros2/    # 本仓库（git clone 到此路径）
       homo_multirobot_urdf/
       homo_multirobot_gazebo/
+      omnidirectional_controllers/
       README.md
 ```
 
@@ -56,7 +58,11 @@ sudo apt install -y ros-humble-gazebo-ros ros-humble-gazebo-plugins \
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --packages-select homo_multirobot_gazebo homo_multirobot_urdf --symlink-install
+sudo apt update
+# ros2_control 与控制器基座依赖（提供 controller_interface 等）
+sudo apt install -y ros-humble-ros2-control ros-humble-ros2-controllers
+
+colcon build --packages-select homo_multirobot_gazebo homo_multirobot_urdf omnidirectional_controllers --symlink-install
 source install/setup.bash
 ```
 

@@ -7,6 +7,7 @@
 - **模型描述**：`urdf/mini_omni_robot.xacro`
   - **`prefix`**：多机时 link/joint 名加前缀，避免 TF 重名（如 `robot1_` → `robot1_base_link`）。
   - **`use_gazebo`**：为 `true` 时在 Gazebo 中插入 **激光**、**IMU** 等 `<gazebo>` 块；纯 RViz 可看需求设为 `false`。
+  - **`use_ros2_control`**：为 `true` 时在 URDF 中插入 `<ros2_control>`（三轮关节 `velocity` 接口）并加载 `libgazebo_ros2_control.so`；为 `false` 时回退加载 `libgazebo_ros_planar_move.so`（避免两套系统同时驱动底盘）。
   - **`ros_namespace`**：传给 Gazebo 插件的 ROS 命名空间，需与仿真 launch 里每台车的 `robot*_namespace` 一致（如 `/robot1`），才能得到约定话题 **`/<ns>/scan`**、**`/<ns>/imu`**。
   - 内置 **`base_footprint`**（相对 `base_link` 高度约 6 cm）。
 - **网格资源**：`meshes/mini_omni_robot_meshes/*.STL`
@@ -28,6 +29,12 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 ```
 
 该 launch 会为 xacro 传入与各车一致的 **`prefix`** 与 **`ros_namespace`**。
+
+若要启用 `ros2_control` 路径：
+
+```bash
+ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=true
+```
 
 ## 依赖
 
@@ -81,9 +88,9 @@ ros2 launch homo_multirobot_urdf display.launch.py prefix:=robot1_
 
 | 项目 | 说明 |
 |------|------|
-| **`/<ns>/odom` 与 `cmd_vel`** | 在 xacro 中增加 `gazebo_ros_planar_move`（或等价插件），并与 `ros_namespace` 对齐；接入后仿真侧动态位姿应替代仅初始对齐的静态 TF（见 gazebo 包 `publish_world_tf` 说明）。 |
+| **`/<ns>/odom` 与 `cmd_vel`** | 本包已提供两种 Gazebo 驱动路径：`gazebo_ros_planar_move`（默认）与 `gazebo_ros2_control`（`use_ros2_control:=true`）。当启用 `ros2_control` 后，`cmd_vel → 轮关节 → odom/TF` 需要由后续控制器（如 `omnidirectional_controllers`）完成。 |
 | **实机 / 仿真切换** | 通过 `use_gazebo`、专用宏或拆分 xacro 减少重复。 |
-| **全向轮高保真** | 后续可引入 `ros2_control` 与独立控制器包，与本 URDF 解耦迭代。 |
+| **全向轮高保真** | 在 `ros2_control` 模式下引入更真实的轮地接触参数、摩擦/打滑模型，并配合控制器做闭环。 |
 
 ## 常见问题
 

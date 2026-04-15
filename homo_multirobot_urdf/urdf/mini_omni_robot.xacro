@@ -3,10 +3,36 @@
 
   <xacro:arg name="prefix" default=""/>
   <xacro:arg name="use_gazebo" default="true"/>
+  <!-- true: use ros2_control + gazebo_ros2_control; false: fallback to gazebo_ros_planar_move -->
+  <xacro:arg name="use_ros2_control" default="false"/>
   <!-- 留空表示不额外设置；若 launch 里为每台机器人设置了命名空间，这里会把插件节点放进该 namespace -->
   <xacro:arg name="ros_namespace" default=""/>
 
   <xacro:property name="p" value="$(arg prefix)"/>
+
+  <xacro:if value="$(arg use_ros2_control)">
+    <ros2_control name="${p}mini_omni_robot_system" type="system">
+      <hardware>
+        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      </hardware>
+
+      <joint name="${p}front_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${p}left_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+      <joint name="${p}right_wheel_joint">
+        <command_interface name="velocity"/>
+        <state_interface name="position"/>
+        <state_interface name="velocity"/>
+      </joint>
+    </ros2_control>
+  </xacro:if>
 
   <link name="${p}base_footprint"/>
 
@@ -343,19 +369,31 @@
     </gazebo>
 
     <!-- Planar move + odom: subscribes `<ns>/cmd_vel`, publishes `<ns>/odom` and TF -->
-    <gazebo>
-      <plugin name="${p}gazebo_ros_planar_move" filename="libgazebo_ros_planar_move.so">
-        <ros>
-          <namespace>$(arg ros_namespace)</namespace>
-        </ros>
-        <command_topic>cmd_vel</command_topic>
-        <odometry_topic>odom</odometry_topic>
-        <odometry_frame>${p}odom</odometry_frame>
-        <robot_base_frame>${p}base_footprint</robot_base_frame>
-        <publish_odom>true</publish_odom>
-        <publish_odom_tf>true</publish_odom_tf>
-      </plugin>
-    </gazebo>
+    <xacro:if value="$(arg use_ros2_control)">
+      <gazebo>
+        <plugin name="${p}gazebo_ros2_control" filename="libgazebo_ros2_control.so">
+          <ros>
+            <namespace>$(arg ros_namespace)</namespace>
+          </ros>
+        </plugin>
+      </gazebo>
+    </xacro:if>
+
+    <xacro:unless value="$(arg use_ros2_control)">
+      <gazebo>
+        <plugin name="${p}gazebo_ros_planar_move" filename="libgazebo_ros_planar_move.so">
+          <ros>
+            <namespace>$(arg ros_namespace)</namespace>
+          </ros>
+          <command_topic>cmd_vel</command_topic>
+          <odometry_topic>odom</odometry_topic>
+          <odometry_frame>${p}odom</odometry_frame>
+          <robot_base_frame>${p}base_footprint</robot_base_frame>
+          <publish_odom>true</publish_odom>
+          <publish_odom_tf>true</publish_odom_tf>
+        </plugin>
+      </gazebo>
+    </xacro:unless>
   </xacro:if>
 
 </robot>

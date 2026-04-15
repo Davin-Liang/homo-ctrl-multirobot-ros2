@@ -49,6 +49,7 @@ def _opaque_setup(context, *args, **kwargs):
         actions.append(SetEnvironmentVariable(name="__GL_SYNC_TO_VBLANK", value="0"))
 
     use_sim_time = LaunchConfiguration("use_sim_time")
+    use_ros2_control = LaunchConfiguration("use_ros2_control")
     world = LaunchConfiguration("world")
     gui = LaunchConfiguration("gui")
     server = LaunchConfiguration("server")
@@ -91,6 +92,9 @@ def _opaque_setup(context, *args, **kwargs):
             " ",
             "ros_namespace:=",
             robot1_namespace,
+            " ",
+            "use_ros2_control:=",
+            use_ros2_control,
         ]
     )
     robot2_urdf = Command(
@@ -104,6 +108,9 @@ def _opaque_setup(context, *args, **kwargs):
             " ",
             "ros_namespace:=",
             robot2_namespace,
+            " ",
+            "use_ros2_control:=",
+            use_ros2_control,
         ]
     )
 
@@ -308,6 +315,11 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="true"),
+            DeclareLaunchArgument(
+                "use_ros2_control",
+                default_value="false",
+                description="true 时在 URDF 中启用 ros2_control + gazebo_ros2_control；false 时回退 gazebo_ros_planar_move。",
+            ),
             DeclareLaunchArgument("world", default_value=default_world),
             DeclareLaunchArgument("gui", default_value="true"),
             DeclareLaunchArgument("server", default_value="true"),

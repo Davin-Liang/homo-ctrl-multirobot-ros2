@@ -2,7 +2,7 @@
 
 面向 **Gazebo Classic 11**（`gazebo_ros` / ROS 2 Humble）的多机仿真启动资源：在同一世界里 **spawn 两台** `mini_omni_robot`（模型与 mesh 来自姊妹包 **`homo_multirobot_urdf`**）。
 
-本包负责 **仿真世界、Gazebo 进程、spawn、ROS 侧 robot/joint 状态、可选 RViz 与 world 静态 TF**；**底盘平面运动/里程计（`cmd_vel → odom`）** 由 `homo_multirobot_urdf` 的 Gazebo 插件提供（当前为 `gazebo_ros_planar_move`，后续可升级 `ros2_control`）。
+本包负责 **仿真世界、Gazebo 进程、spawn、ROS 侧 robot/joint 状态、可选 RViz 与 world 静态 TF**；**底盘运动/里程计（`cmd_vel → odom`）** 由 `homo_multirobot_urdf` 的 Gazebo 插件路径提供：可在 `gazebo_ros_planar_move` 与 `gazebo_ros2_control`（`ros2_control` 接口）之间切换。
 
 ---
 
@@ -41,6 +41,14 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 
 默认：两台实体名 `robot1`、`robot2`，命名空间 `/robot1`、`/robot2`，初始位姿 `(0,0)` 与 `(1,0)`，前缀 `robot1_` / `robot2_`（与 URDF 中 `prefix` 一致，避免 TF 重名）。
 
+### ros2_control 模式（关闭 planar_move）
+
+```bash
+ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=true
+```
+
+注意：启用 `ros2_control` 后，本仓库当前尚未在 launch 中启动控制器（如 `controller_manager` + spawner + `omnidirectional_controllers`），因此 **Gazebo 不会再因为 planar_move 而“自动订阅 cmd_vel 并发布 odom”**；此时应把“能不能动起来/能不能出 odom”交给后续控制器接入来完成。
+
 ### 键盘控制（cmd_vel）
 
 安装键盘遥控（若未安装）：
@@ -65,6 +73,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `use_sim_time` | `true` | 与 Gazebo 仿真时钟一致 |
+| `use_ros2_control` | `false` | `true` 时在 URDF 中启用 `ros2_control` + `gazebo_ros2_control`，并关闭 `gazebo_ros_planar_move`（避免重复驱动） |
 | `world` | 本包 `worlds/empty.world` | 可换自定义 `.world` |
 | `gui` | `true` | `false` 仅跑 `gzserver`，无 Gazebo 窗口 |
 | `server` | `true` | `false` 不启 `gzserver`（一般保持 true） |
@@ -96,8 +105,8 @@ pkill -9 gzclient
 |----------------------|----------|------|
 | `/robot1/scan`、`/robot2/scan` | `sensor_msgs/LaserScan` | 2D 激光（`gazebo_ros_ray_sensor` + `~/out:=scan`） |
 | `/robot1/imu`、`/robot2/imu` | `sensor_msgs/Imu` | IMU（`gazebo_ros_imu_sensor` + `~/out:=imu`） |
-| `/robot1/cmd_vel`、`/robot2/cmd_vel` | `geometry_msgs/Twist` | 底盘速度指令（`gazebo_ros_planar_move` 订阅） |
-| `/robot1/odom`、`/robot2/odom` | `nav_msgs/Odometry` | 里程计（`gazebo_ros_planar_move` 发布） |
+| `/robot1/cmd_vel`、`/robot2/cmd_vel` | `geometry_msgs/Twist` | 底盘速度指令（**planar_move 模式**下由 `gazebo_ros_planar_move` 订阅；**ros2_control 模式**下需由后续控制器订阅） |
+| `/robot1/odom`、`/robot2/odom` | `nav_msgs/Odometry` | 里程计（**planar_move 模式**下由 `gazebo_ros_planar_move` 发布；**ros2_control 模式**下需由后续控制器发布） |
 | `/robot1/robot_description`、… | `std_msgs/String` | 各机模型描述（RViz RobotModel 使用） |
 | `/clock` | `rosgraph_msgs/Clock` | 仿真时钟（RViz / 节点需 `use_sim_time`） |
 
@@ -106,6 +115,17 @@ pkill -9 gzclient
 ```bash
 ros2 topic list | egrep 'robot(1|2)/(scan|imu|cmd_vel|odom)'
 ```
+
+### 确认当前使用的是哪条驱动路径（planar_move vs ros2_control）
+
+`robot_description` 很长，建议使用 `--full-length`：
+
+```bash
+ros2 topic echo /robot1/robot_description --once --full-length \
+| grep -E "gazebo_ros_planar_move|gazebo_ros2_control|ros2_control" | head
+```
+
+输出中出现 `libgazebo_ros_planar_move.so` 则为 planar_move 模式；出现 `libgazebo_ros2_control.so` 与 `<ros2_control ...>` 则为 ros2_control 模式。
 
 ### RViz2
 
@@ -147,8 +167,10 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_rviz:=false
 
 ## 当前能力边界
 
-- **已有**：双机 spawn、空世界、命名空间隔离、`robot_description` / `joint_states`、Gazebo 激光与 IMU、以及 **`/<ns>/cmd_vel → /<ns>/odom`（`gazebo_ros_planar_move`）**。
-- **尚未实现（下一步可做）**：更逼真的全向轮 **接触/力矩/打滑**、以及基于 `gazebo_ros2_control` 的驱动与关节状态闭环等。
+- **已有**：双机 spawn、空世界、命名空间隔离、`robot_description` / `joint_states`、Gazebo 激光与 IMU；底盘驱动支持两种路径：  
+  - `use_ros2_control:=false`：**`/<ns>/cmd_vel → /<ns>/odom`（`gazebo_ros_planar_move`）**  
+  - `use_ros2_control:=true`：**加载 `gazebo_ros2_control` + `ros2_control` 接口**（控制器接入见下一步）
+- **尚未实现（下一步可做）**：启动每台机器人的 `controller_manager` + spawner，并接入全向轮控制器（如 `omnidirectional_controllers`）以驱动轮关节并发布 `odom/TF`。
 
 ---
 
