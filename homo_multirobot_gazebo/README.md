@@ -27,9 +27,11 @@
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --packages-select homo_multirobot_gazebo homo_multirobot_urdf --symlink-install
+colcon build --packages-select homo_multirobot_gazebo homo_multirobot_urdf omnidirectional_controllers --symlink-install
 source install/setup.bash
 ```
+
+> 若你曾在 **不同路径** 构建过同名包（例如把 `omnidirectional_controllers` 从 `src/` 移到 `src/homo-ctrl-multirobot-ros2/`），可能遇到 CMake cache “source does not match” 报错。可删除对应 `build/<pkg>` 后再重新 `colcon build`。
 
 ---
 
@@ -48,6 +50,45 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=tr
 ```
 
 注意：启用 `ros2_control` 后，本仓库当前尚未在 launch 中启动控制器（如 `controller_manager` + spawner + `omnidirectional_controllers`），因此 **Gazebo 不会再因为 planar_move 而“自动订阅 cmd_vel 并发布 odom”**；此时应把“能不能动起来/能不能出 odom”交给后续控制器接入来完成。
+
+---
+
+## ros2_control + OmnidirectionalController（下一步协同入口）
+
+当 `use_ros2_control:=true` 时，本包已经确保 URDF 走 `gazebo_ros2_control` 路径（由 `homo_multirobot_urdf` 控制），接下来需要在 launch 中为每台机器人启动：
+
+- `controller_manager`（由 `gazebo_ros2_control` 插件提供）
+- `spawner`：
+  - `joint_state_broadcaster`
+  - `omnidirectional_controller`（来自包 `omnidirectional_controllers`）
+
+### 控制器 YAML（已准备好）
+
+本包已提供两台机器人的控制器配置文件（几何参数与计划一致：**r=0.03, L=0.24**；三轮对称时 **gamma=60°**）：
+
+- `config/omni_controller_robot1.yaml`
+- `config/omni_controller_robot2.yaml`
+
+关键点（协同约定）：
+
+- **wheel_names**：必须与 URDF 的 `prefix` 对齐（本仓库默认 `robot1_`/`robot2_`），因此 YAML 使用：
+  - `robot1_front_wheel_joint / robot1_left_wheel_joint / robot1_right_wheel_joint`
+  - `robot2_front_wheel_joint / robot2_left_wheel_joint / robot2_right_wheel_joint`
+- **base/odom frame**：YAML 里固定为 `robot{1,2}_base_footprint` 与 `robot{1,2}_odom`，避免多机 TF 重名。
+- **cmd_vel**：控制器默认订阅相对话题 `~/cmd_vel_unstamped`（或 `~/cmd_vel`），因此在命名空间 `/robot1` 下会是 `/robot1/omnidirectional_controller/cmd_vel_unstamped`。
+
+### 推荐的话题对接方式（建议写进下一步 launch）
+
+为了让现有键盘遥控命令不变（仍然发 `/robot1/cmd_vel`），建议在启动控制器时做 remap：
+
+- `/robot1/cmd_vel` → `/robot1/omnidirectional_controller/cmd_vel_unstamped`
+- `/robot2/cmd_vel` → `/robot2/omnidirectional_controller/cmd_vel_unstamped`
+
+控制器发布的里程计是相对话题 `~/odom`，在命名空间 `/robot1` 下会是 `/robot1/omnidirectional_controller/odom`。如希望外部统一用 `/robot1/odom`，也建议在 launch 中 remap：
+
+- `/robot1/omnidirectional_controller/odom` → `/robot1/odom`（robot2 同理）
+
+> 说明：`omnidirectional_controllers` 的 README 文档里也给出了默认的订阅/发布话题名（`~/cmd_vel_unstamped` 与 `~/odom`），本仓库 YAML 与之保持一致，方便直接 spawner 加载。
 
 ### 键盘控制（cmd_vel）
 
@@ -197,6 +238,9 @@ homo_multirobot_gazebo/
 ├── package.xml
 ├── README.md
 ├── BUG_RECORD.md
+├── config/
+│   ├── omni_controller_robot1.yaml
+│   └── omni_controller_robot2.yaml
 ├── launch/
 │   └── sim_two_robots.launch.py
 ├── rviz/
