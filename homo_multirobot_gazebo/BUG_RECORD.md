@@ -95,6 +95,16 @@
 
 ---
 
+## 9. 双机里程计坐标系 `odom` 同名导致 TF/可视化混乱
+
+**现象**：两台车均发布 `odom -> <prefix>base_footprint`，但 `odom` frame 名相同，导致 TF 树中出现同名 frame，RViz/工具中看起来“抢占/跳变/混淆”（尤其在同一 Fixed Frame 下显示两车时）。
+
+**原因**：多机隔离了话题（`/robot1/odom`、`/robot2/odom`），但 **TF frame 名称本身不带命名空间**；若插件/控制器把 `odometry_frame` 固定写成 `odom`，两台机器人会发布同名 frame。
+
+**处理**：让 `odometry_frame` 随 URDF `prefix` 变化，例如使用 `${prefix}odom`（最终为 `robot1_odom`、`robot2_odom`），并在 RViz 中分别选择对应 Fixed Frame 或保持 `world` 但避免引入冲突的静态 TF。
+
+---
+
 ## 9. ALSA / OpenAL 音频相关报错（WSL）
 
 **现象**：`Unknown PCM default`、`Unable to open audio device`、`Audio will be disabled`。

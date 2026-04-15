@@ -133,3 +133,16 @@ colcon build --packages-select homo_multirobot_urdf --symlink-install
 ## 备注：本机 `sudo` / `apt` 异常
 
 在部分受限或损坏的环境中可能出现 `sudo` 配置异常、`apt` 无法加锁等，导致无法代为安装 deb 包。需在用户本机 WSL/实体机修复权限或 `sudo` 后再执行 `apt install`。
+
+---
+
+## 10. 双机仿真里程计 frame 同名（`odom`）导致 TF 混淆
+
+**现象**  
+双机仿真时虽然话题已按命名空间隔离（如 `/robot1/odom`、`/robot2/odom`），但 RViz/`view_frames` 中出现 TF frame 混乱：两台车看起来共用同一个 `odom`，或 Fixed Frame 选 `odom` 时表现异常。
+
+**原因**  
+TF 的 frame 名称不带 ROS 命名空间；若运动/里程计插件把 `odometry_frame` 固定为 `odom`，两台机器人会发布同名 `odom` frame。
+
+**处理**  
+让 `odometry_frame` 随 URDF 的 `prefix` 变化，例如 `${prefix}odom`（对应 `robot1_odom`、`robot2_odom`），并在 RViz 中选择对应的 Fixed Frame（或用 `world` 作为全局参考）。

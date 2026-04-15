@@ -337,7 +337,7 @@ def generate_launch_description():
             DeclareLaunchArgument("robot2_yaw", default_value="0.0"),
             DeclareLaunchArgument(
                 "publish_world_tf",
-                default_value="true",
+                default_value="false",
                 description="发布 world -> <prefix>base_footprint 静态 TF，便于 RViz 使用 Fixed Frame=world。若已有 Gazebo/里程计发布同名 TF，请设为 false。",
             ),
             DeclareLaunchArgument(

@@ -341,6 +341,21 @@
         </plugin>
       </sensor>
     </gazebo>
+
+    <!-- Planar move + odom: subscribes `<ns>/cmd_vel`, publishes `<ns>/odom` and TF -->
+    <gazebo>
+      <plugin name="${p}gazebo_ros_planar_move" filename="libgazebo_ros_planar_move.so">
+        <ros>
+          <namespace>$(arg ros_namespace)</namespace>
+        </ros>
+        <command_topic>cmd_vel</command_topic>
+        <odometry_topic>odom</odometry_topic>
+        <odometry_frame>${p}odom</odometry_frame>
+        <robot_base_frame>${p}base_footprint</robot_base_frame>
+        <publish_odom>true</publish_odom>
+        <publish_odom_tf>true</publish_odom_tf>
+      </plugin>
+    </gazebo>
   </xacro:if>
 
 </robot>
