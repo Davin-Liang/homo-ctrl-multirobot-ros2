@@ -125,6 +125,24 @@
 
 ---
 
+## 11. `empty.world` 依赖 `model://sun` / `model://ground_plane`，在离线或收敛 `GAZEBO_MODEL_PATH` 时启动异常
+
+**现象**  
+启动阶段出现类似错误/告警：
+
+- `Unable to find uri[model://sun]`
+- `Unable to find uri[model://ground_plane]`
+
+严重时可能导致 `gzserver` 不稳定，用户侧表现为“启动后黑屏/卡住/直接退出”。
+
+**原因**  
+本包的 launch 会为 `model://homo_multirobot_urdf/...` 收敛 `GAZEBO_MODEL_PATH` 到自有模型根目录；若同时环境**离线**或不包含 Gazebo 默认模型库路径，则 world 里 `<include><uri>model://sun</uri></include>` / `ground_plane` 无法解析。
+
+**处理**  
+将 `worlds/empty.world` 改为**内联定义**光源与地面（不再 include `model://sun` 与 `model://ground_plane`），确保在离线/路径收敛场景仍可稳定启动。
+
+---
+
 ## 复盘建议
 
 | 类别 | 教训 |

@@ -110,3 +110,39 @@ ros2 run tf2_tools view_frames
 ```
 
 将生成 `frames*.pdf` 用于查看 TF 结构。
+
+### Gazebo 中轮子“陷进地面”/出生就穿模
+
+**现象**  
+Gazebo 刚 spawn 后轮子明显低于地面（或刚体抖动、下陷），影响运动表现。
+
+**原因**  
+轮关节的 `origin` 高度（z）与轮半径/碰撞体几何不匹配，导致初始位姿轮子碰撞体与地面发生穿透；ODE 接触求解会尝试“挤出”重叠，从而出现下陷/抖动。
+
+**处理**  
+- 以“轮中心高度”与“轮半径”做几何校准：保证初始位姿时轮碰撞体**不穿地**（可留少量悬空或轻微接触）。
+- 本仓库已将三轮关节的 z 做过调参（见 `urdf/mini_omni_robot.xacro` 中 `*_wheel_joint` 的 `<origin xyz=...>`）。
+
+### Gazebo（planar_move 模式）走直线会慢慢偏航/走歪
+
+**现象**  
+在 `use_ros2_control:=false`（`gazebo_ros_planar_move`）模式下，发送直线 `cmd_vel`，机器人会持续产生 yaw 偏移。
+
+**原因**  
+`gazebo_ros_planar_move` 直接驱动底盘运动，但轮子若仍参与物理接触（碰撞 + 摩擦），会给底盘额外施加侧向力/力矩，表现为“自己拐弯”。
+
+**处理**  
+将轮子的 Gazebo 摩擦系数设为接近 0，避免轮子接触主导运动；本仓库已在 xacro 里为各轮子 link 添加：
+
+- `<mu1>0.0</mu1>`
+- `<mu2>0.0</mu2>`
+
+相关块见 `urdf/mini_omni_robot.xacro` 中各 `wheel_link` 的 `<gazebo reference=...>`。
+
+### 替换 `base_link` collision 为简单几何体后 Gazebo 黑屏/崩溃
+
+**现象**  
+将 `base_link` 的 `<collision>` 从 mesh 改成 `<box>` 等 primitive 后，`gzserver` 可能在 spawn 后段错误退出（`exit code -11`），表现为 Gazebo 窗口黑屏或直接退出。
+
+**处理**  
+当前建议：`base_link` 的 collision **保持 mesh**，仅对轮子等局部做简化；具体复盘见 `BUG_RECORD.md`。

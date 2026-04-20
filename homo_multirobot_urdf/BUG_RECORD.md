@@ -146,3 +146,47 @@ TF 的 frame 名称不带 ROS 命名空间；若运动/里程计插件把 `odome
 
 **处理**  
 让 `odometry_frame` 随 URDF 的 `prefix` 变化，例如 `${prefix}odom`（对应 `robot1_odom`、`robot2_odom`），并在 RViz 中选择对应的 Fixed Frame（或用 `world` 作为全局参考）。
+
+---
+
+## 11. Gazebo 轮子陷进地面（出生穿模 / 抖动）
+
+**现象**  
+仿真 spawn 后轮子明显“陷进地面”，或刚体接触抖动明显。
+
+**原因**  
+轮关节 `origin` 的 z 高度与轮半径/碰撞体不匹配，导致轮子碰撞体初始位姿与地面发生穿透；ODE 接触求解会强行分离重叠，表现为下陷、抖动或不稳定。
+
+**处理**  
+- 调整 `urdf/mini_omni_robot.xacro` 中三轮关节（`front/left/right_wheel_joint`）的 `<origin xyz=...>` 的 z，使轮子初始不穿地。  
+- 若已将轮子 collision 简化为 primitive（如 cylinder/box），更要同步校准轮半径与关节 z。
+
+---
+
+## 12. Gazebo（planar_move 模式）走直线会走歪 / 慢慢偏航
+
+**现象**  
+`use_ros2_control:=false`（`gazebo_ros_planar_move`）模式下，即使 `cmd_vel` 仅给定直线速度，机器人也会持续产生 yaw 偏航。
+
+**原因**  
+在 planar_move 模式，底盘由插件直接驱动，但轮子若仍以“高摩擦”参与物理接触，会对底盘额外施加侧向力/力矩（接触/摩擦数值不对、初始穿模、几何误差都会放大该现象）。
+
+**处理**  
+将轮子接触摩擦降为接近 0，避免轮子物理接触主导运动：在 xacro 中为各轮子 link 添加 Gazebo 接触参数：
+
+- `<mu1>0.0</mu1>`
+- `<mu2>0.0</mu2>`
+
+---
+
+## 13. 将 `base_link` collision 从 mesh 改为 primitive 后 Gazebo 黑屏/崩溃（`gzserver` 段错误）
+
+**现象**  
+把 `base_link` 的 `<collision>` 由 `<mesh ...>` 替换为 `<box>`（或其他 primitive）后，Gazebo 可能在 spawn 后 `gzserver` 直接崩溃（`exit code -11`）；用户侧常表现为 Gazebo 黑屏、窗口卡死或直接退出。
+
+**原因**  
+在该模型/环境组合下（Gazebo Classic 11 + 当前 URDF/SDF 转换链路 + 接触/碰撞求解），`base_link` 的 primitive collision 会触发不稳定/崩溃（需要进一步上游定位；当前先以规避为主）。
+
+**处理**  
+- `base_link` collision 建议保持 mesh（与 visual 同源），避免触发 `gzserver` 段错误。  
+- 若要提升接触稳定性，优先只对轮子等局部做简化，并配合轮高/摩擦参数调参。
