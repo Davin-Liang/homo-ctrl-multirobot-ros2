@@ -109,6 +109,23 @@ colcon build --packages-select \
 source install/setup.bash
 ```
 
+#### 仅编译 `rf2o_laser_odometry`
+
+在工作空间根目录：
+
+```bash
+source /opt/ros/humble/setup.bash
+sudo apt update
+# rf2o 依赖（若你仅安装了 ros-base，可能需要补齐这些包）
+sudo apt install -y \
+  ros-humble-eigen3-cmake-module \
+  ros-humble-tf2-ros ros-humble-tf2-geometry-msgs \
+  ros-humble-sensor-msgs ros-humble-geometry-msgs ros-humble-std-msgs
+
+colcon build --packages-select rf2o_laser_odometry --symlink-install
+source install/setup.bash
+```
+
 若你此前在同一工作空间里编译过 **已删除的第三方包**（如旧的 `wheeltec_*`），`install/` 里可能仍残留同名目录；可手动删除这些目录，或在工作空间根目录 **清空 `build/`、`install/`、`log/` 后做一次全量重编**，避免 `ament` 与路径混淆。
 
 仅编译模型包（无需 Gazebo）：
