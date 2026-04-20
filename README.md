@@ -1,5 +1,18 @@
 # homo-ctrl-multirobot-ros2
 
+```text
+ _   _  ____  __  __  ____        __  __       _ _   _           _           _     ____   ___  ____  
+| | | |/ __ \|  \/  |/ __ \      |  \/  |     | | | (_)         | |         | |   |  _ \ / _ \|___ \ 
+| |_| | |  | | \  / | |  | |_____| \  / |_   _| | |_ _ _ __ ___ | |__   ___ | |_  | |_) | | | | __) |
+|  _  | |  | | |\/| | |  | |_____| |\/| | | | | | __| | '__/ _ \| '_ \ / _ \| __| |  _ <| | | ||__ < 
+| | | | |__| | |  | | |__| |     | |  | | |_| | | |_| | | | (_) | |_) | (_) | |_  | |_) | |_| |___) |
+|_| |_|\____/|_|  |_|\____/      |_|  |_|\__,_|_|\__|_|_|  \___/|_.__/ \___/ \__| |____/ \___/|____/ 
+```
+
+[![ROS 2 Humble](https://img.shields.io/badge/ROS%202-Humble-22314E?logo=ros&logoColor=white)](https://docs.ros.org/en/humble/)
+[![Ubuntu 22.04](https://img.shields.io/badge/Ubuntu-22.04-E95420?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/22.04/)
+[![Gazebo Classic 11](https://img.shields.io/badge/Gazebo-Classic%2011-4E4E4E?logo=gazebo&logoColor=white)](https://classic.gazebosim.org/)
+
 面向 **ROS 2 Humble** 的多机器人协同与仿真相关代码：以 **`mini_omni_robot`** 全向底盘模型为核心，提供 **URDF/Xacro + mesh**、**Gazebo Classic 双机仿真** 与 **RViz** 可视化。
 
 本仓库已收敛为 **`homo_multirobot_*` 包**；若你曾从旧工程合并过 Wheeltec 厂商的 `wheeltec_robot_urdf` / `turn_on_wheeltec_robot`，它们已从本仓库移除，避免与当前模型与话题约定混淆。实机与 Wheeltec 驱动栈请单独维护或使用上游发行包。

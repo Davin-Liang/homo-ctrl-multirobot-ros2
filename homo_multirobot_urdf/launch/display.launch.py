@@ -6,6 +6,7 @@ from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from ament_index_python.packages import PackageNotFoundError, get_package_share_directory
 
@@ -36,8 +37,9 @@ def generate_launch_description():
     )
 
     robot_description = {
-        "robot_description": Command(
-            ["xacro", " ", xacro_file, " ", "prefix:=", prefix]
+        "robot_description": ParameterValue(
+            Command(["xacro", " ", xacro_file, " ", "prefix:=", prefix]),
+            value_type=str,
         )
     }
 
