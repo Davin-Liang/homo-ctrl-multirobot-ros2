@@ -6,6 +6,43 @@
 
 ---
 
+## 快速理解（推荐先看）
+
+### 包关系与数据流（可视化）
+
+```mermaid
+flowchart LR
+  subgraph URDF[homo_multirobot_urdf]
+    X[mini_omni_robot.xacro<br/>URDF + meshes] --> RSP[robot_state_publisher<br/>robot_description + TF]
+    X --> GZP[Gazebo plugins<br/>lidar/imu + planar_move or ros2_control toggle]
+  end
+
+  subgraph GZ[homo_multirobot_gazebo]
+    W[worlds/empty.world] --> S[gzserver / gzclient]
+    L[sim_two_robots.launch.py<br/>spawn 2 robots + namespaces/prefix] --> S
+    L --> RSP
+  end
+
+  subgraph CTRL[omnidirectional_controllers]
+    C[OmnidirectionalController<br/>cmd_vel -> wheel cmds -> odom]:::opt
+  end
+
+  K[teleop_twist_keyboard] -->|/robot{1,2}/cmd_vel| S
+  S -->|/robot{1,2}/scan, /imu| ROS[(ROS 2 graph)]
+  S -->|/robot{1,2}/odom + TF| ROS
+  C -. when use_ros2_control:=true .-> ROS
+
+  classDef opt stroke-dasharray: 5 5;
+```
+
+### 最短上手路径
+
+- **只看模型（不跑仿真）**：编译 `homo_multirobot_urdf` → `ros2 launch homo_multirobot_urdf display.launch.py`
+- **双机仿真（默认 planar_move，可直接 `/cmd_vel`）**：编译 `homo_multirobot_gazebo` + `homo_multirobot_urdf` → `ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py`
+- **切到 ros2_control（后续接控制器）**：`use_ros2_control:=true` 后，需启动 controller_manager/spawner（见 `homo_multirobot_gazebo/README.md` 的说明与 YAML）
+
+---
+
 ## 仓库结构
 
 | 包名 | 说明 |
