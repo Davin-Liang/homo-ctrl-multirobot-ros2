@@ -50,6 +50,8 @@ def _opaque_setup(context, *args, **kwargs):
 
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_ros2_control = LaunchConfiguration("use_ros2_control")
+    planar_publish_odom = LaunchConfiguration("planar_publish_odom")
+    planar_publish_odom_tf = LaunchConfiguration("planar_publish_odom_tf")
     world = LaunchConfiguration("world")
     gui = LaunchConfiguration("gui")
     server = LaunchConfiguration("server")
@@ -95,6 +97,12 @@ def _opaque_setup(context, *args, **kwargs):
             " ",
             "use_ros2_control:=",
             use_ros2_control,
+            " ",
+            "planar_publish_odom:=",
+            planar_publish_odom,
+            " ",
+            "planar_publish_odom_tf:=",
+            planar_publish_odom_tf,
         ]
     )
     robot2_urdf = Command(
@@ -111,6 +119,12 @@ def _opaque_setup(context, *args, **kwargs):
             " ",
             "use_ros2_control:=",
             use_ros2_control,
+            " ",
+            "planar_publish_odom:=",
+            planar_publish_odom,
+            " ",
+            "planar_publish_odom_tf:=",
+            planar_publish_odom_tf,
         ]
     )
 
@@ -305,8 +319,10 @@ def _opaque_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    default_world_name = "empty.world"
+    world_name = LaunchConfiguration("world_name")
     default_world = PathJoinSubstitution(
-        [get_package_share_directory("homo_multirobot_gazebo"), "worlds", "empty.world"]
+        [get_package_share_directory("homo_multirobot_gazebo"), "worlds", world_name]
     )
     default_rviz_config = PathJoinSubstitution(
         [FindPackageShare("homo_multirobot_gazebo"), "rviz", "two_robots_sim.rviz"]
@@ -319,6 +335,21 @@ def generate_launch_description():
                 "use_ros2_control",
                 default_value="false",
                 description="true 时在 URDF 中启用 ros2_control + gazebo_ros2_control；false 时回退 gazebo_ros_planar_move。",
+            ),
+            DeclareLaunchArgument(
+                "planar_publish_odom",
+                default_value="true",
+                description="仅 gazebo_ros_planar_move 模式生效：是否发布 <ns>/odom 话题。",
+            ),
+            DeclareLaunchArgument(
+                "planar_publish_odom_tf",
+                default_value="true",
+                description="仅 gazebo_ros_planar_move 模式生效：是否发布 TF <prefix>odom -> <prefix>base_footprint。",
+            ),
+            DeclareLaunchArgument(
+                "world_name",
+                default_value=default_world_name,
+                description="从 homo_multirobot_gazebo/worlds/ 下加载的世界文件名（例如 empty.world）。如需绝对路径请直接用 world:=/abs/path/to.world。",
             ),
             DeclareLaunchArgument("world", default_value=default_world),
             DeclareLaunchArgument("gui", default_value="true"),

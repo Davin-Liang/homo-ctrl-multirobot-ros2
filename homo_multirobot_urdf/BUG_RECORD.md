@@ -190,3 +190,24 @@ TF 的 frame 名称不带 ROS 命名空间；若运动/里程计插件把 `odome
 **处理**  
 - `base_link` collision 建议保持 mesh（与 visual 同源），避免触发 `gzserver` 段错误。  
 - 若要提升接触稳定性，优先只对轮子等局部做简化，并配合轮高/摩擦参数调参。
+
+---
+
+## 14. rf2o 里程计 `twist.linear.x` 符号与前进方向相反（常见于 Laser frame 翻转）
+
+**现象**  
+在双机仿真中（或任意发布 `/scan` 的场景），给机器人正向速度（前进），rf2o 输出的里程计（`/robot*/rf2o/odom`）中 `twist.twist.linear.x` 却为负。
+
+**原因**  
+rf2o 会将 `LaserScan.header.frame_id`（通常为 `${prefix}laser_link`）通过 TF 变换到 `base_frame_id`（本仓库推荐 `${prefix}base_footprint`）来推算运动。  
+如果 `laser_link` 相对底盘存在 \( \pi \)（180°）的 yaw 翻转（例如 `laser_joint` 的 `rpy` 设置为 `0 0 3.1416`），则“前进方向”在算法坐标中会被映射为相反方向，从而出现速度符号反号。
+
+**处理**  
+- 保证 `laser_link` 的 +X 与底盘前向一致：将 `urdf/mini_omni_robot.xacro` 中 `laser_joint` 的 `rpy` 改为 `0 0 0`（或等价的“去掉 180° 翻转”）。  
+- 重启仿真（URDF/TF 在启动时加载），再验证：
+
+```bash
+ros2 run tf2_ros tf2_echo robot1_base_footprint robot1_laser_link
+```
+
+期望 yaw 接近 0°。

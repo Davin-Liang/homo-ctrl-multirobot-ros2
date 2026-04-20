@@ -49,6 +49,8 @@ flowchart LR
 |------|------|
 | **`homo_multirobot_urdf`** | `mini_omni_robot.xacro`、STL mesh、单机 RViz 展示 launch |
 | **`homo_multirobot_gazebo`** | 空世界、双机 spawn、可选 RViz 配置与 `world` 静态 TF |
+| **`rf2o_laser_odometry`** | 2D 激光里程计（rf2o，源码引入，ROS 2 分支），订阅 `/robot*/scan` 输出 `/robot*/rf2o/odom`（可选发布 TF） |
+| **`homo_multirobot_localization`** | 多机定位/里程计链路启动与配置（目前包含双机 rf2o launch 与参数约定；后续可加入 EKF 等） |
 | **`omnidirectional_controllers`** | 引入的上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
 
 各包内另有 **`README.md`** 与 **`BUG_RECORD.md`**，用于细节与排障。
@@ -99,7 +101,11 @@ sudo apt update
 # ros2_control 与控制器基座依赖（提供 controller_interface 等）
 sudo apt install -y ros-humble-ros2-control ros-humble-ros2-controllers
 
-colcon build --packages-select homo_multirobot_gazebo homo_multirobot_urdf omnidirectional_controllers --symlink-install
+colcon build --packages-select \
+  homo_multirobot_gazebo homo_multirobot_urdf \
+  rf2o_laser_odometry homo_multirobot_localization \
+  omnidirectional_controllers \
+  --symlink-install
 source install/setup.bash
 ```
 
@@ -127,6 +133,17 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 ```
 
 常用参数见 **`homo_multirobot_gazebo/README.md`**（如 `use_rviz`、`publish_world_tf`、`gui` 等）。
+
+**双机 rf2o（激光里程计）**（需要仿真已在发布 `/robot1/scan`、`/robot2/scan`）：
+
+> 若你在 WSL/受限环境下看到 `PermissionError: ... ~/.ros/log/...`，请把 `ROS_LOG_DIR` 指向工作空间可写目录：
+>
+> `export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros`
+
+```bash
+export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
+ros2 launch homo_multirobot_localization rf2o_two_robots.launch.py
+```
 
 ### 4. 验证话题（仿真）
 

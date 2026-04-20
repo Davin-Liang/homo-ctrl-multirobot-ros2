@@ -115,6 +115,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 |------|------|------|
 | `use_sim_time` | `true` | 与 Gazebo 仿真时钟一致 |
 | `use_ros2_control` | `false` | `true` 时在 URDF 中启用 `ros2_control` + `gazebo_ros2_control`，并关闭 `gazebo_ros_planar_move`（避免重复驱动） |
+| `world_name` | `empty.world` | 从本包 `worlds/` 目录中加载的世界文件名（例如 `test_world.world`）。若需绝对路径，请直接用 `world:=/abs/path/to.world` 覆盖。 |
 | `world` | 本包 `worlds/empty.world` | 可换自定义 `.world` |
 | `gui` | `true` | `false` 仅跑 `gzserver`，无 Gazebo 窗口 |
 | `server` | `true` | `false` 不启 `gzserver`（一般保持 true） |
@@ -126,6 +127,12 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 | `publish_world_tf` | `false` | 发布 `world -> <prefix>base_footprint` 静态 TF（仅用于“初始对齐/静态展示”）；接入里程计/动态 TF 后建议保持 `false`，避免与 `odom -> base_footprint` 等 TF 冲突 |
 | `use_rviz` | `true` | 是否同时启动 RViz2 |
 | `rviz_config` | 本包 `rviz/two_robots_sim.rviz` | RViz 配置文件路径 |
+
+示例：从本包 `worlds/` 目录切换世界文件（注意 ROS 2 launch 参数格式为 `name:=value`）：
+
+```bash
+ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=test_world.world
+```
 
 ### 关闭仿真
 

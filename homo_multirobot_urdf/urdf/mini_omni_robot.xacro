@@ -7,6 +7,9 @@
   <xacro:arg name="use_ros2_control" default="false"/>
   <!-- 留空表示不额外设置；若 launch 里为每台机器人设置了命名空间，这里会把插件节点放进该 namespace -->
   <xacro:arg name="ros_namespace" default=""/>
+  <!-- gazebo_ros_planar_move: toggle odom topic / TF publication -->
+  <xacro:arg name="planar_publish_odom" default="true"/>
+  <xacro:arg name="planar_publish_odom_tf" default="true"/>
 
   <xacro:property name="p" value="$(arg prefix)"/>
 
@@ -294,7 +297,7 @@
   </link>
 
   <joint name="${p}laser_joint" type="fixed">
-    <origin xyz="0.005095 8.5571E-05 0.097524" rpy="0 0 3.1416" />
+    <origin xyz="0.005095 8.5571E-05 0.097524" rpy="0 0 0" />
     <parent link="${p}base_link" />
     <child link="${p}laser_link" />
     <axis xyz="0 0 0" />
@@ -424,8 +427,8 @@
           <odometry_topic>odom</odometry_topic>
           <odometry_frame>${p}odom</odometry_frame>
           <robot_base_frame>${p}base_footprint</robot_base_frame>
-          <publish_odom>true</publish_odom>
-          <publish_odom_tf>true</publish_odom_tf>
+          <publish_odom>$(arg planar_publish_odom)</publish_odom>
+          <publish_odom_tf>$(arg planar_publish_odom_tf)</publish_odom_tf>
         </plugin>
       </gazebo>
     </xacro:unless>

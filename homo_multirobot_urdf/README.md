@@ -36,6 +36,23 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=true
 ```
 
+## 与 rf2o（激光里程计）的坐标系约定（重要）
+
+rf2o 会使用 TF 将 `LaserScan.header.frame_id`（本包默认发布为 `${prefix}laser_link`）变换到 `base_frame_id`（推荐 `${prefix}base_footprint`）来估计运动。
+
+因此需保证 **`laser_link` 的 +X 方向与底盘前进方向一致**。若 `laser_link` 相对底盘存在 \( \pi \)（180°）的 yaw 翻转，常见现象是：
+
+- 机器人给定正向速度（前进），但 rf2o 输出里程计中的 `twist.twist.linear.x` 符号为负；
+- 或者在融合/控制中出现“前后方向相反”的感觉。
+
+验证方式（以 robot1 为例）：
+
+```bash
+ros2 run tf2_ros tf2_echo robot1_base_footprint robot1_laser_link
+```
+
+期望 yaw 接近 0°（而不是 ±180°）。
+
 ## 依赖
 
 必需（ROS 2 Humble）：
