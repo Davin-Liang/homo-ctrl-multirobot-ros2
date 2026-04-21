@@ -6,7 +6,7 @@
 
 ---
 
-## 依赖与关系
+## 📖 依赖与关系
 
 | 依赖 | 作用 |
 |------|------|
@@ -21,7 +21,7 @@
 
 ---
 
-## 编译
+## 🛠️ 编译
 
 在工作空间根目录：
 
@@ -35,7 +35,7 @@ source install/setup.bash
 
 ---
 
-## 启动
+## 🚀 启动
 
 ```bash
 ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
@@ -43,7 +43,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 
 默认：两台实体名 `robot1`、`robot2`，命名空间 `/robot1`、`/robot2`，初始位姿 `(0,0)` 与 `(1,0)`，前缀 `robot1_` / `robot2_`（与 URDF 中 `prefix` 一致，避免 TF 重名）。
 
-### ros2_control 模式（关闭 planar_move）
+### 🧩 ros2_control 模式（关闭 planar_move）
 
 ```bash
 ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=true
@@ -53,7 +53,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=tr
 
 ---
 
-## ros2_control + OmnidirectionalController（下一步协同入口）
+## 🧭 ros2_control + OmnidirectionalController（下一步协同入口）
 
 当 `use_ros2_control:=true` 时，本包已经确保 URDF 走 `gazebo_ros2_control` 路径（由 `homo_multirobot_urdf` 控制），接下来需要在 launch 中为每台机器人启动：
 
@@ -62,7 +62,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=tr
   - `joint_state_broadcaster`
   - `omnidirectional_controller`（来自包 `omnidirectional_controllers`）
 
-### 控制器 YAML（已准备好）
+### 📄 控制器 YAML（已准备好）
 
 本包已提供两台机器人的控制器配置文件（几何参数与计划一致：**r=0.03, L=0.24**；三轮对称时 **gamma=60°**）：
 
@@ -77,7 +77,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=tr
 - **base/odom frame**：YAML 里固定为 `robot{1,2}_base_footprint` 与 `robot{1,2}_odom`，避免多机 TF 重名。
 - **cmd_vel**：控制器默认订阅相对话题 `~/cmd_vel_unstamped`（或 `~/cmd_vel`），因此在命名空间 `/robot1` 下会是 `/robot1/omnidirectional_controller/cmd_vel_unstamped`。
 
-### 推荐的话题对接方式（建议写进下一步 launch）
+### 🔁 推荐的话题对接方式（建议写进下一步 launch）
 
 为了让现有键盘遥控命令不变（仍然发 `/robot1/cmd_vel`），建议在启动控制器时做 remap：
 
@@ -90,7 +90,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=tr
 
 > 说明：`omnidirectional_controllers` 的 README 文档里也给出了默认的订阅/发布话题名（`~/cmd_vel_unstamped` 与 `~/odom`），本仓库 YAML 与之保持一致，方便直接 spawner 加载。
 
-### 键盘控制（cmd_vel）
+### ⌨️ 键盘控制（cmd_vel）
 
 安装键盘遥控（若未安装）：
 
@@ -109,7 +109,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot2/cmd_vel
 ```
 
-### 常用 Launch 参数
+### ⚙️ 常用 Launch 参数
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
@@ -134,7 +134,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=test_world.world
 ```
 
-### 关闭仿真
+### 🧹 关闭仿真
 
 在运行 `ros2 launch` 的终端 **Ctrl+C**；若 Gazebo 窗口卡死可另开终端：
 
@@ -145,7 +145,7 @@ pkill -9 gzclient
 
 ---
 
-## 话题与可视化（当前实现）
+## 📡 话题与可视化（当前实现）
 
 在 **`homo_multirobot_urdf`** 的 xacro 中已配置 Gazebo 插件（`use_gazebo:=true`），并通过 launch 传入 `ros_namespace:=/robot1` 等，话题按命名空间隔离，多机话题形如：
 
@@ -164,7 +164,7 @@ pkill -9 gzclient
 ros2 topic list | egrep 'robot(1|2)/(scan|imu|cmd_vel|odom)'
 ```
 
-### 确认当前使用的是哪条驱动路径（planar_move vs ros2_control）
+### 🔍 确认当前使用的是哪条驱动路径（planar_move vs ros2_control）
 
 `robot_description` 很长，建议使用 `--full-length`：
 
@@ -175,7 +175,7 @@ ros2 topic echo /robot1/robot_description --once --full-length \
 
 输出中出现 `libgazebo_ros_planar_move.so` 则为 planar_move 模式；出现 `libgazebo_ros2_control.so` 与 `<ros2_control ...>` 则为 ros2_control 模式。
 
-### RViz2
+### 🖼️ RViz2
 
 默认与仿真一同启动，并加载 **`rviz/two_robots_sim.rviz`**（双车模型 + 双 LaserScan + TF，**Fixed Frame = world**）。
 
@@ -191,7 +191,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_rviz:=false
 
 ---
 
-## 本包已解决的设计要点（协同必读）
+## ✅ 本包已解决的设计要点（协同必读）
 
 1. **`/spawn_entity` 与 `GazeboRosFactory`**  
    使用 `gazebo_ros` 自带的 **`gzserver.launch.py`**，由 `GazeboRosPaths` 设置 `GAZEBO_PLUGIN_PATH` 等，保证 **`libgazebo_ros_factory.so`** 能加载，否则 `spawn_entity.py` 等不到服务。
@@ -213,7 +213,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_rviz:=false
 
 ---
 
-## 当前能力边界
+## 🧱 当前能力边界
 
 - **已有**：双机 spawn、空世界、命名空间隔离、`robot_description` / `joint_states`、Gazebo 激光与 IMU；底盘驱动支持两种路径：  
   - `use_ros2_control:=false`：**`/<ns>/cmd_vel → /<ns>/odom`（`gazebo_ros_planar_move`）**  
@@ -222,7 +222,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_rviz:=false
 
 ---
 
-## 下一步计划（与仓库整体路线对齐）
+## 🗺️ 下一步计划（与仓库整体路线对齐）
 
 | 优先级 | 内容 | 建议落点 |
 |--------|------|----------|
@@ -235,7 +235,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_rviz:=false
 
 ---
 
-## 文件结构
+## 🗂️ 文件结构
 
 源码位于工作空间：`src/homo-ctrl-multirobot-ros2/homo_multirobot_gazebo/`（与 `homo_multirobot_urdf` 同属该目录，便于协同）。
 
@@ -258,6 +258,6 @@ homo_multirobot_gazebo/
 
 ---
 
-## 许可
+## 📄 许可
 
 与 `package.xml` 中声明一致（Apache-2.0）。

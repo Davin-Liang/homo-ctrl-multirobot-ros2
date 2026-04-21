@@ -2,7 +2,7 @@
 
 本包提供 `mini_omni_robot` 的 **URDF/Xacro + mesh 资源**，用于 **RViz 单机展示**、**Gazebo 多机仿真**（与姊妹包 **`homo_multirobot_gazebo`** 配合）。
 
-## 功能
+## 📖 功能
 
 - **模型描述**：`urdf/mini_omni_robot.xacro`
   - **`prefix`**：多机时 link/joint 名加前缀，避免 TF 重名（如 `robot1_` → `robot1_base_link`）。
@@ -13,7 +13,7 @@
 - **网格资源**：`meshes/mini_omni_robot_meshes/*.STL`
 - **单机 RViz**：`launch/display.launch.py`（默认加载 `rviz/mini_omni_robot.rviz`）
 
-## Gazebo 传感器话题约定（ROS 2）
+## 📡 Gazebo 传感器话题约定（ROS 2）
 
 本 xacro 使用 `gazebo_plugins` 中的 **`libgazebo_ros_ray_sensor.so`** / **`libgazebo_ros_imu_sensor.so`**。在 ROS 2 中插件默认发布在 **`~/out`**，需使用 **`<remapping>~/out:=scan</remapping>`**（激光另加 **`sensor_msgs/LaserScan`** 的 `output_type`），IMU 使用 **`~/out:=imu`**，再配合 **`<ros><namespace>...</namespace></ros>`**，最终话题为：
 
@@ -36,7 +36,7 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py use_ros2_control:=true
 ```
 
-## 与 rf2o（激光里程计）的坐标系约定（重要）
+## ⚠️ 与 rf2o（激光里程计）的坐标系约定（重要）
 
 rf2o 会使用 TF 将 `LaserScan.header.frame_id`（本包默认发布为 `${prefix}laser_link`）变换到 `base_frame_id`（推荐 `${prefix}base_footprint`）来估计运动。
 
@@ -53,7 +53,7 @@ ros2 run tf2_ros tf2_echo robot1_base_footprint robot1_laser_link
 
 期望 yaw 接近 0°（而不是 ±180°）。
 
-## 依赖
+## 🧩 依赖
 
 必需（ROS 2 Humble）：
 
@@ -66,7 +66,7 @@ ros2 run tf2_ros tf2_echo robot1_base_footprint robot1_laser_link
 - `joint_state_publisher` / `joint_state_publisher_gui`（连续关节 TF；Gazebo 多机 launch 已用 `joint_state_publisher`）
 - `gazebo_plugins` / `gazebo_ros`（Gazebo 仿真时由仿真环境提供）
 
-## 编译
+## 🛠️ 编译
 
 在工作空间根目录：
 
@@ -81,7 +81,7 @@ source install/setup.bash
 colcon build --packages-select homo_multirobot_gazebo homo_multirobot_urdf --symlink-install
 ```
 
-## 使用
+## 🚀 使用
 
 ### 单机 RViz（无 Gazebo）
 
@@ -101,7 +101,7 @@ ros2 launch homo_multirobot_urdf display.launch.py prefix:=robot1_
 
 见 **`homo_multirobot_gazebo`** 的 README：`sim_two_robots.launch.py` 会加载双车 RViz 配置，并处理命名空间与可选 `world` 静态 TF。
 
-## 下一步（与本包相关的实现项）
+## 🗺️ 下一步（与本包相关的实现项）
 
 | 项目 | 说明 |
 |------|------|
@@ -109,7 +109,7 @@ ros2 launch homo_multirobot_urdf display.launch.py prefix:=robot1_
 | **实机 / 仿真切换** | 通过 `use_gazebo`、专用宏或拆分 xacro 减少重复。 |
 | **全向轮高保真** | 在 `ros2_control` 模式下引入更真实的轮地接触参数、摩擦/打滑模型，并配合控制器做闭环。 |
 
-## 常见问题
+## 🧰 常见问题
 
 ### RViz 能启动但看不到轮子等部件
 

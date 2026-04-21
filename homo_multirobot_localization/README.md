@@ -6,22 +6,100 @@
 
 - 双机 **rf2o 激光里程计** 启动（仿真/回放）
 - 单机 **rf2o 激光里程计** 启动（实机部署）
+- 双机 **EKF（robot_localization）** 启动与参数（融合 IMU + rf2o odom）
+- 单机 **EKF（robot_localization）** 启动（实机部署，支持 config 文件约定话题）
+- 一键启动整条链路：**Gazebo 双机仿真 + 双机 rf2o + 双机 EKF**
+- 组合启动：
+  - 单机：**rf2o + EKF**（实机部署）
+  - 双机：**rf2o + EKF**（仿真/回放）
 
 ---
 
-## 编译
+## 🛠️ 编译
 
 在工作空间根目录：
 
 ```bash
 source /opt/ros/humble/setup.bash
+sudo apt update
+sudo apt install -y ros-humble-robot-localization
 colcon build --packages-select homo_multirobot_localization rf2o_laser_odometry --symlink-install
 source install/setup.bash
 ```
 
 ---
 
-## 启动（双机 rf2o）
+## 🧠 EKF 融合（robot_localization）
+
+本包提供双机 EKF 启动与参数（融合 `/robot*/imu` + `/robot*/rf2o/odom`，输出 `/robot*/odometry/filtered`，并由 EKF 发布 TF `robot*_odom -> robot*_base_footprint`）：
+
+```bash
+export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
+ros2 launch homo_multirobot_localization ekf_two_robots.launch.py
+```
+
+### 🚀 启动（单机 EKF，实机）
+
+每台真实机器人上各启动一次（默认 `use_sim_time:=false`），推荐显式传入 `namespace` 与 `prefix`：
+
+```bash
+export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
+ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
+  namespace:=/robot1 prefix:=robot1_
+```
+
+该 launch 默认会加载 `config/ekf_single_robot.yaml` 来约定 EKF 的融合项与默认话题（如 `imu`、`rf2o/odom`）；如需自定义，直接覆盖：
+
+```bash
+ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
+  namespace:=/robot1 prefix:=robot1_ \
+  config_file:=/abs/path/to/my_ekf.yaml
+```
+
+#### 🧩 零参数启动（固定 robot1/robot2 的 frame）
+
+如果你希望“每台机器人上直接一条命令启动”，可以用本包内置的实机配置（已把 `map/odom/base_link/world_frame` 固定成 `robot1_*` / `robot2_*`）：
+
+```bash
+ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
+  namespace:=/robot1 \
+  config_file:=$(ros2 pkg prefix homo_multirobot_localization)/share/homo_multirobot_localization/config/ekf_robot1_real.yaml
+```
+
+```bash
+ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
+  namespace:=/robot2 \
+  config_file:=$(ros2 pkg prefix homo_multirobot_localization)/share/homo_multirobot_localization/config/ekf_robot2_real.yaml
+```
+
+话题约定（在 `/robot1` 命名空间下）：
+
+- **输入**：`/robot1/imu`、`/robot1/rf2o/odom`
+- **输出**：`/robot1/odometry/filtered`
+- **TF**：默认由 EKF 发布 `robot1_odom -> robot1_base_footprint`
+
+---
+
+## 🧪 一键启动整条链路（仿真 + rf2o + EKF）
+
+将 **Gazebo 双机仿真**、**双机 rf2o**、**双机 EKF** 串联启动：
+
+```bash
+export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
+ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py
+```
+
+### ⚠️ TF 策略（关键）
+
+该总 launch 默认：
+
+- `planar_publish_odom:=false`
+- `planar_publish_odom_tf:=false`
+- `rf2o_publish_tf:=false`
+
+也就是：**只让 EKF 发布** `robot*_odom -> robot*_base_footprint` 的 TF，避免 Gazebo planar_move / rf2o 与 EKF 同时发布导致 TF 冲突。
+
+## 🚀 启动（双机 rf2o）
 
 > 在 WSL/受限环境下如果遇到 `PermissionError: ... ~/.ros/log/...`，可把日志目录指向工作空间可写路径：
 >
@@ -41,12 +119,12 @@ ros2 launch homo_multirobot_localization rf2o_two_robots.launch.py
 
 说明：rf2o 的关键参数（scan/odom 话题、frame、publish_tf 等）已在 `rf2o_two_robots.launch.py` 中**显式传入**，本包不再维护单独的 rf2o 参数 YAML，避免“YAML 顶层 key 与节点名不匹配导致参数不生效”的坑。
 
-### 话题约定
+### 📡 话题约定
 
 - **输入**：`/robot1/scan`、`/robot2/scan`
 - **输出**：`/robot1/rf2o/odom`、`/robot2/rf2o/odom`（`nav_msgs/Odometry`）
 
-### TF 策略（关键）
+### ⚠️ TF 策略（关键）
 
 rf2o 是否发布 `odom -> base_footprint` 的 TF 由参数控制：
 
@@ -61,7 +139,7 @@ ros2 launch homo_multirobot_localization rf2o_two_robots.launch.py rf2o_publish_
 
 ---
 
-## 启动（单机 rf2o，实机）
+## 🚀 启动（单机 rf2o，实机）
 
 每台真实机器人上各启动一次（默认 `use_sim_time:=false`），推荐显式传入 `namespace` 与 `prefix`：
 
@@ -84,5 +162,41 @@ ros2 launch homo_multirobot_localization rf2o_single_robot.launch.py \
 ros2 launch homo_multirobot_localization rf2o_single_robot.launch.py \
   namespace:=/robot1 prefix:=robot1_ \
   scan_topic:=/scan
+```
+
+---
+
+## 🚀 启动（单机 rf2o + EKF，实机）
+
+每台真实机器人上各启动一次（默认 `use_sim_time:=false`），推荐显式传入 `namespace` 与 `prefix`：
+
+```bash
+ros2 launch homo_multirobot_localization rf2o_ekf_single_robot.launch.py \
+  namespace:=/robot1 prefix:=robot1_
+```
+
+该组合 launch 默认 `ekf_yaml_only:=true`，也就是 **EKF 完全以 `config_file`(YAML) 为准**。  
+如果你希望临时用命令行覆盖 EKF 的 frame/topic/frequency/publish_tf 等参数，可显式设置：
+
+```bash
+ros2 launch homo_multirobot_localization rf2o_ekf_single_robot.launch.py \
+  namespace:=/robot1 prefix:=robot1_ \
+  ekf_yaml_only:=false
+```
+
+关键默认策略：
+
+- `rf2o_publish_tf:=false`
+- `ekf_publish_tf:=true`
+
+也就是：**只由 EKF 发布** `odom -> base_footprint` TF，避免 TF 冲突。
+
+---
+
+## 🚀 启动（双机 rf2o + EKF）
+
+```bash
+export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
+ros2 launch homo_multirobot_localization rf2o_ekf_two_robots.launch.py
 ```
 

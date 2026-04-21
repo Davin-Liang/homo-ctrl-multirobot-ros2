@@ -1,0 +1,36 @@
+/**:
+  ros__parameters:
+    frequency: 30.0
+    sensor_timeout: 0.2
+    two_d_mode: true
+
+    publish_tf: true
+    publish_acceleration: false
+    print_diagnostics: true
+
+    map_frame: robot2_map
+    odom_frame: robot2_odom
+    base_link_frame: robot2_base_footprint
+    world_frame: robot2_odom
+
+    # Inputs (relative topics under /robot2 namespace)
+    odom0: rf2o/odom
+    imu0: imu
+
+    odom0_config: [true,  true,  false,
+                   false, false, true,
+                   true,  true,  false,
+                   false, false, true,
+                   false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+
+    imu0_config: [false, false, false,
+                  false, false, true,
+                  false, false, false,
+                  false, false, true,
+                  true,  true,  false]
+    imu0_differential: false
+    imu0_relative: true
+    imu0_remove_gravitational_acceleration: true
+
