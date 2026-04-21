@@ -2,7 +2,10 @@
 
 本包用于放置多机“定位/里程计链路”的 **launch 与配置**（与 `homo_multirobot_gazebo` + `homo_multirobot_urdf` 配合）。
 
-当前已提供：双机 **rf2o 激光里程计** 启动。
+当前已提供：
+
+- 双机 **rf2o 激光里程计** 启动（仿真/回放）
+- 单机 **rf2o 激光里程计** 启动（实机部署）
 
 ---
 
@@ -55,4 +58,31 @@ ros2 launch homo_multirobot_localization rf2o_two_robots.launch.py rf2o_publish_
 ```
 
 建议：与 EKF（`robot_localization`）二选一，避免多源 TF 冲突。
+
+---
+
+## 启动（单机 rf2o，实机）
+
+每台真实机器人上各启动一次（默认 `use_sim_time:=false`），推荐显式传入 `namespace` 与 `prefix`：
+
+```bash
+ros2 launch homo_multirobot_localization rf2o_single_robot.launch.py \
+  namespace:=/robot1 prefix:=robot1_
+```
+
+常用覆盖参数：
+
+- `scan_topic`：默认 `scan`（在 `/robot1` 下即 `/robot1/scan`）
+- `odom_topic`：默认 `rf2o/odom`（在 `/robot1` 下即 `/robot1/rf2o/odom`）
+- `publish_tf`：默认 `false`（建议与 EKF 二选一）
+- `freq`：默认 `20.0`
+- `base_frame_id` / `odom_frame_id`：默认分别为 `<prefix>base_footprint` / `<prefix>odom`
+
+示例：激光话题不在命名空间下时，直接用绝对话题名：
+
+```bash
+ros2 launch homo_multirobot_localization rf2o_single_robot.launch.py \
+  namespace:=/robot1 prefix:=robot1_ \
+  scan_topic:=/scan
+```
 

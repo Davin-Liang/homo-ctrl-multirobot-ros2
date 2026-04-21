@@ -78,7 +78,7 @@
         <mesh filename="package://homo_multirobot_urdf/meshes/mini_omni_robot_meshes/base_link.STL" />
       </geometry>
       <material name="">
-        <color rgba="0.741176470588235 0.901960784313726 0.956862745098039 1" />
+        <color rgba="0.22 0.22 0.22 1" />
       </material>
     </visual>
     <collision>
@@ -121,7 +121,7 @@
         <mesh filename="package://homo_multirobot_urdf/meshes/mini_omni_robot_meshes/front_wheel_link.STL" />
       </geometry>
       <material name="">
-        <color rgba="0.376470588235294 0.376470588235294 0.376470588235294 1" />
+        <color rgba="0.18 0.18 0.18 1" />
       </material>
     </visual>
     <collision>
@@ -159,7 +159,7 @@
         <mesh filename="package://homo_multirobot_urdf/meshes/mini_omni_robot_meshes/left_wheel_link.STL" />
       </geometry>
       <material name="">
-        <color rgba="0.376470588235294 0.376470588235294 0.376470588235294 1" />
+        <color rgba="0.18 0.18 0.18 1" />
       </material>
     </visual>
     <collision>
@@ -197,7 +197,7 @@
         <mesh filename="package://homo_multirobot_urdf/meshes/mini_omni_robot_meshes/right_wheel_link.STL" />
       </geometry>
       <material name="">
-        <color rgba="0.376470588235294 0.376470588235294 0.376470588235294 1" />
+        <color rgba="0.18 0.18 0.18 1" />
       </material>
     </visual>
     <collision>
@@ -221,14 +221,46 @@
   <gazebo reference="${p}front_wheel_link">
     <mu1>${wheel_mu}</mu1>
     <mu2>${wheel_mu2}</mu2>
+    <material>Gazebo/DarkGrey</material>
+    <ambient>0.08 0.08 0.08 1</ambient>
+    <diffuse>0.18 0.18 0.18 1</diffuse>
+    <specular>0.15 0.15 0.15 1</specular>
   </gazebo>
   <gazebo reference="${p}left_wheel_link">
     <mu1>${wheel_mu}</mu1>
     <mu2>${wheel_mu2}</mu2>
+    <material>Gazebo/DarkGrey</material>
+    <ambient>0.08 0.08 0.08 1</ambient>
+    <diffuse>0.18 0.18 0.18 1</diffuse>
+    <specular>0.15 0.15 0.15 1</specular>
   </gazebo>
   <gazebo reference="${p}right_wheel_link">
     <mu1>${wheel_mu}</mu1>
     <mu2>${wheel_mu2}</mu2>
+    <material>Gazebo/DarkGrey</material>
+    <ambient>0.08 0.08 0.08 1</ambient>
+    <diffuse>0.18 0.18 0.18 1</diffuse>
+    <specular>0.15 0.15 0.15 1</specular>
+  </gazebo>
+
+  <!-- Gazebo materials (visual polish) -->
+  <gazebo reference="${p}base_link">
+    <material>Gazebo/Grey</material>
+    <ambient>0.10 0.10 0.10 1</ambient>
+    <diffuse>0.22 0.22 0.22 1</diffuse>
+    <specular>0.35 0.35 0.35 1</specular>
+  </gazebo>
+  <gazebo reference="${p}controller_link">
+    <material>Gazebo/Green</material>
+    <ambient>0.02 0.08 0.04 1</ambient>
+    <diffuse>0.06 0.35 0.18 1</diffuse>
+    <specular>0.20 0.25 0.20 1</specular>
+  </gazebo>
+  <gazebo reference="${p}camera_link">
+    <material>Gazebo/Black</material>
+    <ambient>0.02 0.02 0.02 1</ambient>
+    <diffuse>0.08 0.08 0.08 1</diffuse>
+    <specular>0.25 0.25 0.25 1</specular>
   </gazebo>
 
   <link name="${p}controller_link">
@@ -249,7 +281,7 @@
         <mesh filename="package://homo_multirobot_urdf/meshes/mini_omni_robot_meshes/controller_link.STL" />
       </geometry>
       <material name="">
-        <color rgba="0.741176470588235 0.901960784313726 0.956862745098039 1" />
+        <color rgba="0.06 0.35 0.18 1" />
       </material>
     </visual>
     <collision>
@@ -285,7 +317,7 @@
         <mesh filename="package://homo_multirobot_urdf/meshes/mini_omni_robot_meshes/laser.STL" />
       </geometry>
       <material name="">
-        <color rgba="0.376470588235294 0.376470588235294 0.376470588235294 1" />
+        <color rgba="0.08 0.08 0.08 1" />
       </material>
     </visual>
     <collision>
@@ -321,7 +353,7 @@
         <mesh filename="package://homo_multirobot_urdf/meshes/mini_omni_robot_meshes/camera_link.STL" />
       </geometry>
       <material name="">
-        <color rgba="1 1 1 1" />
+        <color rgba="0.08 0.08 0.08 1" />
       </material>
     </visual>
     <collision>
@@ -342,6 +374,10 @@
   <xacro:if value="$(arg use_gazebo)">
     <!-- Ray lidar: publishes `<ns>/scan` -->
     <gazebo reference="${p}laser_link">
+      <material>Gazebo/Black</material>
+      <ambient>0.05 0.05 0.05 1</ambient>
+      <diffuse>0.12 0.12 0.12 1</diffuse>
+      <specular>0.20 0.20 0.20 1</specular>
       <sensor name="${p}lidar" type="ray">
         <always_on>true</always_on>
         <update_rate>10</update_rate>

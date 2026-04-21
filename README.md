@@ -175,6 +175,13 @@ export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
 ros2 launch homo_multirobot_localization rf2o_two_robots.launch.py
 ```
 
+**单机 rf2o（实机部署）**（每台机器人各启动一次）：
+
+```bash
+ros2 launch homo_multirobot_localization rf2o_single_robot.launch.py \
+  namespace:=/robot1 prefix:=robot1_
+```
+
 ### 4. 验证话题（仿真）
 
 在仿真运行后：
