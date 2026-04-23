@@ -31,7 +31,7 @@ ros2 topic echo /robot2/scan --once
 在 WSL/受限环境下，`ros2 launch` 甚至在加载 launch 文件时就失败，提示对 `~/.ros/log/...` 无写权限。
 
 **处理**  
-把 `ROS_LOG_DIR` 指向工作空间可写目录：
+（仅在受限/自动化环境下需要）把 `ROS_LOG_DIR` 指向可写目录：
 
 ```bash
 export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
@@ -117,5 +117,34 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=test_wor
 ```bash
 ros2 topic hz /robot1/scan
 ros2 topic hz /robot1/rf2o/odom
+```
+
+---
+
+## 6. `slam_toolbox` 在仿真中无 `map` frame / `tf2_echo map robot1_odom` 提示 frame 不存在
+
+**现象**  
+`/robot1/slam_toolbox` 节点在运行，`/clock` 正常，但 TF 树里没有 `map`，例如：
+
+- `ros2 run tf2_ros tf2_echo map robot1_odom` → `Invalid frame ID "map" ... frame does not exist`
+
+**原因**  
+`slam_toolbox` 需要 TF 链 `robot1_odom -> robot1_base_footprint`（以及 `base_footprint -> laser_link`）才能发布 `map -> robot1_odom`。  
+若 EKF 仍在用默认 frame（如 `odom`/`base_link`）发布 TF，或者 `ekf_yaml_only:=true` 导致 launch 覆盖的 frame 未生效，就会出现“odom->base 缺失”，从而 `map` frame 不会出现。
+
+**处理**  
+确保 EKF 发布的 TF 与 `prefix` 约定一致：
+
+- `odom_frame := robot1_odom`
+- `base_link_frame := robot1_base_footprint`
+- `world_frame := robot1_odom`
+
+在仿真总 launch 中推荐默认 `ekf_yaml_only:=false` 并显式传入上述 frame（本仓库的 `sim_rf2o_ekf_single_robot.launch.py` 已按此修复）。
+
+验证：
+
+```bash
+ros2 run tf2_ros tf2_echo robot1_odom robot1_base_footprint
+ros2 run tf2_ros tf2_echo map robot1_odom
 ```
 

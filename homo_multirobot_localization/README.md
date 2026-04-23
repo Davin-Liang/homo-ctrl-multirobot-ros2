@@ -23,7 +23,7 @@
 source /opt/ros/humble/setup.bash
 sudo apt update
 sudo apt install -y ros-humble-robot-localization
-colcon build --packages-select homo_multirobot_localization rf2o_laser_odometry --symlink-install
+colcon build --packages-select homo_multirobot_localization rf2o_laser_odometry --symlink-install --cmake-args -DBUILD_TESTING=OFF
 source install/setup.bash
 ```
 
@@ -34,7 +34,6 @@ source install/setup.bash
 本包提供双机 EKF 启动与参数（融合 `/robot*/imu` + `/robot*/rf2o/odom`，输出 `/robot*/odometry/filtered`，并由 EKF 发布 TF `robot*_odom -> robot*_base_footprint`）：
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
 ros2 launch homo_multirobot_localization ekf_two_robots.launch.py
 ```
 
@@ -43,7 +42,6 @@ ros2 launch homo_multirobot_localization ekf_two_robots.launch.py
 每台真实机器人上各启动一次（默认 `use_sim_time:=false`），推荐显式传入 `namespace` 与 `prefix`：
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
 ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
   namespace:=/robot1 prefix:=robot1_
 ```
@@ -85,9 +83,25 @@ ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
 将 **Gazebo 双机仿真**、**双机 rf2o**、**双机 EKF** 串联启动：
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
 ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py
 ```
+
+### 单机版（只起一台车，联调/建图更稳）
+
+当你希望仿真环境中只有一台车（例如只让 `robot1` 建图，避免 `robot2` 的实体进入激光视野影响建图）：
+
+```bash
+ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
+```
+
+默认参数：
+
+- `robot_namespace:=/robot1`
+- `robot_prefix:=robot1_`
+- `planar_publish_odom_tf:=false`
+- `rf2o_publish_tf:=false`
+
+也就是：**只让 EKF 发布** `robot1_odom -> robot1_base_footprint` 的 TF，避免多源 TF 冲突；并确保后续 `slam_toolbox` 能拿到完整 TF 链从而发布 `map -> robot1_odom`。
 
 ### ⚠️ TF 策略（关键）
 
@@ -101,9 +115,7 @@ ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py
 
 ## 🚀 启动（双机 rf2o）
 
-> 在 WSL/受限环境下如果遇到 `PermissionError: ... ~/.ros/log/...`，可把日志目录指向工作空间可写路径：
->
-> `export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros`
+> 在某些受限/自动化环境下（例如无写权限的 home 目录）如果遇到 `PermissionError: ... ~/.ros/log/...`，再临时设置 `ROS_LOG_DIR` 到可写目录即可。
 
 启动前请确保仿真（或实机）已在发布：
 
@@ -113,7 +125,6 @@ ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py
 启动：
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
 ros2 launch homo_multirobot_localization rf2o_two_robots.launch.py
 ```
 
@@ -196,7 +207,6 @@ ros2 launch homo_multirobot_localization rf2o_ekf_single_robot.launch.py \
 ## 🚀 启动（双机 rf2o + EKF）
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
 ros2 launch homo_multirobot_localization rf2o_ekf_two_robots.launch.py
 ```
 

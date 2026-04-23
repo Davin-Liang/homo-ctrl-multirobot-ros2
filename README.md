@@ -33,9 +33,11 @@
 |------|------|
 | **`homo_multirobot_urdf`** | `mini_omni_robot.xacro`、STL mesh、单机 RViz 展示 launch |
 | **`homo_multirobot_gazebo`** | 空世界、双机 spawn、可选 RViz 配置与 `world` 静态 TF |
-| **`rf2o_laser_odometry`** | 2D 激光里程计（rf2o，源码引入，ROS 2 分支），订阅 `/robot*/scan` 输出 `/robot*/rf2o/odom`（可选发布 TF） |
+| **`homo_multirobot_slam_toolbox`** | 多机器人建图封装：支持选定 `mapper_robot` 单机建图（两车复用同一张地图），并支持将 `/map` 重映射进机器人 namespace，便于在 `/robot1` 下调用 `save_map` |
+| **`rf2o_laser_odometry`（third_party）** | 2D 激光里程计（rf2o，上游源码引入，ROS 2 分支），订阅 `/robot*/scan` 输出 `/robot*/rf2o/odom`（可选发布 TF） |
 | **`homo_multirobot_localization`** | 多机定位/里程计链路启动与配置：双机/单机 rf2o、双机/单机 EKF（`robot_localization`），以及仿真一键链路（Gazebo + rf2o + EKF） |
-| **`omnidirectional_controllers`** | 引入的上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
+| **`omnidirectional_controllers`（third_party）** | 上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
+| **`robot_localization`（third_party，可选）** | 上游融合包（EKF/UKF）。推荐直接装 `ros-humble-robot-localization`；若需源码联调可放入工作空间 third_party |
 
 各包内另有 **`README.md`** 与 **`BUG_RECORD.md`**，用于细节与排障。
 
@@ -58,6 +60,9 @@ sudo apt update
 sudo apt install -y ros-humble-gazebo-ros ros-humble-gazebo-plugins \
   ros-humble-xacro ros-humble-robot-state-publisher \
   ros-humble-joint-state-publisher ros-humble-rviz2
+
+# slam_toolbox（建图）
+sudo apt install -y ros-humble-slam-toolbox
 
 # robot_localization（推荐直接用二进制包；若用源码编译，也可先装这个，能补齐大部分依赖）
 sudo apt install -y ros-humble-robot-localization
@@ -88,8 +93,12 @@ git clone git@github.com:Davin-Liang/homo-ctrl-multirobot-ros2.git
     homo-ctrl-multirobot-ros2/    # 本仓库（git clone 到此路径）
       homo_multirobot_urdf/
       homo_multirobot_gazebo/
-      omnidirectional_controllers/
+      homo_multirobot_slam_toolbox/
       README.md
+      third_party/
+        omnidirectional_controllers/
+        rf2o_laser_odometry/
+        robot_localization/
 ```
 
 ### 2. 编译
@@ -104,98 +113,71 @@ sudo apt install -y ros-humble-ros2-control ros-humble-ros2-controllers
 sudo apt install -y ros-humble-robot-localization
 
 # 编译本仓库所有包
-colcon build --symlink-install
+colcon build --symlink-install --cmake-args -DBUILD_TESTING=OFF
 source install/setup.bash
 ```
+
+> third_party 目录下是上游源码的“引入副本”，用于补齐你工作空间的依赖或方便联调。  
+> 如果你更倾向使用 apt 二进制（例如 `robot_localization`），可以保留 third_party 但不使用；或自行移除对应上游包。
 
 若你此前在同一工作空间里编译过 **已删除的第三方包**（如旧的 `wheeltec_*`），`install/` 里可能仍残留同名目录；可手动删除这些目录，或在工作空间根目录 **清空 `build/`、`install/`、`log/` 后做一次全量重编**，避免 `ament` 与路径混淆。
 
 ### 3. 运行
 
-**单机 RViz（无仿真）**：
+下面仅列出“复现项目能力”的最短入口；每个能力的完整参数解释与排障请直接看对应包内 README / BUG_RECORD。
+
+#### 3.1 单机 RViz（无仿真）
 
 ```bash
 ros2 launch homo_multirobot_urdf display.launch.py
 ```
 
-**Gazebo 双机仿真（含 Gazebo 客户端与 RViz，可选）**：
+更多：见 `homo_multirobot_urdf/README.md`。
+
+#### 3.2 Gazebo 仿真
+
+双机：
 
 ```bash
 ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 ```
 
-常用参数见 **`homo_multirobot_gazebo/README.md`**（如 `use_rviz`、`publish_world_tf`、`gui` 等）。
-
-**双机 rf2o（激光里程计）**（需要仿真已在发布 `/robot1/scan`、`/robot2/scan`）：
-
-> 若你在 WSL/受限环境下看到 `PermissionError: ... ~/.ros/log/...`，请把 `ROS_LOG_DIR` 指向工作空间可写目录：
+> 建议：若你要跑 `rf2o`/EKF，优先使用带墙体/结构的世界（例如 `test_world.world`），避免 `empty.world` 特征不足导致 rf2o 漂移：
 >
-> `export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros`
+> `ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=test_world.world`
+
+单机（推荐用于建图/联调，避免第二台车动态影响激光与建图）：
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
-ros2 launch homo_multirobot_localization rf2o_two_robots.launch.py
+ros2 launch homo_multirobot_gazebo sim_single_robot.launch.py
 ```
 
-**双机 EKF（IMU + rf2o 融合）**（需已在发布 `/robot*/imu` 与 `/robot*/rf2o/odom`）：
+更多：见 `homo_multirobot_gazebo/README.md` 与 `homo_multirobot_gazebo/BUG_RECORD.md`。
+
+#### 3.3 定位/里程计链路（rf2o + EKF）
+
+一键启动整条链路（仿真单车 + rf2o + EKF）：
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
-ros2 launch homo_multirobot_localization ekf_two_robots.launch.py
+ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
 ```
 
-**一键启动整条链路（仿真 + rf2o + EKF）**：
+更多：见 `homo_multirobot_localization/README.md` 与 `homo_multirobot_localization/BUG_RECORD.md`。
+
+#### 3.4 建图（slam_toolbox）
+
+单机建图（选定 mapper_robot）：
 
 ```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
-ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py
+ros2 launch homo_multirobot_slam_toolbox single_robot_mapping.launch.py mapper_robot:=robot1 use_sim_time:=true
 ```
 
-**单机 rf2o（实机部署）**（每台机器人各启动一次）：
+保存地图（mapper_robot=robot1）：
 
 ```bash
-ros2 launch homo_multirobot_localization rf2o_single_robot.launch.py \
-  namespace:=/robot1 prefix:=robot1_
+ros2 service call /robot1/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name: {data: '/abs/path/to/my_map'}}"
 ```
-
-**单机 rf2o + EKF（实机部署，一条命令）**（每台机器人各启动一次）：
-
-```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
-ros2 launch homo_multirobot_localization rf2o_ekf_single_robot.launch.py \
-  namespace:=/robot1 prefix:=robot1_
-```
-
-该组合 launch 默认 `ekf_yaml_only:=true`，EKF 参数以 `config_file`(YAML) 为准；如需临时用命令行覆盖 EKF 的 frame/topic/frequency/publish_tf 等参数：
-
-```bash
-ros2 launch homo_multirobot_localization rf2o_ekf_single_robot.launch.py \
-  namespace:=/robot1 prefix:=robot1_ \
-  ekf_yaml_only:=false
-```
-
-**单机 EKF（实机部署，IMU + rf2o 融合）**（每台机器人各启动一次）：
-
-```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
-ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
-  namespace:=/robot1 prefix:=robot1_
-```
-
-若你希望零参数启动（frame 固定为 `robot1_*` / `robot2_*`），可直接指定本包内置配置：
-
-```bash
-ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
-  namespace:=/robot1 \
-  config_file:=$(ros2 pkg prefix homo_multirobot_localization)/share/homo_multirobot_localization/config/ekf_robot1_real.yaml
-```
-
-**双机 rf2o + EKF（仿真/回放，一条命令）**：
-
-```bash
-export ROS_LOG_DIR=~/ros-projects/homo_multirobot_ws/log/ros
-ros2 launch homo_multirobot_localization rf2o_ekf_two_robots.launch.py
-```
+更多：见 `homo_multirobot_slam_toolbox/README.md` 与 `homo_multirobot_slam_toolbox/BUG_RECORD.md`。
 
 ### 4. 验证话题（仿真）
 

@@ -43,6 +43,20 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 
 默认：两台实体名 `robot1`、`robot2`，命名空间 `/robot1`、`/robot2`，初始位姿 `(0,0)` 与 `(1,0)`，前缀 `robot1_` / `robot2_`（与 URDF 中 `prefix` 一致，避免 TF 重名）。
 
+> 若你计划使用 `rf2o`（激光里程计）/EKF，推荐使用带墙体/结构的世界（例如 `test_world.world`），避免 `empty.world` 特征不足导致 rf2o 漂移：
+>
+> `ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=test_world.world`
+
+### 单机仿真（只 spawn 一台车）
+
+当你需要“只建图/只联调一台车”（避免第二台车对激光/建图造成动态干扰）时使用：
+
+```bash
+ros2 launch homo_multirobot_gazebo sim_single_robot.launch.py
+```
+
+默认：实体名 `robot1`、命名空间 `/robot1`、前缀 `robot1_`。
+
 ### 🧩 ros2_control 模式（关闭 planar_move）
 
 ```bash
@@ -249,7 +263,8 @@ homo_multirobot_gazebo/
 │   ├── omni_controller_robot1.yaml
 │   └── omni_controller_robot2.yaml
 ├── launch/
-│   └── sim_two_robots.launch.py
+│   ├── sim_two_robots.launch.py
+│   └── sim_single_robot.launch.py
 ├── rviz/
 │   └── two_robots_sim.rviz
 └── worlds/
