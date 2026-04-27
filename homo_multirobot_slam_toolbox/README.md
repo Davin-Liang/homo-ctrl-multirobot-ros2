@@ -30,6 +30,23 @@
 ros2 launch homo_multirobot_slam_toolbox single_robot_mapping.launch.py mapper_robot:=robot1 use_sim_time:=true
 ```
 
+### 🗺️ RViz 里看不到地图（/map）？
+
+默认情况下，本仓库的 `single_robot_mapping.launch.py` 会将 slam_toolbox 的地图话题固定到**全局**：
+
+- `/map`、`/map_updates`
+
+因此 RViz 直接订阅 `/map` 即可。
+
+同时，为了不影响 `save_map`（其内部 `map_saver` 会在命名空间下订阅相对话题 `map`），本仓库会在 `map_in_namespace:=false` 时自动把 `/map` 转发到 `/<ns>/map`，保证保存地图仍然可用。
+
+如果你确实需要把地图话题放进命名空间（例如希望出现 `/robot1/map`），可显式开启：
+
+```bash
+ros2 launch homo_multirobot_slam_toolbox single_robot_mapping.launch.py \
+  mapper_robot:=robot1 use_sim_time:=true map_in_namespace:=true
+```
+
 ---
 
 ## 💾 保存地图
@@ -54,4 +71,5 @@ ros2 service call /robot1/slam_toolbox/save_map slam_toolbox/srv/SaveMap "{name:
 
 - `.pgm` 是图片文件，在编辑器里按文本打开会“乱码”；用 `explorer.exe` 或图片查看器打开即可。
 - 若 TF 树里没有 `map` frame，请优先检查 `robot1_odom -> robot1_base_footprint` 是否存在（一般是 EKF frame 配置未对齐导致）。
+- 若使用 `nav2_map_server` 加载本包 `maps/*.yaml`，请确保这些地图文件被正确安装到 `install/.../share/.../maps/`。若 `map_server` 报 `Failed processing YAML file ... bad file`，通常是 YAML 中 `image: xxx.pgm` 相对路径指向的图片在 install 目录下不存在。
 

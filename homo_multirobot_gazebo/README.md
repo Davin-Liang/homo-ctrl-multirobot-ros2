@@ -43,9 +43,9 @@ ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 
 默认：两台实体名 `robot1`、`robot2`，命名空间 `/robot1`、`/robot2`，初始位姿 `(0,0)` 与 `(1,0)`，前缀 `robot1_` / `robot2_`（与 URDF 中 `prefix` 一致，避免 TF 重名）。
 
-> 若你计划使用 `rf2o`（激光里程计）/EKF，推荐使用带墙体/结构的世界（例如 `test_world.world`），避免 `empty.world` 特征不足导致 rf2o 漂移：
+> 若你计划使用 `rf2o`（激光里程计）/EKF，推荐使用带墙体/结构的世界（例如 `sim_room1.world` / `test_world.world`），避免 `empty.world` 特征不足导致 rf2o 漂移：
 >
-> `ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=test_world.world`
+> `ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=sim_room1.world`
 
 ### 单机仿真（只 spawn 一台车）
 
@@ -129,8 +129,8 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 |------|------|------|
 | `use_sim_time` | `true` | 与 Gazebo 仿真时钟一致 |
 | `use_ros2_control` | `false` | `true` 时在 URDF 中启用 `ros2_control` + `gazebo_ros2_control`，并关闭 `gazebo_ros_planar_move`（避免重复驱动） |
-| `world_name` | `empty.world` | 从本包 `worlds/` 目录中加载的世界文件名（例如 `test_world.world`）。若需绝对路径，请直接用 `world:=/abs/path/to.world` 覆盖。 |
-| `world` | 本包 `worlds/empty.world` | 可换自定义 `.world` |
+| `world_name` | `sim_room1.world` | 从本包 `worlds/` 目录中加载的世界文件名（例如 `test_world.world`、`empty.world`）。若需绝对路径，请直接用 `world:=/abs/path/to.world` 覆盖。 |
+| `world` | 本包 `worlds/sim_room1.world` | 可换自定义 `.world` |
 | `gui` | `true` | `false` 仅跑 `gzserver`，无 Gazebo 窗口 |
 | `server` | `true` | `false` 不启 `gzserver`（一般保持 true） |
 | `verbose` | `false` | `gzserver` 是否啰嗦输出 |
@@ -268,6 +268,8 @@ homo_multirobot_gazebo/
 ├── rviz/
 │   └── two_robots_sim.rviz
 └── worlds/
+    ├── sim_room1.world
+    ├── test_world.world
     └── empty.world
 ```
 

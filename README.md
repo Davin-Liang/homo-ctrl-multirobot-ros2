@@ -143,9 +143,9 @@ ros2 launch homo_multirobot_urdf display.launch.py
 ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py
 ```
 
-> 建议：若你要跑 `rf2o`/EKF，优先使用带墙体/结构的世界（例如 `test_world.world`），避免 `empty.world` 特征不足导致 rf2o 漂移：
+> 建议：若你要跑 `rf2o`/EKF，优先使用带墙体/结构的世界（例如 `sim_room1.world` / `test_world.world`），避免 `empty.world` 特征不足导致 rf2o 漂移：
 >
-> `ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=test_world.world`
+> `ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=sim_room1.world`
 
 单机（推荐用于建图/联调，避免第二台车动态影响激光与建图）：
 
@@ -164,7 +164,7 @@ ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
 ```
 
 说明：该仿真总 launch 默认 `use_rviz:=true`（会同时启动 RViz）；如不需要可设置 `use_rviz:=false`。
-说明：该仿真总 launch 默认 `world_name:=test_world.world`；如需空世界可设置 `world_name:=empty.world`。
+说明：该仿真总 launch 默认 `world_name:=sim_room1.world`；如需切换可设置 `world_name:=test_world.world` 或 `world_name:=empty.world`。
 
 更多：见 `homo_multirobot_localization/README.md` 与 `homo_multirobot_localization/BUG_RECORD.md`。
 
@@ -187,6 +187,10 @@ ros2 launch homo_multirobot_nav amcl_two_robots.launch.py
 ```bash
 ros2 launch homo_multirobot_nav amcl_single_robot.launch.py map:=/abs/path/to/my_map.yaml
 ```
+
+说明：仓库内置示例地图位于 `homo_multirobot_slam_toolbox/maps/`，安装后路径为：
+
+- `$(ros2 pkg prefix homo_multirobot_slam_toolbox)/share/homo_multirobot_slam_toolbox/maps/*.yaml`
 
 更多：见 `homo_multirobot_nav/README.md` 与 `homo_multirobot_nav/BUG_RECORD.md`。
 

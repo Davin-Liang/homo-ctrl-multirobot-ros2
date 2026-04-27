@@ -86,7 +86,7 @@ ros2 launch homo_multirobot_localization ekf_single_robot.launch.py \
 ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py
 ```
 
-默认 `world_name:=test_world.world`（带结构的世界更利于 rf2o 稳定；如需空世界可设为 `empty.world`）。
+默认 `world_name:=sim_room1.world`（带结构的世界更利于 rf2o 稳定；如需切换可设为 `test_world.world` 或 `empty.world`）。
 
 ### 单机版（只起一台车，联调/建图更稳）
 
@@ -98,7 +98,7 @@ ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
 
 默认参数：
 
-- `world_name:=test_world.world`（默认使用带墙体/结构的世界，rf2o 更稳定；如需空世界可设为 `empty.world`）
+ - `world_name:=sim_room1.world`（默认使用带墙体/结构的世界，rf2o 更稳定；如需切换可设为 `test_world.world` 或 `empty.world`）
 - `robot_namespace:=/robot1`
 - `robot_prefix:=robot1_`
 - `use_rviz:=true`（默认会启动 RViz；如不需要可设为 `use_rviz:=false`）

@@ -18,6 +18,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -27,12 +28,16 @@ endif()
 add_executable(talker src/publisher_member_function.cpp)
 ament_target_dependencies(talker rclcpp std_msgs)
 
+add_executable(occupancy_grid_relay src/occupancy_grid_relay.cpp)
+ament_target_dependencies(occupancy_grid_relay rclcpp nav_msgs)
+
 install(TARGETS
   talker
+  occupancy_grid_relay
   DESTINATION lib/${PROJECT_NAME})
 
 install(
-  DIRECTORY config launch
+  DIRECTORY config launch maps
   DESTINATION share/${PROJECT_NAME}
 )
 

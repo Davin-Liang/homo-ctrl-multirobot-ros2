@@ -143,6 +143,29 @@
 
 ---
 
+## 12. `empty.world` 特征不足导致 rf2o/建图效果差（漂移/不收敛）
+
+**现象**
+
+- 使用 `empty.world` 时，rf2o（scan matching）里程计在静止时仍可能漂移；
+- 建图时回环/配准效果差，地图质量不稳定。
+
+**原因**
+
+空世界缺少结构化几何特征，2D 激光的 scan matching 可观性变差，容易随机游走。
+
+**处理**
+
+优先使用带墙体/结构的世界（例如本包 `worlds/sim_room1.world` 或 `worlds/test_world.world`），并在启动时显式指定：
+
+```bash
+ros2 launch homo_multirobot_gazebo sim_two_robots.launch.py world_name:=sim_room1.world
+```
+
+本仓库已将 `sim_two_robots.launch.py` / `sim_single_robot.launch.py` 的默认 `world_name` 调整为 `sim_room1.world`。
+
+---
+
 ## 复盘建议
 
 | 类别 | 教训 |

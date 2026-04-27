@@ -91,7 +91,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="true"),
-            DeclareLaunchArgument("world_name", default_value="test_world.world"),
+            DeclareLaunchArgument("world_name", default_value="sim_room1.world"),
             DeclareLaunchArgument("gui", default_value="true"),
             DeclareLaunchArgument("server", default_value="true"),
             DeclareLaunchArgument("verbose", default_value="false"),

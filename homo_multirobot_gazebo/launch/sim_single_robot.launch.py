@@ -206,7 +206,7 @@ def _opaque_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    default_world_name = "empty.world"
+    default_world_name = "sim_room1.world"
     world_name = LaunchConfiguration("world_name")
     default_world = PathJoinSubstitution(
         [get_package_share_directory("homo_multirobot_gazebo"), "worlds", world_name]
