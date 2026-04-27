@@ -32,7 +32,7 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME})
 
 install(
-  DIRECTORY config launch
+  DIRECTORY config launch maps
   DESTINATION share/${PROJECT_NAME}
 )
 
