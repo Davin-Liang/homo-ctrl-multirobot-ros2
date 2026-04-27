@@ -34,6 +34,7 @@
 | **`homo_multirobot_urdf`** | `mini_omni_robot.xacro`、STL mesh、单机 RViz 展示 launch |
 | **`homo_multirobot_gazebo`** | 空世界、双机 spawn、可选 RViz 配置与 `world` 静态 TF |
 | **`homo_multirobot_slam_toolbox`** | 多机器人建图封装：支持选定 `mapper_robot` 单机建图（两车复用同一张地图），并支持将 `/map` 重映射进机器人 namespace，便于在 `/robot1` 下调用 `save_map` |
+| **`homo_multirobot_nav`** | 已知地图定位（Nav2 `map_server` + `amcl`）：单车/双车共图定位 launch，并提供“开箱即用”的 RViz 配置（Map QoS、初始位姿话题等） |
 | **`rf2o_laser_odometry`（third_party）** | 2D 激光里程计（rf2o，上游源码引入，ROS 2 分支），订阅 `/robot*/scan` 输出 `/robot*/rf2o/odom`（可选发布 TF） |
 | **`homo_multirobot_localization`** | 多机定位/里程计链路启动与配置：双机/单机 rf2o、双机/单机 EKF（`robot_localization`），以及仿真一键链路（Gazebo + rf2o + EKF） |
 | **`omnidirectional_controllers`（third_party）** | 上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
@@ -162,7 +163,32 @@ ros2 launch homo_multirobot_gazebo sim_single_robot.launch.py
 ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
 ```
 
+说明：该仿真总 launch 默认 `use_rviz:=true`（会同时启动 RViz）；如不需要可设置 `use_rviz:=false`。
+说明：该仿真总 launch 默认 `world_name:=test_world.world`；如需空世界可设置 `world_name:=empty.world`。
+
 更多：见 `homo_multirobot_localization/README.md` 与 `homo_multirobot_localization/BUG_RECORD.md`。
+
+#### 3.4 已知地图定位（AMCL + map_server，共图）
+
+单车 AMCL（默认 `/robot1`，并启动 RViz）：
+
+```bash
+ros2 launch homo_multirobot_nav amcl_single_robot.launch.py
+```
+
+双车 AMCL（共用同一张地图，并提供可分别设置 `/robot1/initialpose` 与 `/robot2/initialpose` 的 RViz 工具）：
+
+```bash
+ros2 launch homo_multirobot_nav amcl_two_robots.launch.py
+```
+
+选择地图（示例）：
+
+```bash
+ros2 launch homo_multirobot_nav amcl_single_robot.launch.py map:=/abs/path/to/my_map.yaml
+```
+
+更多：见 `homo_multirobot_nav/README.md` 与 `homo_multirobot_nav/BUG_RECORD.md`。
 
 #### 3.4 建图（slam_toolbox）
 
