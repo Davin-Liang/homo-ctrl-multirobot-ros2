@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    leader_ns: "/robot1"
+    follower_ns: "/robot2"
+
+    # Formation geometry
+    m_p: 4
+    radius: 2.0
+    tol: 0.1
+
+    # Robot dynamics (controller model mass, not physical mass)
+    mass: 8.0
+
+    # Yaw control (conservative defaults for AMCL noisy yaw)
+    Kp_yaw: 1.0
+    K_ff: 0.3
+
+    # Control loop
+    control_rate: 20.0

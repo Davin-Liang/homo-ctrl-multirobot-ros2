@@ -5,6 +5,7 @@
 ## 📖 功能
 
 - **模型描述**：`urdf/mini_omni_robot.xacro`
+  - 底盘总质量：**2.0 kg**（各 link 的 mass 与 inertia 已从原始 CAD 导出值等比例缩放）
   - **`prefix`**：多机时 link/joint 名加前缀，避免 TF 重名（如 `robot1_` → `robot1_base_link`）。
   - **`use_gazebo`**：为 `true` 时在 Gazebo 中插入 **激光**、**IMU** 等 `<gazebo>` 块；纯 RViz 可看需求设为 `false`。
   - **`use_ros2_control`**：为 `true` 时在 URDF 中插入 `<ros2_control>`（三轮关节 `velocity` 接口）并加载 `libgazebo_ros2_control.so`；为 `false` 时回退加载 `libgazebo_ros_planar_move.so`（避免两套系统同时驱动底盘）。

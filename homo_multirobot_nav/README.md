@@ -1,11 +1,18 @@
 # homo_multirobot_nav
 
-本包用于放置“已知地图定位（AMCL）+ 静态地图加载（map_server）+ 多机器人命名空间/TF 组织 + RViz 便捷配置”的启动文件。
+本包用于放置”已知地图定位 + 静态地图加载 + 多机器人命名空间/TF 组织 + RViz 便捷配置”的启动文件。
+
+支持两种定位方式：
+
+| 方式 | Launch 文件 | 说明 |
+|------|------------|------|
+| AMCL（粒子滤波） | `amcl_single_robot.launch.py` / `amcl_two_robots.launch.py` | 依赖 `nav2_amcl` + `nav2_map_server` |
+| **slam_toolbox 纯定位**（推荐） | `slam_toolbox_loc_single_robot.launch.py` / `slam_toolbox_loc_two_robots.launch.py` | scan-to-map 匹配，位姿更平滑 |
 
 ## 目标与约定
 
 - **地图**：使用已保存的 2D 栅格地图（YAML+PGM），由 `nav2_map_server` 加载并发布全局 `/map`。
-- **共图多车**：单全局 `map`，每台车各自发布 `map -> robotX_odom`。
+- **共图多车**：单全局 `map`，每台车各自发布 `map -> robotX_odom`。定位方式（AMCL 或 slam_toolbox）由 launch 文件选择。
 - **TF 约定**（与仓库一致）：
   - EKF 发布：`robotX_odom -> robotX_base_footprint`
   - AMCL 发布：`map -> robotX_odom`
@@ -73,6 +80,23 @@ ros2 launch homo_multirobot_nav amcl_two_robots.launch.py
 在顶部工具栏切换对应工具后，在地图上点击并拖拽即可给对应机器人设置初始位姿。
 
 ---
+
+## 🚀 启动（slam_toolbox 纯定位，双车）
+
+```bash
+ros2 launch homo_multirobot_nav slam_toolbox_loc_two_robots.launch.py
+```
+
+与 AMCL 不同，slam_toolbox 纯定位直接通过启动参数设置初始位姿：
+
+```bash
+ros2 launch homo_multirobot_nav slam_toolbox_loc_two_robots.launch.py \
+  robot1_map_start_x:=0.0 robot1_map_start_y:=0.0 robot1_map_start_yaw:=0.0 \
+  robot2_map_start_x:=2.0 robot2_map_start_y:=0.0 robot2_map_start_yaw:=0.0
+```
+
+slam_toolbox 定位**不发布 `amcl_pose`**，通过 TF 提供 `map → odom` 变换。
+使用本定位的控制器需从 TF 获取位姿。
 
 ## ✅ 最小验证
 

@@ -31,10 +31,11 @@
 
 | 包名 | 说明 |
 |------|------|
-| **`homo_multirobot_urdf`** | `mini_omni_robot.xacro`、STL mesh、单机 RViz 展示 launch |
+| **`homo_multirobot_urdf`** | `mini_omni_robot.xacro`（总质量 2.0 kg）、STL mesh、单机 RViz 展示 launch |
 | **`homo_multirobot_gazebo`** | 空世界、双机 spawn、可选 RViz 配置与 `world` 静态 TF |
 | **`homo_multirobot_slam_toolbox`** | 多机器人建图封装：支持选定 `mapper_robot` 单机建图（两车复用同一张地图），并支持将 `/map` 重映射进机器人 namespace，便于在 `/robot1` 下调用 `save_map` |
-| **`homo_multirobot_nav`** | 已知地图定位（Nav2 `map_server` + `amcl`）：单车/双车共图定位 launch，并提供“开箱即用”的 RViz 配置（Map QoS、初始位姿话题等） |
+| **`homo_multirobot_nav`** | 已知地图定位（AMCL 或 slam_toolbox 纯定位）：单车/双车定位 launch + 地图加载 + RViz 配置 |
+| **`homo_multirobot_formation_control`** | Leader-Follower 编队控制（齐次控制算法，C++ / Eigen）：支持单/双 follower，通过 TF + EKF 获取状态 |
 | **`rf2o_laser_odometry`（third_party）** | 2D 激光里程计（rf2o，上游源码引入，ROS 2 分支），订阅 `/robot*/scan` 输出 `/robot*/rf2o/odom`（可选发布 TF） |
 | **`homo_multirobot_localization`** | 多机定位/里程计链路启动与配置：双机/单机 rf2o、双机/单机 EKF（`robot_localization`），以及仿真一键链路（Gazebo + rf2o + EKF） |
 | **`omnidirectional_controllers`（third_party）** | 上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
@@ -168,19 +169,36 @@ ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
 
 更多：见 `homo_multirobot_localization/README.md` 与 `homo_multirobot_localization/BUG_RECORD.md`。
 
-#### 3.4 已知地图定位（AMCL + map_server，共图）
+#### 3.4 已知地图定位
 
-单车 AMCL（默认 `/robot1`，并启动 RViz）：
+**方式 A：AMCL（粒子滤波）**
+
+单车：
 
 ```bash
 ros2 launch homo_multirobot_nav amcl_single_robot.launch.py
 ```
 
-双车 AMCL（共用同一张地图，并提供可分别设置 `/robot1/initialpose` 与 `/robot2/initialpose` 的 RViz 工具）：
+双车：
 
 ```bash
 ros2 launch homo_multirobot_nav amcl_two_robots.launch.py
 ```
+
+**方式 B：slam_toolbox 纯定位（推荐）**
+
+比 AMCL 更平滑，位姿不跳变，适合与编队控制联调。
+
+双车（直接在 launch 参数中设置初始位姿）：
+
+```bash
+ros2 launch homo_multirobot_nav slam_toolbox_loc_two_robots.launch.py \
+  robot1_map_start_x:=0.0 robot1_map_start_y:=0.0 robot1_map_start_yaw:=0.0 \
+  robot2_map_start_x:=2.0 robot2_map_start_y:=0.0 robot2_map_start_yaw:=0.0
+```
+
+> 注意：slam_toolbox 定位**不发布 `amcl_pose`**，而是通过 TF 提供 `map → odom` 变换。
+> 使用 slam_toolbox 定位的控制器需从 TF 获取位姿。
 
 选择地图（示例）：
 
@@ -188,13 +206,31 @@ ros2 launch homo_multirobot_nav amcl_two_robots.launch.py
 ros2 launch homo_multirobot_nav amcl_single_robot.launch.py map:=/abs/path/to/my_map.yaml
 ```
 
-说明：仓库内置示例地图位于 `homo_multirobot_slam_toolbox/maps/`，安装后路径为：
-
-- `$(ros2 pkg prefix homo_multirobot_slam_toolbox)/share/homo_multirobot_slam_toolbox/maps/*.yaml`
-
 更多：见 `homo_multirobot_nav/README.md` 与 `homo_multirobot_nav/BUG_RECORD.md`。
 
-#### 3.4 建图（slam_toolbox）
+#### 3.5 Leader-Follower 编队控制
+
+单 follower（默认 `/robot1` 领航、`/robot2` 跟随）：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py
+```
+
+双 follower：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_two_followers.launch.py
+```
+
+键盘遥控领航者：
+
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot1/cmd_vel
+```
+
+更多：见 `homo_multirobot_formation_control/README.md` 与 `homo_multirobot_formation_control/BUG_RECORD.md`。
+
+#### 3.6 建图（slam_toolbox）
 
 单机建图（选定 mapper_robot）：
 
