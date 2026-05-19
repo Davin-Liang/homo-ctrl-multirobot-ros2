@@ -19,6 +19,10 @@
 | 8 | `val_a/val_b` 比值在噪声下爆炸 | 控制 | 比值 clamp |
 | 9 | 死区导致"开-关"抽搐 | 控制 | 移除死区 |
 | 10 | 速度归零导致算法退化 | 控制 | 不采用，保留完整模型 |
+| 11 | 6D 控制器速度误差跨坐标系直接相减 → 发散 | 控制 | follower 速度旋转到 leader 车体系 |
+| 12 | 边界投影符号错误 → 两车相撞 | 控制 | d = +radius（非 -radius）|
+| 13 | `trans_con_nd` 可控性矩阵尺寸硬编码 | C++ | 改用动态 `MatrixXd(N, N*M)` |
+| 14 | `sim_rf2o_ekf` launch 未转发 spawn 位姿参数 | 架构 | 添加 robot*_x/y/z/yaw 参数转发 |
 
 ---
 
@@ -219,3 +223,89 @@ val_b = std::clamp(val_b, -max_ratio, max_ratio);
 **最终方案**
 
 通过 EKF odom + TF 变换通道提供完整 4 维状态（位置 + 速度），控制器逻辑等价于原版。
+
+---
+
+## 11) 6D 控制器速度误差跨坐标系直接相减 → 发散
+
+**现象**
+
+6D 控制器（Layer 3）初次运行时两车相撞，cmd_vel 输出恒定方向不收敛。
+
+**原因**
+
+6D 状态中 $v_x^b, v_y^b$ 定义在各机器人**自身车体系**下。当 leader yaw=0°、follower yaw=90° 时，
+直接做 $v_{x,f}^b - v_{x,l}^b$ 是把不同坐标系下的速度相减，无物理意义。
+follower 的"前进"（body +X）是 map +Y 方向，leader 的"前进"是 map +X 方向，
+两者相减不能反映真实速度误差。
+
+**处理**
+
+在误差计算时将 follower 速度旋转到 leader 车体系：
+
+$$v_{x,f}^L = v_{x,f}^b \cos\Delta\theta - v_{y,f}^b \sin\Delta\theta$$
+$$v_{y,f}^L = v_{x,f}^b \sin\Delta\theta + v_{y,f}^b \cos\Delta\theta$$
+
+其中 $\Delta\theta = \theta_f - \theta_l$。对应地，控制力从 leader 车体系旋转回 follower 车体系进行前向欧拉积分。
+
+**修改文件**: `homo_controller_6d.hpp` → `compute_error()`, `lpc_calculate()`
+
+---
+
+## 12) 边界投影符号错误 → 两车相撞
+
+**现象**
+
+修复 #11 后两车仍然相撞。调试日志显示 follower 从右侧逼近 leader 并直接穿过到达左侧。
+
+**原因**
+
+边界投影公式 $d = -r_s \cdot \text{direction}$ 中的负号把编队点放在了 leader 的**反方向**。
+follower 在 leader 右侧时，编队点被置于 leader 左侧，follower 必须穿越 leader 才能到达。
+
+**处理**
+
+改为 $d = +r_s \cdot \text{direction}$，编队点落在 leader→follower 连线与安全圆的交点（两者之间）：
+
+$$d_{\text{pos}} = r_s \cdot \frac{\mathbf{p}_f - \mathbf{p}_l}{\|\mathbf{p}_f - \mathbf{p}_l\|}$$
+
+**修改文件**: `homo_controller_6d.hpp` → `compute_error()`
+
+---
+
+## 13) `trans_con_nd` 可控性矩阵尺寸硬编码
+
+**现象**
+
+首次编译 `lpc2hpc_nd.hpp` 时，可控性矩阵直接使用了原 4D 版本的 `Matrix<double, 4, 8>`。
+
+**原因**
+
+原版 `trans_con` 的可控性矩阵针对 4 状态 2 输入设计（4×8）。6D 系统有 6 状态 3 输入，
+可控性矩阵应为 6×18。硬编码导致编译错误。
+
+**处理**
+
+改为动态尺寸 `MatrixXd(N, N*M)`，由运行时维度决定。
+
+**修改文件**: `lpc2hpc_nd.hpp` → `trans_con_nd()`
+
+---
+
+## 14) `sim_rf2o_ekf` launch 未转发 spawn 位姿参数
+
+**现象**
+
+通过 `sim_rf2o_ekf_two_robots.launch.py` 传入 `robot2_x:=4.0 robot2_yaw:=1.57` 不生效，
+两车仍 spawn 在默认位置。
+
+**原因**
+
+`sim_rf2o_ekf_two_robots.launch.py` 内嵌了 `sim_two_robots.launch.py`（Gazebo spawn），
+但 `robot*_x/y/z/yaw` 等参数未在 `IncludeLaunchDescription` 的 `launch_arguments` 中转发。
+
+**处理**
+
+在 launch 文件中声明并转发所有 8 个 spawn 位姿参数。
+
+**修改文件**: `homo_multirobot_localization/launch/sim_rf2o_ekf_two_robots.launch.py`

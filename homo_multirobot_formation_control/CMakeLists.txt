@@ -44,6 +44,34 @@ install(TARGETS formation_control_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- 6D 运动学模型控制器 (Layer 3) -------------------------------------------
+add_executable(formation_control_node_6d
+  src/main_6d.cpp
+  src/formation_control_node_6d.cpp
+)
+
+target_include_directories(formation_control_node_6d PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+ament_target_dependencies(formation_control_node_6d
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+target_link_libraries(formation_control_node_6d
+  Eigen3::Eigen
+)
+
+install(TARGETS formation_control_node_6d
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
 )
