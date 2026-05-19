@@ -45,15 +45,15 @@
 
 详细的数学推导见 `doc/kinematic_homogeneous_control.md`。核心要点：
 
-1. **6D 混合系状态**：`[pₓ, p_y, θ, vₓᵇ, v_yᵇ, ω]ᵀ`，位置/朝向在 map 系，
+1. **6D 混合系状态**：$[p_x, p_y, \theta, v_x^b, v_y^b, \omega]^{\mathsf{T}}$，位置/朝向在 map 系，
    速度在车体系，输出天然对应 `cmd_vel`
-2. **误差在 leader 车体系下计算**：follower 速度按 Δθ 旋转后求差，
+2. **误差在 leader 车体系下计算**：follower 速度按 $\Delta\theta$ 旋转后求差，
    控制力再旋转回 follower 车体系做前向欧拉积分
-3. **边界投影编队**：`d = rₛ · (p_f − pₗ) / ‖p_f − pₗ‖`，
+3. **边界投影编队**：$d = r_s \cdot (\mathbf{p}_f - \mathbf{p}_l)/\|\mathbf{p}_f - \mathbf{p}_l\|$，
    连续光滑，无离散切换
-4. **时变 Aₗ 矩阵**：含 leader 速度耦合项 (ωₗ, v_{x,l}ᵇ, v_{y,l}ᵇ)，
-   每周期更新；HPC 参数在 leader 速度或 Δθ 变化超过阈值时重算
-5. **yaw 控制集成**：`θ/ω` 作为 3×6 增益矩阵的第三通道，临界阻尼双极点设计
+4. **时变 $A_l$ 矩阵**：含 leader 速度耦合项 $(\omega_l, v_{x,l}^b, v_{y,l}^b)$，
+   每周期更新；HPC 参数在 leader 速度或 $\Delta\theta$ 变化超过阈值时重算
+5. **yaw 控制集成**：$\theta/\omega$ 作为 3×6 增益矩阵的第三通道，临界阻尼双极点设计
 
 ## 数据输入
 

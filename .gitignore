@@ -8,3 +8,11 @@ frames_*.gv
 
 # Gazebo runtime / downloaded models cache
 homo_multirobot_gazebo/worlds/models/
+
+# Colcon build artifacts (when building inside source tree)
+build/
+install/
+log/
+
+# PDF papers
+*.pdf
