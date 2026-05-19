@@ -9,7 +9,10 @@
 $$\dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u}, \quad 
 \mathbf{x} = [p_x, p_y, v_x, v_y]^{\mathsf{T}} \in \mathbb{R}^4$$
 
-其中 $A = \begin{bmatrix} 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 0 & 0 \\ 0 & 0 & 0 & 0 \end{bmatrix}$, $B = \begin{bmatrix} 0 & 0 \\ 0 & 0 \\ \frac{1}{m} & 0 \\ 0 & \frac{1}{m} \end{bmatrix}$。
+其中：
+
+$$A = \begin{bmatrix} 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & 0 & 0 \\ 0 & 0 & 0 & 0 \end{bmatrix}, \quad
+B = \begin{bmatrix} 0 & 0 \\ 0 & 0 \\ \frac{1}{m} & 0 \\ 0 & \frac{1}{m} \end{bmatrix}$$
 
 该模型的隐含假设是：速度分量 $(v_x, v_y)$ 定义在全局（map）坐标系下，机器人被视为无朝向的质点。然而在实际系统中，ROS 的 `cmd_vel` 接口（`geometry_msgs/Twist`）语义为**车体坐标系**：
 - `linear.x`：沿机器人前进方向（body +X）
@@ -70,7 +73,9 @@ a_y / m \\
 $$\begin{bmatrix} \Delta e_x^L \\ \Delta e_y^L \end{bmatrix} = 
 R(-\theta_l) \begin{bmatrix} p_{x,f} - p_{x,l} \\ p_{y,f} - p_{y,l} \end{bmatrix}$$
 
-其中 $R(\theta) = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix}$ 为旋转矩阵。
+其中 $R(\theta)$ 为旋转矩阵：
+
+$$R(\theta) = \begin{bmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{bmatrix}$$
 
 follower 车体系速度也需旋转到 leader 车体系才能求差：
 
