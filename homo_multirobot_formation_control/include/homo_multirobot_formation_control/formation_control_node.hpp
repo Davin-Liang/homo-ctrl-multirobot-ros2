@@ -16,6 +16,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <memory>
 #include "homo_multirobot_formation_control/homo_controller.hpp"
+#include "homo_multirobot_formation_control/kinematic_constraint.hpp"
 
 class FormationController : public rclcpp::Node
 {
@@ -28,9 +29,11 @@ private:
   // ---- 参数 ----------------------------------------------------------------
   std::string leader_ns_, follower_ns_;
   double Kp_yaw_, K_ff_;
+  double control_rate_;
 
-  // ---- 控制器 --------------------------------------------------------------
+  // ---- 控制器 + 约束 -------------------------------------------------------
   std::unique_ptr<formation_control::LpcController> ctrl_;
+  formation_control::KinematicConstraint constraint_;
 
   // ---- TF ------------------------------------------------------------------
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;

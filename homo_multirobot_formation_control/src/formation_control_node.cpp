@@ -33,9 +33,19 @@ FormationController::FormationController()
   double mass   = declare_parameter("mass",    8.0);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
   K_ff_         = declare_parameter("K_ff",    1.0);
-  double control_rate = declare_parameter("control_rate", 20.0);
+  control_rate_ = declare_parameter("control_rate", 20.0);
+
+  double wheel_radius    = declare_parameter("wheel_radius",    0.03);
+  double base_radius     = declare_parameter("base_radius",     0.11);
+  double wheel_max_omega = declare_parameter("wheel_max_omega", 20.0);
+  double max_linear_accel  = declare_parameter("max_linear_accel",  2.0);
+  double max_angular_accel = declare_parameter("max_angular_accel", 4.0);
 
   ctrl_ = std::make_unique<LpcController>(m_p, radius, tol, mass);
+
+  constraint_ = KinematicConstraint(wheel_radius, base_radius,
+                                    wheel_max_omega,
+                                    max_linear_accel, max_angular_accel);
 
   // TF 监听 slam_toolbox/AMCL 的 map→odom 变换链
   tf_buffer_   = std::make_unique<tf2_ros::Buffer>(get_clock());
@@ -52,7 +62,7 @@ FormationController::FormationController()
 
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 
-  int ms = static_cast<int>(1000.0 / control_rate);
+  int ms = static_cast<int>(1000.0 / control_rate_);
   timer_ = create_wall_timer(std::chrono::milliseconds(ms), [this]() { timer_cb(); });
 
   RCLCPP_INFO(get_logger(), "编队控制节点已启动。");
@@ -158,15 +168,28 @@ void FormationController::timer_cb()
   // 齐次控制律（算法本身未修改）
   auto out = ctrl_->lpc_calculate(x1, x2);
 
+  // 将 map 系速度旋转到车体坐标系（cmd_vel 语义为车体系）
+  double vx_body =  out[0] * std::cos(follower_yaw) + out[1] * std::sin(follower_yaw);
+  double vy_body = -out[0] * std::sin(follower_yaw) + out[1] * std::cos(follower_yaw);
+
   // 构建并发布速度指令
   geometry_msgs::msg::Twist cmd;
-  cmd.linear.x = std::clamp(out[0], -1.0, 1.0);
-  cmd.linear.y = std::clamp(out[1], -1.0, 1.0);
+  cmd.linear.x = std::clamp(vx_body, -1.0, 1.0);
+  cmd.linear.y = std::clamp(vy_body, -1.0, 1.0);
 
   // 偏航控制: 比例（归一化后）+ 前馈
   double raw_err   = leader_yaw - follower_yaw;
   double norm_err  = std::atan2(std::sin(raw_err), std::cos(raw_err));
   cmd.angular.z = std::clamp(norm_err * Kp_yaw_ + leader_az * K_ff_, -0.5, 0.5);
+
+  // 全向轮运动学约束（轮速 + 加速度限幅）
+  double dt = 1.0 / control_rate_;
+  double wheel_scale = constraint_.apply(cmd.linear.x, cmd.linear.y, cmd.angular.z, dt);
+  if (wheel_scale < 0.99) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+      "轮速约束触发: scale=%.2f, 限幅后 cmd=(%.2f, %.2f, %.2f)",
+      wheel_scale, cmd.linear.x, cmd.linear.y, cmd.angular.z);
+  }
 
   cmd_pub_->publish(cmd);
 }

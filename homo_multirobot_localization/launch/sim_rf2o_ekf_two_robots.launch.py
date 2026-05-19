@@ -22,6 +22,15 @@ def generate_launch_description():
     robot1_prefix = LaunchConfiguration("robot1_prefix")
     robot2_prefix = LaunchConfiguration("robot2_prefix")
 
+    robot1_x = LaunchConfiguration("robot1_x")
+    robot1_y = LaunchConfiguration("robot1_y")
+    robot1_z = LaunchConfiguration("robot1_z")
+    robot1_yaw = LaunchConfiguration("robot1_yaw")
+    robot2_x = LaunchConfiguration("robot2_x")
+    robot2_y = LaunchConfiguration("robot2_y")
+    robot2_z = LaunchConfiguration("robot2_z")
+    robot2_yaw = LaunchConfiguration("robot2_yaw")
+
     # TF/odom conflict strategy
     planar_publish_odom = LaunchConfiguration("planar_publish_odom")
     planar_publish_odom_tf = LaunchConfiguration("planar_publish_odom_tf")
@@ -52,6 +61,14 @@ def generate_launch_description():
             "robot2_prefix": robot2_prefix,
             "planar_publish_odom": planar_publish_odom,
             "planar_publish_odom_tf": planar_publish_odom_tf,
+            "robot1_x": robot1_x,
+            "robot1_y": robot1_y,
+            "robot1_z": robot1_z,
+            "robot1_yaw": robot1_yaw,
+            "robot2_x": robot2_x,
+            "robot2_y": robot2_y,
+            "robot2_z": robot2_z,
+            "robot2_yaw": robot2_yaw,
         }.items(),
     )
 
@@ -104,6 +121,14 @@ def generate_launch_description():
             DeclareLaunchArgument("robot2_namespace", default_value="/robot2"),
             DeclareLaunchArgument("robot1_prefix", default_value="robot1_"),
             DeclareLaunchArgument("robot2_prefix", default_value="robot2_"),
+            DeclareLaunchArgument("robot1_x", default_value="0.0"),
+            DeclareLaunchArgument("robot1_y", default_value="0.0"),
+            DeclareLaunchArgument("robot1_z", default_value="0.0"),
+            DeclareLaunchArgument("robot1_yaw", default_value="0.0"),
+            DeclareLaunchArgument("robot2_x", default_value="1.0"),
+            DeclareLaunchArgument("robot2_y", default_value="0.0"),
+            DeclareLaunchArgument("robot2_z", default_value="0.0"),
+            DeclareLaunchArgument("robot2_yaw", default_value="0.0"),
             # Default: EKF is the ONLY source of odom->base TF
             DeclareLaunchArgument("planar_publish_odom", default_value="false"),
             DeclareLaunchArgument("planar_publish_odom_tf", default_value="false"),

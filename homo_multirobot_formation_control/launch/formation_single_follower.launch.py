@@ -21,6 +21,13 @@ def generate_launch_description():
     Kp_yaw = LaunchConfiguration("Kp_yaw")
     K_ff = LaunchConfiguration("K_ff")
 
+    # Kinematic constraints
+    wheel_radius = LaunchConfiguration("wheel_radius")
+    base_radius = LaunchConfiguration("base_radius")
+    wheel_max_omega = LaunchConfiguration("wheel_max_omega")
+    max_linear_accel = LaunchConfiguration("max_linear_accel")
+    max_angular_accel = LaunchConfiguration("max_angular_accel")
+
     # Control rate
     control_rate = LaunchConfiguration("control_rate")
 
@@ -40,6 +47,11 @@ def generate_launch_description():
             "mass": mass,
             "Kp_yaw": Kp_yaw,
             "K_ff": K_ff,
+            "wheel_radius": wheel_radius,
+            "base_radius": base_radius,
+            "wheel_max_omega": wheel_max_omega,
+            "max_linear_accel": max_linear_accel,
+            "max_angular_accel": max_angular_accel,
             "control_rate": control_rate,
         }],
     )
@@ -65,5 +77,15 @@ def generate_launch_description():
                               description="Feedforward yaw gain"),
         DeclareLaunchArgument("control_rate", default_value="20.0",
                               description="Control loop frequency (Hz)"),
+        DeclareLaunchArgument("wheel_radius", default_value="0.03",
+                              description="Wheel rolling radius (m)"),
+        DeclareLaunchArgument("base_radius", default_value="0.11",
+                              description="Distance from robot center to wheel (m)"),
+        DeclareLaunchArgument("wheel_max_omega", default_value="20.0",
+                              description="Max wheel angular velocity (rad/s)"),
+        DeclareLaunchArgument("max_linear_accel", default_value="2.0",
+                              description="Max body linear acceleration (m/s^2)"),
+        DeclareLaunchArgument("max_angular_accel", default_value="4.0",
+                              description="Max body angular acceleration (rad/s^2)"),
         formation_node,
     ])
