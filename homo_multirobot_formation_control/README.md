@@ -3,7 +3,8 @@
 基于**齐次控制（Homogeneous Control）** 的 Leader-Follower 编队算法（C++ / Eigen），
 适配项目的 slam_toolbox / AMCL + EKF 定位体系。
 
-提供两套控制器：**4D 质点模型**（原版论文算法）和 **6D 运动学模型**（考虑车身朝向 + 全向轮约束）。
+提供三套控制器：**4D 质点模型**（原版论文算法）、**6D 运动学模型**（考虑车身朝向 + 全向轮约束）、
+以及 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）。
 
 ## 目录
 
@@ -23,8 +24,13 @@
 |------|------------|-----------|---------|---------|---------|
 | **4D (原版)** | `formation_single_follower.launch.py` | `formation_control_node` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **6D (运动学)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
+| **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
 
-两套控制器共享以下模块（不修改原 4D 代码）：
+6D+OA 在 6D 基础上新增基于单线激光雷达的避障功能：通过 `/scan` 话题感知障碍物，
+将障碍物距离约束以软约束形式融入 QP 优化框架，求解最优速度指令平衡编队跟踪与避障。
+**适用于圆柱体等光滑曲面障碍物，不支持正方体等多面体。**
+
+三套控制器共享以下模块（不修改原 4D/6D 代码）：
 - `kinematic_constraint.hpp` — 全向轮轮速/加速度约束
 - `types_nd.hpp`, `hnorm_nd.hpp`, `lpc2hpc_nd.hpp` — N-D 泛化齐次控制工具库
 
@@ -54,6 +60,59 @@
 4. **时变 $A_l$ 矩阵**：含 leader 速度耦合项 $(\omega_l, v_{x,l}^b, v_{y,l}^b)$，
    每周期更新；HPC 参数在 leader 速度或 $\Delta\theta$ 变化超过阈值时重算
 5. **yaw 控制集成**：$\theta/\omega$ 作为 3×6 增益矩阵的第三通道，临界阻尼双极点设计
+
+## 算法原理 (6D+OA)
+
+6D+OA 复用了 6D 的 HPC 核心算法（`homo_controller_6d.hpp` 等），在 HPC 期望速度输出后插入避障融合模块。
+架构如下：
+
+```
+HPC 期望力 → 坐标系旋转 → 前向欧拉积分 → 候选速度 v_hpc
+                                                 ↓
+/scan → 点云滤波 → 欧几里得聚类 → 障碍物列表 → QP 融合求解 → 运动学约束 → cmd_vel
+```
+
+### 激光处理
+
+1. 滤除无效点（inf/nan/超量程），转为 2D 笛卡尔坐标（车身系）
+2. 欧几里得聚类：相邻点距离 ≤ `cluster_tolerance` 的归为一簇
+3. 每个簇取**最近点**（离机器人最近的点）作为障碍物位置，半径上限 0.5m
+4. 多帧最近邻匹配 + 低通滤波，跟踪障碍物 ID 并估计速度
+
+### QP 优化问题
+
+决策变量 $v = [v_x, v_y, \omega] \in \mathbb{R}^3$（车体系速度指令）：
+
+$$\min_v \quad \|v - v_{\text{hpc}}\|^2 + \sum_i w_i \cdot \phi_{\text{smooth}}(v \cdot n_i - v_{\text{safe},i})^2$$
+
+$$\text{s.t.} \quad v_{\min} \le v \le v_{\max}, \quad |v - v_{\text{prev}}| \le a_{\max} \cdot dt$$
+
+其中 $\phi_{\text{smooth}}(x) = \frac{1}{2}(x + \sqrt{x^2 + \varepsilon^2})$ 为光滑 max(0,x) 近似，
+$n_i$ 为机器人指向障碍物表面的单位向量，
+$w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
+
+安全速度 $v_{\text{safe},i}$：
+- 障碍物在安全距离外：$v_{\text{safe}} = \max(0, \text{clearance}/T)$，限制靠近速度
+- 进入安全距离内：$v_{\text{safe}} < 0$（负值），要求机器人主动后退
+
+求解方法：投影梯度下降（Eigen，无外部 QP 求解器依赖），Armijo 回溯线搜索。
+
+### 避障参数（launch 可改）
+
+| 参数 | 类型 | 默认值 | 作用 |
+|------|------|--------|------|
+| `scan_topic` | string | `scan` | 激光雷达话题（相对 follower 命名空间） |
+| `safety_distance` | double | 0.5 | 安全距离阈值 (m)，进入该范围触发后退 |
+| `obstacle_weight` | double | 1.0 | 避障代价权重，越大越保守 |
+| `time_horizon` | double | 0.5 | 碰撞预测时域 (s) |
+| `max_obstacles` | int | 10 | 最大考虑障碍物数量 |
+| `cluster_tolerance` | double | 0.1 | 聚类距离阈值 (m) |
+| `min_cluster_size` | int | 5 | 聚类最少点数 |
+
+### 已知局限
+
+- **适用**：圆柱体、球体等光滑曲面障碍物
+- **不适用**：正方体、长方体等多面体——最近点会在面间跳变，导致 QP 反复拉锯
 
 ## 数据输入
 
@@ -141,7 +200,7 @@
 
 ## 依赖
 
-- `rclcpp`、`geometry_msgs`、`nav_msgs`
+- `rclcpp`、`geometry_msgs`、`nav_msgs`、`sensor_msgs`
 - `tf2_ros`、`tf2_geometry_msgs`
 - `Eigen 3.4`（`libeigen3-dev`）+ unsupported 模块（KroneckerProduct, MatrixFunctions）
 - `eigen3_cmake_module`
@@ -180,6 +239,19 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launc
   radius:=1.0 mass:=8.0 I:=1.0 wheel_max_omega:=10.0
 ```
 
+### 启动（6D+OA 单 follower，带避障）
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py
+```
+
+带参数：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py \
+  safety_distance:=0.6 radius:=1.0 obstacle_weight:=1.5
+```
+
 ### 启动（双 follower，4D 版）
 
 ```bash
@@ -203,6 +275,10 @@ ros2 launch homo_multirobot_formation_control formation_single_follower.launch.p
 # 3b. 编队控制 — 6D 版
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py \
   radius:=1.0 wheel_max_omega:=10.0
+
+# 3c. 编队控制 — 6D+OA 版（带避障）
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py \
+  safety_distance:=0.6 radius:=1.0
 
 # 4. 键盘遥控领航者
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot1/cmd_vel

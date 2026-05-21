@@ -16,6 +16,7 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 add_executable(formation_control_node
   src/main.cpp
@@ -69,6 +70,36 @@ target_link_libraries(formation_control_node_6d
 )
 
 install(TARGETS formation_control_node_6d
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# ---- 6D+OA 运动学模型控制器 (带避障) -----------------------------------------
+add_executable(formation_control_node_6d_oa
+  src/main_6d_oa.cpp
+  src/formation_control_node_6d_oa.cpp
+  src/obstacle_avoider.cpp
+)
+
+target_include_directories(formation_control_node_6d_oa PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+ament_target_dependencies(formation_control_node_6d_oa
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  sensor_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+target_link_libraries(formation_control_node_6d_oa
+  Eigen3::Eigen
+)
+
+install(TARGETS formation_control_node_6d_oa
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -23,6 +23,11 @@
 | 12 | 边界投影符号错误 → 两车相撞 | 控制 | d = +radius（非 -radius）|
 | 13 | `trans_con_nd` 可控性矩阵尺寸硬编码 | C++ | 改用动态 `MatrixXd(N, N*M)` |
 | 14 | `sim_rf2o_ekf` launch 未转发 spawn 位姿参数 | 架构 | 添加 robot*_x/y/z/yaw 参数转发 |
+| 15 | 避障参数重复声明导致节点崩溃 | OA | has_parameter 检查后按需 declare |
+| 16 | scan 时间戳与 rclcpp::Time 类型不兼容 | OA | rclcpp::Time(msg->header.stamp) 转换 |
+| 17 | v_hpc 过大（>4 m/s）导致梯度爆炸 | OA | QP 求解前裁剪到加速度盒内 |
+| 18 | severity 无上限导致径向力远超横向力 | OA | severity 上限设为 8x |
+| 19 | 最近点表示在正方体棱边跳变导致振荡 | OA | 圆柱体适用，正方体不支持 |
 
 ---
 
@@ -309,3 +314,108 @@ $$d_{\text{pos}} = r_s \cdot \frac{\mathbf{p}_f - \mathbf{p}_l}{\|\mathbf{p}_f -
 在 launch 文件中声明并转发所有 8 个 spawn 位姿参数。
 
 **修改文件**: `homo_multirobot_localization/launch/sim_rf2o_ekf_two_robots.launch.py`
+
+---
+
+## 15) 避障参数 `max_linear_accel` 重复声明 → 节点崩溃
+
+**现象**
+
+`ros2 launch formation_single_follower_6d_oa.launch.py` 后进程立即退出：
+`ParameterAlreadyDeclaredException: parameter 'max_linear_accel' has already been declared`
+
+**原因**
+
+`FormationController6DOA` 节点和 `ObstacleAvoider` 分别在各自构造函数中
+declare 了同名的 `max_linear_accel` 和 `max_angular_accel` 参数。ROS 2 不允许
+同一节点内重复声明同名参数。
+
+**处理**
+
+在 `ObstacleAvoider` 中使用 `has_parameter` 检查：
+- 已存在 → `get_parameter` 读取
+- 不存在 → `declare_parameter` 声明后读取
+
+**修改文件**: `obstacle_avoider.cpp` → 构造函数 `get_or_declare_double` lambda
+
+---
+
+## 16) scan 时间戳 `builtin_interfaces::msg::Time` 与 `rclcpp::Time` 类型不兼容
+
+**现象**
+
+编译报错：`no match for 'operator-' (operand types are 'builtin_interfaces::msg::Time' and 'rclcpp::Time')`
+
+**原因**
+
+`msg->header.stamp` 类型为 `builtin_interfaces::msg::Time`，`last_scan_stamp_` 为 `rclcpp::Time`，
+两者不能直接做减法运算。
+
+**处理**
+
+```cpp
+rclcpp::Time now(msg->header.stamp);
+double dt = (now - last_scan_stamp_).seconds();
+```
+
+**修改文件**: `obstacle_avoider.cpp` → `scan_callback()`
+
+---
+
+## 17) v_hpc 远大于加速度可行盒导致梯度爆炸，梯度下降不收敛
+
+**现象**
+
+日志显示 `v_hpc=[-4.4,-0.4]`（4.4 m/s），但加速度约束仅允许 ±0.1 m/s 变化。
+QP 目标函数 `||v - v_hpc||²` 的梯度约为 `2×(4.4) ≈ 8.8`，
+避障梯度仅 ~0.5，被编队力完全压制。梯度下降每次迭代都撞到加速度盒边界
+并被投影回来，20 次迭代不收敛，输出速度接近零。
+
+**原因**
+
+HPC 控制器在大编队误差下输出极高速度（非线性增益放大），
+但在 QP 中没有将编队目标裁剪到加速度可达范围。
+
+**处理**
+
+求解前将 v_hpc 裁剪到加速度盒内：`v_target = clip(v_hpc, lb, ub)`，
+让编队力只在可达范围内竞争。后续版本中此逻辑被移除（清理正方体代码时），
+保留此记录供未来调优参考。
+
+**修改文件**: `obstacle_avoider.cpp` → `solve()`（已被后续清理移除）
+
+---
+
+## 18) 障碍物权重 severity 无上限，靠近表面时径向力爆炸
+
+**现象**
+
+`severity = safety_distance / d_surface` 公式在 `d_surface ≈ 0.01m` 时可达 150x，
+径向排斥力为横向绕行力的 50 倍以上，优化器只能后退无法绕行。
+
+**处理**
+
+severity 上限设为 8x：`severity = clamp(1.5, severity, 8.0)`。
+
+**修改文件**: `obstacle_avoider.cpp` → `obstacle_effective_weight()`
+
+---
+
+## 19) 最近点表示在正方体棱边跳变 → 左右振荡
+
+**现象**
+
+正方体作为障碍物时，follower 在棱边处来回振荡，无法绕行。
+圆柱体正常（光滑曲面，最近点连续）。
+
+**原因**
+
+正方体有多个离散面，当机器人经过棱边时，最近点从一个面跳到另一个面，
+排斥方向 `n` 突变，QP 代价函数结构跳变，导致速度指令帧间不连续 → 振荡。
+多次尝试通过位置平滑、横向激励、动态编队权重等手段修复，均无法完全消除。
+
+**结论**
+
+基于最近点的障碍物表示**仅适用于光滑曲面（圆柱体、球体等）**，
+多面体需用质心圆或其他表示方式。此局限已写入 README 已知局限。
+
