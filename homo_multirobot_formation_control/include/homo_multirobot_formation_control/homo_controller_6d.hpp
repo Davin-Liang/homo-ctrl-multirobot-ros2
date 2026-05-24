@@ -28,10 +28,10 @@ public:
   /// @param hpc_vel_threshold  leader 速度变化触发 HPC 重算的阈值
   LpcController6D(double radius = 2.0, double mass = 8.0, double I = 1.0,
                   double omega_d = 1.5, double omega_d_theta = 1.5,
-                  double hpc_vel_threshold = 0.3)
+                  double hpc_vel_threshold = 0.3, bool use_hpc = true)
     : radius_(radius), mass_(mass), I_(I),
       omega_d_(omega_d), omega_d_theta_(omega_d_theta),
-      hpc_vel_threshold_(hpc_vel_threshold)
+      hpc_vel_threshold_(hpc_vel_threshold), use_hpc_(use_hpc)
   {
     const int n = 6, m = 3;
 
@@ -72,14 +72,16 @@ public:
     last_dtheta_ = dtheta;
     k_lin_ = calculate_klin(e);
 
-    auto res = lpc2hpc_nd(A_, B_, k_lin_);
-    if (res.G0.isZero(1e-12)) {
-      throw std::runtime_error("6D 控制器初始化失败: lpc2hpc 返回零结果。");
+    if (use_hpc_) {
+      auto res = lpc2hpc_nd(A_, B_, k_lin_);
+      if (res.G0.isZero(1e-12)) {
+        throw std::runtime_error("6D 控制器初始化失败: lpc2hpc 返回零结果。");
+      }
+      G0_ = res.G0;
+      P_  = res.P;
+      nu_ = res.nu_min;
+      Gd_ = Eigen::MatrixXd::Identity(6, 6) + nu_ * G0_;
     }
-    G0_ = res.G0;
-    P_  = res.P;
-    nu_ = res.nu_min;
-    Gd_ = Eigen::MatrixXd::Identity(6, 6) + nu_ * G0_;
     initialized_ = true;
   }
 
@@ -102,31 +104,34 @@ public:
     // 3. 自适应线性增益
     k_lin_ = calculate_klin(e);
 
-    // 4. leader 速度或 Δθ 变化较大 → 重算 HPC 参数
-    Eigen::Vector3d leader_vel(x1(3), x1(4), x1(5));
-    bool vel_changed = (leader_vel - last_hpc_leader_vel_).norm() > hpc_vel_threshold_;
-    bool yaw_changed = std::abs(dtheta - last_dtheta_) > 0.3;
-    if (vel_changed || yaw_changed) {
-      auto res = lpc2hpc_nd(A_, B_, k_lin_);
-      if (!res.G0.isZero(1e-12)) {
-        G0_ = res.G0;
-        P_  = res.P;
-        nu_ = res.nu_min;
-        Gd_ = Eigen::MatrixXd::Identity(6, 6) + nu_ * G0_;
-        last_hpc_leader_vel_ = leader_vel;
-        last_dtheta_ = dtheta;
+    // 4. HPC 参数时变重算（仅 HPC 模式）
+    Eigen::VectorXd u_L;
+    if (use_hpc_) {
+      Eigen::Vector3d leader_vel(x1(3), x1(4), x1(5));
+      bool vel_changed = (leader_vel - last_hpc_leader_vel_).norm() > hpc_vel_threshold_;
+      bool yaw_changed = std::abs(dtheta - last_dtheta_) > 0.3;
+      if (vel_changed || yaw_changed) {
+        auto res = lpc2hpc_nd(A_, B_, k_lin_);
+        if (!res.G0.isZero(1e-12)) {
+          G0_ = res.G0;
+          P_  = res.P;
+          nu_ = res.nu_min;
+          Gd_ = Eigen::MatrixXd::Identity(6, 6) + nu_ * G0_;
+          last_hpc_leader_vel_ = leader_vel;
+          last_dtheta_ = dtheta;
+        }
       }
+
+      // 齐次范数 + 控制律
+      double nx = hnorm_nd(e, Gd_, P_);
+      double c = std::clamp(nx, 0.5, 1.0);
+      double log_c = std::log(c);
+      Eigen::MatrixXd expm_g = (Gd_ * (1.0 - log_c)).exp();
+      Eigen::VectorXd warped_e = expm_g * e;
+      u_L = std::pow(c, 1.0 + nu_) * (k_lin_ * warped_e);
+    } else {
+      u_L = k_lin_ * e;  // 纯线性比例控制
     }
-
-    // 5. 齐次范数（二分法）
-    double nx = hnorm_nd(e, Gd_, P_);
-    double c = std::clamp(nx, 0.5, 1.0);
-
-    // 6. 齐次控制律（u 在 leader 车体系下）
-    double log_c  = std::log(c);
-    Eigen::MatrixXd expm_g = (Gd_ * (1.0 - log_c)).exp();
-    Eigen::VectorXd warped_e = expm_g * e;
-    Eigen::VectorXd u_L = std::pow(c, 1.0 + nu_) * (k_lin_ * warped_e);
 
     // 7. 控制力从 leader 车体系旋转到 follower 车体系
     double ux_f =  u_L(0) * cos_dt + u_L(1) * sin_dt;
@@ -242,6 +247,7 @@ private:
   // ---- 控制器状态 ------------------------------------------------------------
   Eigen::MatrixXd k_lin_, P_, G0_, Gd_;
   double nu_;
+  bool   use_hpc_;
   Eigen::Vector3d last_hpc_leader_vel_;
   double last_dtheta_ = 0.0;
   bool initialized_;

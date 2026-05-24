@@ -41,7 +41,8 @@ FormationController::FormationController()
   double max_linear_accel  = declare_parameter("max_linear_accel",  2.0);
   double max_angular_accel = declare_parameter("max_angular_accel", 4.0);
 
-  ctrl_ = std::make_unique<LpcController>(m_p, radius, tol, mass);
+  bool use_hpc = declare_parameter("use_hpc", true);
+  ctrl_ = std::make_unique<LpcController>(m_p, radius, tol, mass, use_hpc);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius,
                                     wheel_max_omega,

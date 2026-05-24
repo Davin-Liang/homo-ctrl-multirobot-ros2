@@ -18,6 +18,7 @@ def generate_launch_description():
     omega_d = LaunchConfiguration("omega_d")
     omega_d_theta = LaunchConfiguration("omega_d_theta")
     hpc_vel_threshold = LaunchConfiguration("hpc_vel_threshold")
+    use_hpc = LaunchConfiguration("use_hpc")
 
     # Kinematic constraints
     wheel_radius = LaunchConfiguration("wheel_radius")
@@ -45,6 +46,7 @@ def generate_launch_description():
             "omega_d": omega_d,
             "omega_d_theta": omega_d_theta,
             "hpc_vel_threshold": hpc_vel_threshold,
+            "use_hpc": use_hpc,
             "wheel_radius": wheel_radius,
             "base_radius": base_radius,
             "wheel_max_omega": wheel_max_omega,
@@ -70,6 +72,8 @@ def generate_launch_description():
                               description="Yaw channel desired bandwidth"),
         DeclareLaunchArgument("hpc_vel_threshold", default_value="0.3",
                               description="Leader velocity change threshold for HPC recompute"),
+        DeclareLaunchArgument("use_hpc", default_value="true",
+                              description="Enable homogeneous upgrade (false = pure LPC)"),
         DeclareLaunchArgument("wheel_radius", default_value="0.03"),
         DeclareLaunchArgument("base_radius", default_value="0.11"),
         DeclareLaunchArgument("wheel_max_omega", default_value="20.0"),

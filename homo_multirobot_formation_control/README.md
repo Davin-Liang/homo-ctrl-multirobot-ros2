@@ -173,6 +173,16 @@ $w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
 
 > 约束日志：轮速约束触发时每 2s 打印 `[WARN] 轮速约束触发: scale=X.XX`。
 
+### 消融实验参数（两套共享）
+
+| 参数 | 类型 | 默认值 | 作用 |
+|------|------|--------|------|
+| `use_hpc` | bool | true | 启用齐次升级（false 退化为纯线性比例控制 LPC，用于消融对照） |
+
+> 论文消融实验矩阵：
+> - 4D + HPC（原版 baseline）、4D + LPC（对照组）
+> - 6D + HPC（本文方法）、6D + LPC（消融组）
+
 ### 控制频率（launch 可改）
 
 | 参数 | 类型 | 默认值 | 作用 |
@@ -224,6 +234,10 @@ ros2 launch homo_multirobot_formation_control formation_single_follower.launch.p
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
   mass:=2.0 radius:=2.0 Kp_yaw:=4.0 K_ff:=1.0
+
+# LPC 消融对照（关闭齐次升级）
+ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
+  use_hpc:=false
 ```
 
 ### 启动（6D 单 follower）
@@ -237,6 +251,10 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launc
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py \
   radius:=1.0 mass:=8.0 I:=1.0 wheel_max_omega:=10.0
+
+# LPC 消融对照（关闭齐次升级）
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py \
+  use_hpc:=false
 ```
 
 ### 启动（6D+OA 单 follower，带避障）

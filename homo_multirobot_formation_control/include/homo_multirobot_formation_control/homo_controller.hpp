@@ -20,8 +20,9 @@ class LpcController {
 public:
   // m_p: 安全编队点数量   radius: 编队圆半径 (m)
   // tol: 编队点切换容差 (m)   mass: 双重积分器模型质量（调参用，非物理质量）
-  LpcController(int m_p = 4, double radius = 2.0, double tol = 0.1, double mass = 2.0)
-    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass)
+  LpcController(int m_p = 4, double radius = 2.0, double tol = 0.1, double mass = 2.0,
+               bool use_hpc = true)
+    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), use_hpc_(use_hpc)
   {
     // 2D 双重积分器: x = [px, py, vx, vy]
     A_ << 0, 0, 1, 0,
@@ -74,14 +75,16 @@ public:
     Vec4d e = x2 - x1 - d_;
     k_lin_ = calculate_klin(e);
 
-    auto res = lpc2hpc(A_, B_, k_lin_);
-    if (res.G0.isZero(1e-12)) {
-      throw std::runtime_error("控制器初始化失败: lpc2hpc 返回零结果。");
+    if (use_hpc_) {
+      auto res = lpc2hpc(A_, B_, k_lin_);
+      if (res.G0.isZero(1e-12)) {
+        throw std::runtime_error("控制器初始化失败: lpc2hpc 返回零结果。");
+      }
+      G0_ = res.G0;
+      P_  = res.P;
+      nu_ = res.nu_min;
+      Gd_ = Mat4d::Identity() + nu_ * G0_;
     }
-    G0_ = res.G0;
-    P_  = res.P;
-    nu_ = res.nu_min;              // 取下界以获得最强的齐次效应
-    Gd_ = Mat4d::Identity() + nu_ * G0_;
   }
 
   // --------------------------------------------------------------------------
@@ -101,18 +104,17 @@ public:
 
     Vec4d e = x2 - x1 - d_;
 
-    // 二分法齐次范数（无 ANN、无 cvxpy）
-    double nx = hnorm(e, Gd_, P_);
-
-    // c ∈ [0.5, 1.0]: 下界从 Python 原版的 0.1 抬高到 0.5，
-    // 抑制 slam_toolbox/AMCL 定位噪声通过 expm(Gd·(1−ln c)) 过度放大。
-    double c = std::clamp(nx, 0.5, 1.0);
-
-    // 齐次控制律
-    double log_c   = std::log(c);
-    Mat4d  expm_g  = (Gd_ * (1.0 - log_c)).exp();
-    Vec4d  warped_e = expm_g * e;
-    Eigen::Vector2d u2 = std::pow(c, 1.0 + nu_) * (k_lin_ * warped_e);
+    Eigen::Vector2d u2;
+    if (use_hpc_) {
+      double nx = hnorm(e, Gd_, P_);
+      double c = std::clamp(nx, 0.5, 1.0);
+      double log_c  = std::log(c);
+      Mat4d  expm_g = (Gd_ * (1.0 - log_c)).exp();
+      Vec4d  warped_e = expm_g * e;
+      u2 = std::pow(c, 1.0 + nu_) * (k_lin_ * warped_e);
+    } else {
+      u2 = k_lin_ * e;  // 纯线性比例控制
+    }
 
     // 前向欧拉: v_desired = v_current + h · a
     double h = 0.1;
@@ -164,12 +166,14 @@ private:
       Vec4d e = x2 - x1 - d_;
       k_lin_ = calculate_klin(e);
 
-      auto res = lpc2hpc(A_, B_, k_lin_);
-      if (!res.G0.isZero(1e-12)) {
-        G0_ = res.G0;
-        P_  = res.P;
-        nu_ = res.nu_min;
-        Gd_ = Mat4d::Identity() + nu_ * G0_;
+      if (use_hpc_) {
+        auto res = lpc2hpc(A_, B_, k_lin_);
+        if (!res.G0.isZero(1e-12)) {
+          G0_ = res.G0;
+          P_  = res.P;
+          nu_ = res.nu_min;
+          Gd_ = Mat4d::Identity() + nu_ * G0_;
+        }
       }
     }
   }
@@ -227,6 +231,7 @@ private:
   Mat4d         G0_;          // 齐次生成元
   Mat4d         Gd_;          // 膨胀生成元 (I + nu * G0)
   double        nu_;          // 齐次度
+  bool          use_hpc_;     // false 时退化为纯 LPC
 
   Eigen::Vector2d last_cmd_vel_;
 };

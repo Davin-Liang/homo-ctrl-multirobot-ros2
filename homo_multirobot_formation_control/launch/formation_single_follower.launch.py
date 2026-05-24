@@ -53,6 +53,7 @@ def generate_launch_description():
             "max_linear_accel": max_linear_accel,
             "max_angular_accel": max_angular_accel,
             "control_rate": control_rate,
+            "use_hpc": LaunchConfiguration("use_hpc"),
         }],
     )
 
@@ -77,6 +78,8 @@ def generate_launch_description():
                               description="Feedforward yaw gain"),
         DeclareLaunchArgument("control_rate", default_value="20.0",
                               description="Control loop frequency (Hz)"),
+        DeclareLaunchArgument("use_hpc", default_value="true",
+                              description="Enable homogeneous upgrade (false = pure LPC)"),
         DeclareLaunchArgument("wheel_radius", default_value="0.03",
                               description="Wheel rolling radius (m)"),
         DeclareLaunchArgument("base_radius", default_value="0.11",

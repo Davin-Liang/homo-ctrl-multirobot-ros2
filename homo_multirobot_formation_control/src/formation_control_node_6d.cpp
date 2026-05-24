@@ -82,6 +82,7 @@ FormationController6D::FormationController6D()
   double omega_d        = declare_parameter("omega_d",        1.5);
   double omega_d_theta  = declare_parameter("omega_d_theta",  1.5);
   double hpc_vel_threshold = declare_parameter("hpc_vel_threshold", 0.3);
+  bool use_hpc = declare_parameter("use_hpc", true);
   control_rate_ = declare_parameter("control_rate", 20.0);
 
   // 运动学约束参数
@@ -93,7 +94,7 @@ FormationController6D::FormationController6D()
 
   ctrl_ = std::make_unique<LpcController6D>(radius, mass, I,
                                             omega_d, omega_d_theta,
-                                            hpc_vel_threshold);
+                                            hpc_vel_threshold, use_hpc);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius,
                                     wheel_max_omega,
