@@ -28,6 +28,11 @@
 | 17 | v_hpc 过大（>4 m/s）导致梯度爆炸 | OA | QP 求解前裁剪到加速度盒内 |
 | 18 | severity 无上限导致径向力远超横向力 | OA | severity 上限设为 8x |
 | 19 | 最近点表示在正方体棱边跳变导致振荡 | OA | 圆柱体适用，正方体不支持 |
+| 20 | MPC QP 速度硬约束在 x1 不可行 → 求解失败 | MPC | 从 x3 开始施加约束，留缓冲步数 |
+| 21 | MPC 参考速度坐标系错误 → 侧向跟踪不对称 | MPC | 改用跟随者朝向 R(θ_f)^T |
+| 22 | MPC 边界投影位置/速度参考不一致 → 侧向弱 | MPC | 固定偏移模式 + 动态 ω×d 偏移 |
+| 23 | MPC 求解器 API 字段名不兼容 | MPC | warm_start/polish |
+| 24 | MPC QP 条件数极端 → 全部求解失败 | MPC | R 设下限 + eps 放松 |
 
 ---
 
@@ -418,4 +423,109 @@ severity 上限设为 8x：`severity = clamp(1.5, severity, 8.0)`。
 
 基于最近点的障碍物表示**仅适用于光滑曲面（圆柱体、球体等）**，
 多面体需用质心圆或其他表示方式。此局限已写入 README 已知局限。
+
+---
+
+## 20) MPC QP 速度硬约束在 x1 不可行 → 求解失败
+
+**现象**
+
+MPC 启动后频繁出现 OSQP status=-3（primal infeasible），连续求解失败后 fallback 零速度。
+
+**原因**
+
+速度约束从 $x_1$ 开始施加，$|v_1| \le v_{\max}$。但 $x_1 = x_0 + dt \cdot u_0$，
+且 $u_0$ 受加速度限幅 $|u| \le a_{\max}$ 约束。
+当当前速度 $v_0$ 远超 $v_{\max}$（如初始时刻或大角速度 $>2$ rad/s），即使最大减速也
+无法在一个步长内回到限制范围内，导致 $x_1$ 约束直接不可行。
+
+**处理**
+
+速度约束改为从 $x_3$（k=3）开始施加，留出 $3 \cdot dt \cdot a_{\max}$ 的缓冲空间。
+此修改将约束不可行的概率大幅降低。若当前速度严重超限（>$v_{\max} + 3 \cdot dt \cdot a_{\max}$），
+仍需 fallback 零速度作为兜底。
+
+---
+
+## 21) MPC 参考速度坐标系错误 → 侧向跟踪不对称
+
+**现象**
+
+Leader 前后移动时 follower 能保持编队，Leader 侧移时 follower 反应迟钝、保持不住距离。
+
+**原因**
+
+参考车体速度 $v_{\text{ref}}^{\text{body}}$ 的计算使用了参考朝向 $\theta_{\text{ref}}$（Leader 朝向）
+进行旋转，而非跟随者的实际朝向 $\theta_f$：
+$$v_{\text{ref}}^{\text{body}} = R(\theta_{\text{ref}})^T \cdot v_{\text{ref}}^{\text{map}}$$
+
+当两车朝向不一致时（如初始 90° 偏差），Leader 车体系的"侧移"对应跟随者车体系的"前后移"，
+速度参考与位置参考矛盾，导致侧向响应显著弱于前后向。
+
+**处理**
+
+改用跟随者的实际朝向进行旋转变换：
+$$v_{\text{ref}}^{\text{body}} = R(\theta_f)^T \cdot v_{\text{ref}}^{\text{map}}$$
+
+修改后前后和侧向跟踪对称性恢复。
+
+---
+
+## 22) MPC 边界投影位置/速度参考不一致 → 侧向保持力弱
+
+**现象**
+
+使用边界投影编队时，Leader 侧移时 follower 保持力弱于前后移动。
+
+**原因**
+
+边界投影参考位置为 $p_{\text{ref}} = p_L - r \cdot (p_L - p_f)/\|p_L - p_f\|$。
+当 Leader 侧移 $\Delta y$ 时，参考位置仅移动约 $(r/d) \cdot \Delta y$（$d$ 为两车距离），
+位置误差被人为缩小。但速度参考 $v_{\text{ref}}$ 直接使用 Leader 速度，保持不变。
+位置和速度参考不一致——位置参考说"你还行"，速度参考说"快去追"——MPC 跟着偏弱的位置误差走，响应迟缓。
+
+**处理**
+
+（1）改为固定偏移编队模式，位置和速度参考完全同步移动，作为默认策略。
+（2）速度参考的 $\omega \times d$ 偏移项同步改用边界投影动态偏移量（非固定偏移），
+消除位置/速度公式层面的不一致。纯边界投影的完整一致性需要多轮 SQP 迭代，留待后续升级。
+
+---
+
+## 23) MPC 求解器 API 字段名不兼容
+
+**现象**
+
+编译时报错 `OSQPSettings has no member named 'warm_starting'`、`'polishing'`。
+
+**原因**
+
+`ros-humble-osqp-vendor` 提供的 OSQP 版本字段名为 `warm_start`、`polish`，
+而非旧版 API 的 `warm_starting`、`polishing`。`osqp.h` 位于 `/opt/ros/humble/include/osqp/`，
+需通过 `target_link_libraries(… osqp::osqp)` 链接。
+
+**处理**
+
+修正字段名为 `warm_start`、`polish`；CMakeLists.txt 中通过 `find_package(osqp_vendor)` +
+`target_link_libraries(… osqp::osqp)` 正确引入依赖。
+
+---
+
+## 24) MPC QP 条件数极端 → 全部求解失败
+
+**现象**
+
+将 `q_theta=20.0` 与 `r_alpha=0.001` 组合使用时，QP 100% 返回 infeasible/max_iter，
+连续 141 次求解均失败，节点进入安全停车状态。
+
+**原因**
+
+Q/R 权重比达到 20000:1，QP 的 Hessian 矩阵条件数极端差，OSQP 在默认精度
+（`eps_abs/rel=1e-4`）下无法收敛。极端权重组合对数值求解器不友好。
+
+**处理**
+
+（1）R 权重设下限 0.01，避免 Q/R 比超过 2000:1。
+（2）OSQP 精度放松至 `eps_abs/rel=1e-3`，提升数值稳定性。
+（3）极端调参需求通过提高 Q 权重（而非降低 R）来满足。
 
