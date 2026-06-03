@@ -10,9 +10,7 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
 
     # Formation geometry
-    m_p = LaunchConfiguration("m_p")
     radius = LaunchConfiguration("radius")
-    tol = LaunchConfiguration("tol")
 
     # Robot dynamics
     mass = LaunchConfiguration("mass")
@@ -34,17 +32,15 @@ def generate_launch_description():
 
     formation_node = Node(
         package="homo_multirobot_formation_control",
-        executable="formation_control_node",
-        name="formation_control_node",
+        executable="formation_control_node_4d_cont",
+        name="formation_control_node_4d_cont",
         namespace=PythonExpression(["'", follower_ns, "'"]),
         output="screen",
         parameters=[{
             "leader_ns": leader_ns,
             "follower_ns": follower_ns,
             "use_sim_time": use_sim_time,
-            "m_p": m_p,
             "radius": radius,
-            "tol": tol,
             "mass": mass,
             "omega_d": omega_d,
             "Kp_yaw": Kp_yaw,
@@ -66,12 +62,8 @@ def generate_launch_description():
                               description="Follower robot namespace"),
         DeclareLaunchArgument("use_sim_time", default_value="true",
                               description="Use simulation time"),
-        DeclareLaunchArgument("m_p", default_value="4",
-                              description="Number of safe formation points"),
         DeclareLaunchArgument("radius", default_value="2.0",
-                              description="Formation circle radius (m)"),
-        DeclareLaunchArgument("tol", default_value="0.1",
-                              description="Switching tolerance between formation points"),
+                              description="Formation safety circle radius (m)"),
         DeclareLaunchArgument("mass", default_value="8.0",
                               description="Controller model mass (tuning, not physical)"),
         DeclareLaunchArgument("omega_d", default_value="1.5",

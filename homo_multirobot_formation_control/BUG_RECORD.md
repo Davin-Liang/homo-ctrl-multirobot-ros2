@@ -33,6 +33,9 @@
 | 22 | MPC 边界投影位置/速度参考不一致 → 侧向弱 | MPC | 固定偏移模式 + 动态 ω×d 偏移 |
 | 23 | MPC 求解器 API 字段名不兼容 | MPC | warm_start/polish |
 | 24 | MPC QP 条件数极端 → 全部求解失败 | MPC | R 设下限 + eps 放松 |
+| 25 | omega_d·mass 下限过高 → 边界极限环震荡 | 控制 | 调低 mass 或 omega_d |
+| 26 | 连续边界投影切线方向无恢复力 → 单轴漂移 | 控制 | 结构特性，非 bug |
+| 27 | 8 字轨迹 Y 通道频率 2ω > ω_d → Y 轴跟踪差 | 控制 | 提高 omega_d 或放慢 8 字 |
 
 ---
 
@@ -528,4 +531,103 @@ Q/R 权重比达到 20000:1，QP 的 Hessian 矩阵条件数极端差，OSQP 在
 （1）R 权重设下限 0.01，避免 Q/R 比超过 2000:1。
 （2）OSQP 精度放松至 `eps_abs/rel=1e-3`，提升数值稳定性。
 （3）极端调参需求通过提高 Q 权重（而非降低 R）来满足。
+
+---
+
+## 25) omega_d·mass 下限过高 → 边界极限环震荡
+
+**现象**
+
+4D 连续边界投影控制器（`LpcController4DCont`）在 `wheel_max_omega` 调高后，
+follower 在安全圆边界附近持续进出震荡，表现为 cmd_vel 正负交替。
+
+**原因**
+
+`calculate_klin()` 中自适应增益下限为 `a ≥ omega_d * mass`。默认 `omega_d=1.5, mass=8.0`
+时下限为 12，而 MATLAB 原版在 `lpc_hpc_distance_square.m` 中使用硬编码下限 1（初始）
+和 4（切换后）。
+
+| 版本 | 下限 | k1 (mass=8) | 闭环极点 |
+|------|------|------------|---------|
+| MATLAB 原版 | 1~4 | -0.125~-2 | -(0.125~4)/m |
+| C++ 修正版 | omega_d·m = 12 | -18 | -12/8 = -1.5 |
+
+C++ 版边界附近弹簧刚度是 MATLAB 的 9~144 倍。在离散控制相位滞后、
+加速度饱和、速度硬限幅三个非线性环节串联下，高增益形成极限环震荡。
+
+**处理**
+
+降低 `mass` 或 `omega_d` 可软化边界，牺牲收敛速度换稳定性：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py \
+  mass:=3.0 omega_d:=2.0  # 自适应增益下限 = 6
+```
+
+MATLAB 原版的硬编码下限 1~4 与论文理论一致，`omega_d * mass` 是 C++ 移植时引入的工程修正，
+目的是解耦 mass 与收敛速度。代价是默认值下边界过于刚性。
+
+---
+
+## 26) 连续边界投影切线方向无恢复力 → 单轴漂移
+
+**现象**
+
+使用连续边界投影时，Y 轴坐标偏差显著大于 X 轴，即使 leader 做匀速圆周运动。
+
+**原因**
+
+连续边界投影的误差 `e = d × (1 - R/|d|)` 始终平行于相对位置向量 `d`，只有径向分量。
+切线方向完全没有恢复力。离散多边形约束的是空间中一个固定点（位置 X + Y 全约束），
+连续投影只约束到圆的半径（1 维约束），切线方向自由度不受控。
+
+**力学类比**
+
+| 编队策略 | 约束维度 | 力学类比 |
+|---------|---------|---------|
+| 离散多边形 | 2（位置全约束） | 刚性杆，两端固定 |
+| 连续边界投影 | 1（仅径向） | 杆 + 铰链，可绕圈滑动 |
+
+这是连续边界投影的结构特性，不是 bug。切线漂移的程度取决于初始条件、
+leader 运动轨迹和控制器参数。对于编队应用，通常不需要严格约束圆周上的具体方位，
+切线自由度是设计让步。
+
+---
+
+## 27) 8 字轨迹 Y 通道频率 2ω > ω_d → Y 轴跟踪差
+
+**现象**
+
+leader 做 8 字运动（`leader_eight.py`）时，follower Y 轴跟踪显著差于 X 轴，
+X 轴可以紧密跟随，Y 轴有明显相位滞后和幅值衰减。
+
+**原因**
+
+`leader_eight.py` 的轨迹参数方程为：
+
+$$x(t) = A_x \sin(\omega t), \quad y(t) = A_y \sin(2\omega t)$$
+
+Y 通道频率是 X 通道的 2 倍。默认 `period=10s → ω=0.628 → 2ω=1.257`。
+默认 `omega_d=1.5`，Y 通道频率已逼近带宽，闭环系统无法跟上。
+
+对于圆轨迹（`leader_circle.py`），X 和 Y 频率相同，跟踪效果对称。
+
+**处理**
+
+```bash
+# 方案1：提高控制器带宽
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py \
+  omega_d:=3.0
+
+# 方案2：放慢 8 字
+ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/robot1 \
+  -p period:=20.0
+
+# 方案3：减小 Y 幅值
+ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/robot1 \
+  -p amplitude_y:=0.5
+```
+
+这与连续边界投影无关——离散多边形方案在相同条件下也会出现 Y 轴滞后（同频率）。
+根本原因是 8 字轨迹 Y 通道的固有高频特性，需要足够的控制器带宽来跟踪。
 

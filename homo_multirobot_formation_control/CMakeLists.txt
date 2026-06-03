@@ -46,6 +46,34 @@ install(TARGETS formation_control_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- 4D 连续边界投影控制器 ----------------------------------------------------
+add_executable(formation_control_node_4d_cont
+  src/main_4d_cont.cpp
+  src/formation_control_node_4d_cont.cpp
+)
+
+target_include_directories(formation_control_node_4d_cont PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+ament_target_dependencies(formation_control_node_4d_cont
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+target_link_libraries(formation_control_node_4d_cont
+  Eigen3::Eigen
+)
+
+install(TARGETS formation_control_node_4d_cont
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # ---- 6D 运动学模型控制器 (Layer 3) -------------------------------------------
 add_executable(formation_control_node_6d
   src/main_6d.cpp
@@ -140,6 +168,9 @@ install(DIRECTORY include/
 
 install(PROGRAMS
   scripts/leader_control.py
+  scripts/leader_circle.py
+  scripts/leader_eight.py
+  scripts/record_trajectory.py
   scripts/formation_control_py.py
   DESTINATION lib/${PROJECT_NAME}
 )

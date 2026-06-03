@@ -17,6 +17,7 @@ def generate_launch_description():
 
     # Robot dynamics
     mass = LaunchConfiguration("mass")
+    omega_d = LaunchConfiguration("omega_d")
 
     # Yaw control
     Kp_yaw = LaunchConfiguration("Kp_yaw")
@@ -32,6 +33,7 @@ def generate_launch_description():
         "radius": radius,
         "tol": tol,
         "mass": mass,
+        "omega_d": omega_d,
         "Kp_yaw": Kp_yaw,
         "K_ff": K_ff,
         "control_rate": control_rate,
@@ -78,6 +80,8 @@ def generate_launch_description():
                               description="Switching tolerance between formation points"),
         DeclareLaunchArgument("mass", default_value="8.0",
                               description="Controller model mass (tuning, not physical)"),
+        DeclareLaunchArgument("omega_d", default_value="1.5",
+                              description="Desired damping bandwidth"),
         DeclareLaunchArgument("Kp_yaw", default_value="4.0",
                               description="Proportional yaw gain"),
         DeclareLaunchArgument("K_ff", default_value="1.0",

@@ -21,8 +21,8 @@ public:
   // m_p: 安全编队点数量   radius: 编队圆半径 (m)
   // tol: 编队点切换容差 (m)   mass: 双重积分器模型质量（调参用，非物理质量）
   LpcController(int m_p = 4, double radius = 2.0, double tol = 0.1, double mass = 2.0,
-               bool use_hpc = true)
-    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), use_hpc_(use_hpc)
+               double omega_d = 1.5, bool use_hpc = true)
+    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), omega_d_(omega_d), use_hpc_(use_hpc)
   {
     // 2D 双重积分器: x = [px, py, vx, vy]
     A_ << 0, 0, 1, 0,
@@ -187,7 +187,7 @@ private:
   // --------------------------------------------------------------------------
   Mat24d calculate_klin(const Vec4d& e)
   {
-    const double omega_d = 1.5;    // 期望阻尼带宽
+    const double omega_d = omega_d_;
 
     // 防超调比值: a_i = −m · e_i_v / e_i_p
     double val_a = (std::abs(e(0)) > 1e-6) ? -mass_ * e(2) / e(0) : 0.0;
@@ -218,6 +218,7 @@ private:
   double radius_;    // 编队圆半径 (m)
   double tol_;       // 切换滞后容差 (m)
   double mass_;      // 模型质量（调参）
+  double omega_d_;   // 期望阻尼带宽
 
   // ---- 系统模型（双重积分器） ----------------------------------------------
   Mat4d  A_;

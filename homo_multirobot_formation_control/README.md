@@ -24,6 +24,7 @@
 | 版本 | Launch 文件 | 可执行文件 | 状态模型 | 编队策略 | yaw 控制 |
 |------|------------|-----------|---------|---------|---------|
 | **4D (原版)** | `formation_single_follower.launch.py` | `formation_control_node` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系) | 离散多边形 + tol 切换 | 独立 P+前馈 |
+| **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
 | **6D (运动学)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
 | **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
 | **MPC 6D (模型预测控制)** | `formation_single_follower_mpc_6d.launch.py` | `formation_control_node_mpc_6d` | 同 6D | 固定偏移（Leader 车体系） | 集成于 6D 主回路 |
@@ -208,6 +209,7 @@ Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考�
 | 参数 | 类型 | 默认值 | 作用 | 调大效果 | 调小效果 |
 |------|------|--------|------|----------|----------|
 | `mass` | double | 8.0 | 双重积分器模型的等效质量 | 增益增大，响应更快 | 增益减小，响应更慢 |
+| `omega_d` | double | 1.5 | 期望阻尼带宽，决定最小收敛速度 | 响应更快但可能震荡 | 更平滑但跟踪滞后 |
 | `m_p` | int | 4 | 安全编队点数量 | 更多编队位置可选 | 编队选择少 |
 | `radius` | double | 2.0 | 编队圆半径 (m) | 跟随距离增大 | 跟随更近 |
 | `tol` | double | 0.1 | 编队点切换容差 (m) | 不易频繁切换 | 切换更灵敏 |
@@ -264,20 +266,22 @@ Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考�
 
 ### 4D 进阶参数（代码内硬编码）
 
-以下参数在 `homo_controller.hpp` 中：
+以下参数在 `homo_controller.hpp` 中（不暴露为 launch 参数）：
 
 | 参数 | 默认值 | 作用 |
 |------|--------|------|
-| `omega_d` | 1.5 | 期望阻尼带宽 |
 | `c` clamp 下界 | 0.5 | 齐次范数下限（原版 Python 0.1，提升以抑制噪声放大） |
 | `h`（前向积分步长） | 0.1 | 前向欧拉步长 |
+
+> `omega_d` 已从硬编码升级为 launch 参数（默认 1.5），可在命令行直接调参。
 
 ### 典型调参建议
 
 | 场景 | 4D 版 | 6D 版 |
 |------|------|------|
 | slam_toolbox 定位 | `mass:=8.0 Kp_yaw:=4.0` | `mass:=8.0 I:=1.0 radius:=2.0` |
-| 响应太慢 | 增大 `mass` 到 15.0 | 增大 `mass` 或降低 `omega_d` |
+| 响应太慢 | 增大 `mass` 或 `omega_d` | 增大 `mass` 或 `omega_d` |
+| 边界震荡 | 降低 `omega_d` 或 `mass` | 降低 `omega_d` 或 `mass` |
 | 偏航跟不上 | 增大 `Kp_yaw`/`K_ff` | 增大 `omega_d_theta` 或 `I` |
 | 编队距离不对 | 调 `radius` | 调 `radius` |
 
@@ -311,6 +315,27 @@ ros2 launch homo_multirobot_formation_control formation_single_follower.launch.p
 
 # LPC 消融对照（关闭齐次升级）
 ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
+  use_hpc:=false
+
+# 提高带宽追移动目标
+ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
+  omega_d:=3.0 mass:=10.0
+```
+
+### 启动（4D Cont 连续边界投影）
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py
+```
+
+带参数：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py \
+  radius:=2.0 mass:=8.0 omega_d:=1.5
+
+# LPC 消融对照
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py \
   use_hpc:=false
 ```
 
@@ -365,6 +390,49 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_mpc_6d.l
 ```bash
 ros2 launch homo_multirobot_formation_control formation_two_followers.launch.py
 ```
+
+## 领航者轨迹脚本
+
+本包提供两个领航者开环控制脚本，用于编队测试：
+
+### leader_circle — 圆轨迹
+
+```bash
+ros2 run homo_multirobot_formation_control leader_circle.py --ros-args -r __ns:=/robot1
+
+# 带参数
+ros2 run homo_multirobot_formation_control leader_circle.py --ros-args -r __ns:=/robot1 \
+  -p radius:=2.0 -p speed:=0.5 -p direction:=cw
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `radius` | 1.0 | 圆半径 (m) |
+| `speed` | 0.3 | 切向线速度 (m/s) |
+| `heading` | 0.0 | 车体航向角 (度) |
+| `direction` | ccw | ccw=逆时针, cw=顺时针 |
+| `rate` | 20.0 | 发布频率 (Hz) |
+
+### leader_eight — 8 字轨迹
+
+```bash
+ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/robot1
+
+# 带参数：大 8 字 + 慢速
+ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/robot1 \
+  -p amplitude_x:=3.0 -p amplitude_y:=1.5 -p period:=15.0
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `amplitude_x` | 2.0 | X 方向半幅 (m) |
+| `amplitude_y` | 1.0 | Y 方向半幅 (m) |
+| `period` | 10.0 | 一个 8 字周期 (s) |
+| `heading` | 0.0 | 车体航向角 (度) |
+| `rate` | 20.0 | 发布频率 (Hz) |
+
+> 两个脚本均为纯开环速度指令，无位置反馈。`period` 控制指令频率而非实际轨迹周期。
+> Y 通道频率为 2ω（X 通道的 2 倍），对控制器带宽要求更高，需适当提高 `omega_d`。
 
 ## 完整联调
 
