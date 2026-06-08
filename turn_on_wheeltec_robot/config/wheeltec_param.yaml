@@ -1,0 +1,22 @@
+# mini_omni 实车参数
+car_mode: mini_omni
+
+# 超声波避障（mini_omni 无此硬件）
+ranger_avoid_flag: false
+
+# 雷达型号：Leishen LS N10Plus (UART)
+lidar_type: ls_N10Plus_uart
+
+# ls_M10/ls_N10 系列单线雷达配置
+x10:
+  lidar_port: /dev/wheeltec_lidar
+  angle_disable_min: [9000]
+  angle_disable_max: [24000]
+
+# lscx 系列多线雷达配置（不使用）
+lscx:
+  angle_disable_min: [12000]
+  angle_disable_max: [24000]
+
+# IMU：内置 STM32
+imu_mode: stm32

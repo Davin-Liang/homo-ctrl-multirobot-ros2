@@ -103,6 +103,14 @@
     <child link="${p}imu_link" />
   </joint>
 
+  <!-- 别名：gyro_link（Wheeltec 驱动使用），挂在 imu_link 下，0 偏移 -->
+  <link name="${p}gyro_link"/>
+  <joint name="${p}gyro_alias_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="${p}imu_link"/>
+    <child link="${p}gyro_link"/>
+  </joint>
+
   <link name="${p}front_wheel_link">
     <inertial>
       <origin xyz="5.74714974423331E-05 0.00320699063859495 -4.61768854820438E-05" rpy="0 0 0" />
@@ -333,6 +341,14 @@
     <parent link="${p}base_link" />
     <child link="${p}laser_link" />
     <axis xyz="0 0 0" />
+  </joint>
+
+  <!-- 别名：laser（Wheeltec 驱动使用），挂在 laser_link 下，0 偏移 -->
+  <link name="${p}laser"/>
+  <joint name="${p}laser_alias_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="${p}laser_link"/>
+    <child link="${p}laser"/>
   </joint>
 
   <link name="${p}camera_link">

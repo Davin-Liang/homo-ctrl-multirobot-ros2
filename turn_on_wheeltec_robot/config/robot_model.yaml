@@ -1,0 +1,8 @@
+# 实车 TF 位置参数（仅 mini_omni）
+robot_model:
+  mini_omni:
+    base_to_link: [0.0, 0.0, 0.06542, 0.0, 0.0, 0.0]
+    base_to_gyro: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    base_to_laser:  [0.015, 0.0, 0.17, 0.0, 0.0, 0.0]
+    base_to_radar:  [0.0, 0.0, 0.3, 0.0, 0.0, 0.0]
+    base_to_camera: [0.075, 0.12, 0.0, 0.0, 0.0, 0.0]
