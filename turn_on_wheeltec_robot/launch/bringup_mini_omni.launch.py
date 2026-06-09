@@ -71,6 +71,8 @@ def generate_launch_description():
             "use_sim_time": "false",
             "imu_topic": "imu/data_filtered",
             "ekf_yaml_only": "false",
+            "rf2o_freq": "10.0",
+            "scan_topic": "scan",
         }.items(),
     )
 
