@@ -1,5 +1,3 @@
-import os
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -10,22 +8,27 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     prefix = LaunchConfiguration("prefix")
 
-    driver_config = os.path.join(
-        get_package_share_directory("lslidar_driver"),
-        "config", "lslidar_x10.yaml"
-    )
-
     lidar_node = Node(
         package="lslidar_driver",
         executable="lslidar_driver_node",
         name="lslidar_driver_node",
         namespace=namespace,
         output="screen",
-        parameters=[driver_config, {
+        parameters=[{
+            "lidar_type": "X10",
             "lidar_model": "N10Plus",
             "serial_port": "/dev/wheeltec_lidar",
             "frame_id": [prefix, "laser"],
+            "pointcloud_topic": "lslidar_point_cloud",
             "laserscan_topic": "scan",
+            "publish_scan": True,
+            "use_high_precision": True,
+            "publish_multiecholaserscan": False,
+            "N10Plus_hz": 10,
+            "min_range": 0.15,
+            "max_range": 50.0,
+            "angle_disable_min": [0],
+            "angle_disable_max": [0],
         }],
     )
 
