@@ -100,6 +100,7 @@ void CLaserOdometry2DNode::LaserCallBack(const sensor_msgs::msg::LaserScan::Shar
       // Initialize module on first scan (from laser params)
       setLaserPoseFromTf();
       rf2o_ref.init(last_scan, initial_robot_pose.pose.pose);
+      rf2o_ref.fps = freq;                  // 修复硬编码 fps=1.0，匹配实际帧率
       rf2o_ref.first_laser_scan = false;
     }
   }
