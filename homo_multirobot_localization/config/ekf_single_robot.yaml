@@ -13,12 +13,13 @@
     odom0: rf2o/odom
     imu0: imu
 
+    # 差分模式下位置→速度（静止时位置差分≈0），速度会被二次差分→加速度（放大噪声）故关掉
     odom0_config: [true,  true,  false,
                    false, false, true,
-                   true,  true,  false,
-                   false, false, true,
+                   false, false, false,
+                   false, false, false,
                    false, false, false]
-    # 差分模式：EKF 自动从位置差分算速度，静止时差分趋近 0 不漂移
+    # 差分模式：EKF 从位置差分算速度，静止时差分趋近 0
     odom0_differential: true
     odom0_relative: false
 
