@@ -118,6 +118,14 @@ bool CLaserOdometry2DNode::setLaserPoseFromTf()
 
   try
   {
+    // 等待 TF 就绪（首次启动时 TF 可能还未发布）
+    if (!buffer_->canTransform(base_frame_id, last_scan.header.frame_id,
+                               tf2::TimePointZero, tf2::durationFromSec(5.0)))
+    {
+      RCLCPP_WARN(get_logger(), "TF [%s->%s] not available after 5s wait",
+                  base_frame_id.c_str(), last_scan.header.frame_id.c_str());
+      return false;
+    }
     tf_laser = buffer_->lookupTransform(base_frame_id, last_scan.header.frame_id, tf2::TimePointZero);
     retrieved = true;
   }

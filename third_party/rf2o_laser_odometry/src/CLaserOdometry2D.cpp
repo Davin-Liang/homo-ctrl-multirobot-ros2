@@ -378,7 +378,7 @@ void CLaserOdometry2D::createImagePyramid()
         // Inner pixels (avoid first/last point in the scan)
         if ((u>0)&&(u<cols_i-1))
         {
-          if (dcenter > 0.f)
+          if (std::isfinite(dcenter) && dcenter > 0.f)
           {
             float sum = 0.f;
             float weight = 0.f;
@@ -403,7 +403,7 @@ void CLaserOdometry2D::createImagePyramid()
         //Boundary
         else
         {
-          if (dcenter > 0.f)
+          if (std::isfinite(dcenter) && dcenter > 0.f)
           {
             float sum = 0.f;
             float weight = 0.f;
