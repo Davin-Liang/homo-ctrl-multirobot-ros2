@@ -24,6 +24,8 @@ public:
   CLaserOdometry2D    rf2o_ref;
   bool                publish_tf, new_scan_available;
   double              freq;
+  int                 ctf_levels_param;
+  int                 iter_irls_param;
   std::string         laser_scan_topic;
   std::string         odom_topic;
   std::string         base_frame_id;

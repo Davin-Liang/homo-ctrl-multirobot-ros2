@@ -63,6 +63,8 @@ def generate_launch_description():
     odom_topic = LaunchConfiguration("odom_topic")
     rf2o_publish_tf = LaunchConfiguration("rf2o_publish_tf")
     rf2o_freq = LaunchConfiguration("rf2o_freq")
+    ctf_levels = LaunchConfiguration("ctf_levels")
+    iter_irls = LaunchConfiguration("iter_irls")
     base_frame_id = LaunchConfiguration("base_frame_id")
     odom_frame_id = LaunchConfiguration("odom_frame_id")
 
@@ -102,6 +104,8 @@ def generate_launch_description():
                 "odom_frame_id": odom_frame_id,
                 "init_pose_from_topic": "",
                 "freq": ParameterValue(rf2o_freq, value_type=float),
+                "ctf_levels": ParameterValue(ctf_levels, value_type=int),
+                "iter_irls": ParameterValue(iter_irls, value_type=int),
             },
             {"use_sim_time": use_sim_time},
         ],
@@ -144,6 +148,16 @@ def generate_launch_description():
                 "rf2o_freq",
                 default_value="20.0",
                 description="rf2o 处理频率（Hz）。建议不高于激光帧率太多。",
+            ),
+            DeclareLaunchArgument(
+                "ctf_levels",
+                default_value="5",
+                description="rf2o 金字塔层级（5=精度高，3=适配稀疏雷达）",
+            ),
+            DeclareLaunchArgument(
+                "iter_irls",
+                default_value="5",
+                description="rf2o 迭代次数（5=收敛好，3=适配稀疏雷达）",
             ),
             DeclareLaunchArgument(
                 "base_frame_id",

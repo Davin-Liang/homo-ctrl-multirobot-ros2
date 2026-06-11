@@ -73,6 +73,9 @@ def generate_launch_description():
             "ekf_yaml_only": "false",
             "rf2o_freq": "6.0",
             "scan_topic": "scan",
+            # 实车 N10 雷达稀疏，降低金字塔层级
+            "ctf_levels": "3",
+            "iter_irls": "3",
             # 显式传 odom_frame_id，避免被 base_serial 的 odom_combined 覆盖
             "odom_frame_id": [prefix, "odom"],
         }.items(),

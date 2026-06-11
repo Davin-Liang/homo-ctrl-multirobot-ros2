@@ -69,8 +69,7 @@ void CLaserOdometry2D::init(const sensor_msgs::msg::LaserScan& scan,
   width = scan.ranges.size();         // Num of samples (size) of the scan laser
   cols = width;						            // Max resolution. Should be similar to the width parameter
   fovh = std::abs(scan.angle_max - scan.angle_min);  // Horizontal Laser's FOV
-  ctf_levels = 3;                     // Coarse-to-Fine levels (降低适配稀疏雷达)
-  iter_irls  = 3;                     // Num iterations to solve iterative reweighted least squares（降低适配稀疏雷达）
+  // ctf_levels and iter_irls 已由 ROS 参数在 init() 前设置，不在此硬编码
 
   // Set the robot initial pose in the "map" frame_id
   // Odometry estimation will carry out from this initial pose

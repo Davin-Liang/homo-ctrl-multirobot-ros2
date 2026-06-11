@@ -39,6 +39,10 @@ CLaserOdometry2DNode::CLaserOdometry2DNode(): Node("CLaserOdometry2DNode")
   this->get_parameter("init_pose_from_topic", init_pose_from_topic);
   this->declare_parameter<double>("freq", 10.0);
   this->get_parameter("freq", freq);
+  this->declare_parameter<int>("ctf_levels", 5);
+  this->get_parameter("ctf_levels", ctf_levels_param);
+  this->declare_parameter<int>("iter_irls", 5);
+  this->get_parameter("iter_irls", iter_irls_param);
 
   // Init Publishers and Subscribers
   //---------------------------------
@@ -99,6 +103,8 @@ void CLaserOdometry2DNode::LaserCallBack(const sensor_msgs::msg::LaserScan::Shar
     {
       // Initialize module on first scan (from laser params)
       setLaserPoseFromTf();
+      rf2o_ref.ctf_levels = ctf_levels_param;
+      rf2o_ref.iter_irls  = iter_irls_param;
       rf2o_ref.init(last_scan, initial_robot_pose.pose.pose);
       rf2o_ref.first_laser_scan = false;
     }
