@@ -28,8 +28,8 @@ def generate_launch_description():
     )
     declare_odom_frame = DeclareLaunchArgument(
         "odom_frame_id",
-        default_value=[prefix, "odom_combined"],
-        description="轮式里程计 odom frame_id"
+        default_value=[prefix, "odom"],
+        description="轮式里程计 odom frame_id（与 EKF world_frame 对齐）"
     )
     declare_gyro_frame = DeclareLaunchArgument(
         "gyro_frame_id",
