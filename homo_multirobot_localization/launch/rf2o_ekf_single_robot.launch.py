@@ -28,7 +28,7 @@ def _make_ekf_node(context, **_kwargs):
                 "odom_frame": LaunchConfiguration("odom_frame").perform(context),
                 "base_link_frame": LaunchConfiguration("base_link_frame").perform(context),
                 "world_frame": LaunchConfiguration("world_frame").perform(context),
-                "odom0": LaunchConfiguration("odom_topic").perform(context),
+                "odom0": LaunchConfiguration("ekf_odom_topic").perform(context) or LaunchConfiguration("odom_topic").perform(context),
                 "imu0": LaunchConfiguration("imu_topic").perform(context),
                 "frequency": float(LaunchConfiguration("ekf_frequency").perform(context)),
                 "sensor_timeout": float(
@@ -61,6 +61,7 @@ def generate_launch_description():
     # rf2o args
     scan_topic = LaunchConfiguration("scan_topic")
     odom_topic = LaunchConfiguration("odom_topic")
+    ekf_odom_topic = LaunchConfiguration("ekf_odom_topic")
     rf2o_publish_tf = LaunchConfiguration("rf2o_publish_tf")
     rf2o_freq = LaunchConfiguration("rf2o_freq")
     ctf_levels = LaunchConfiguration("ctf_levels")
@@ -137,7 +138,12 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "odom_topic",
                 default_value="rf2o/odom",
-                description="rf2o 输出 odom 话题（同时作为 EKF 的 odom 输入；相对名会拼到 namespace 下）。",
+                description="rf2o 输出 odom 话题（相对名会拼到 namespace 下）。",
+            ),
+            DeclareLaunchArgument(
+                "ekf_odom_topic",
+                default_value="",
+                description="EKF odom0 输入话题（空则等于 odom_topic）。设为 odom 可切换轮式里程计。",
             ),
             DeclareLaunchArgument(
                 "rf2o_publish_tf",
