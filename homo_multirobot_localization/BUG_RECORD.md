@@ -148,3 +148,23 @@ ros2 run tf2_ros tf2_echo robot1_odom robot1_base_footprint
 ros2 run tf2_ros tf2_echo map robot1_odom
 ```
 
+## 7. odom_frame_id 参数在 IncludeLaunchDescription 中被覆盖
+
+**现象**: 实车 bringup 中 rf2o 的 `header.frame_id` 错误地变成了 `robot1_odom_combined`。
+
+**原因**: `base_serial.launch.py` 和 `rf2o_ekf_single_robot.launch.py` 都声明了 `odom_frame_id` 参数。ROS 2 launch 中先声明的参数优先，`base_serial` 的 `odom_combined` 覆盖了 rf2o 的默认值 `odom`。
+
+**解决**: 在父 launch 中显式传递 `odom_frame_id` 给 rf2o_ekf launch。
+
+## 8. 新增 ekf_odom_topic 参数解耦 rf2o 与 EKF
+
+**背景**: `odom_topic` 在 `rf2o_ekf_single_robot.launch.py` 中同时控制 rf2o 的输出话题和 EKF 的 odom0 输入。切换为轮式里程计时，不能直接设 `odom_topic:=odom`（会导致 rf2o 覆盖轮式里程计数据）。
+
+**解决**: 新增 `ekf_odom_topic` 参数，仅控制 EKF 的 odom0 输入，与 rf2o 输出独立。
+
+## 9. ctf_levels/iter_irls 改为可配置参数
+
+**背景**: rf2o 金字塔层级和迭代次数原为硬编码，实车 N10 稀疏雷达需降低以适应，但仿真需保持原值。
+
+**解决**: 作为 ROS 参数暴露，默认 5（仿真），实车 bringup 传 3。
+

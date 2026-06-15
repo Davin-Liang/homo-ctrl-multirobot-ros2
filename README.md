@@ -40,6 +40,10 @@
 | **`homo_multirobot_localization`** | 多机定位/里程计链路启动与配置：双机/单机 rf2o、双机/单机 EKF（`robot_localization`），以及仿真一键链路（Gazebo + rf2o + EKF） |
 | **`omnidirectional_controllers`（third_party）** | 上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
 | **`robot_localization`（third_party，可选）** | 上游融合包（EKF/UKF）。推荐直接装 `ros-humble-robot-localization`；若需源码联调可放入工作空间 third_party |
+| **`turn_on_wheeltec_robot`** | Wheeltec 实车硬件驱动包：STM32 串口通信、N10 雷达驱动、IMU 防漂移、EKF 定位 bringup，支持多机 namespace 隔离 |
+| **`serial`** | 实车串口库（SDK 内） |
+| **`wheeltec_robot_msg`** | Wheeltec 自定义消息（SDK 内） |
+| **`lslidar_ros2`** | Leishen 雷达驱动 + 消息（SDK 内，lslidar_driver + lslidar_msgs） |
 
 各包内另有 **`README.md`** 与 **`BUG_RECORD.md`**，用于细节与排障。
 

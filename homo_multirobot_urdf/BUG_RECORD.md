@@ -211,3 +211,9 @@ ros2 run tf2_ros tf2_echo robot1_base_footprint robot1_laser_link
 ```
 
 期望 yaw 接近 0°。
+
+## 15. Wheeltec 驱动需要 gyro_link 和 laser 帧名
+
+**现象**: Wheeltec 串口驱动和 ImuProcessor 使用 `gyro_link` 作为 IMU frame_id，雷达驱动使用 `laser` 作为 scan frame_id，但 xacro 中只有 `imu_link` 和 `laser_link`。
+
+**解决**: 在 xacro 中添加 `gyro_link` 和 `laser` 作为 0 偏移别名 link，通过 fixed joint 挂在 `imu_link` 和 `laser_link` 下。不删除原有 link，仿真兼容。
