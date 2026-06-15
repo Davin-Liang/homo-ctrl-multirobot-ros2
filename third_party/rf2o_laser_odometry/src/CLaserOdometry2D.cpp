@@ -204,6 +204,10 @@ bool CLaserOdometry2D::odometryCalculation(const sensor_msgs::msg::LaserScan& sc
 
   // copy @param scan to internal variable (we already did it for the previous scan)
   range_wf = Eigen::Map<const Eigen::MatrixXf>(scan.ranges.data(), width, 1);
+  // 源头过滤所有 inf/NaN（稀疏雷达 inf 会污染金字塔和求解器）
+  for (unsigned int i = 0; i < width; i++)
+    if (!std::isfinite(range_wf(i)))
+      range_wf(i) = 0.f;
 
   // Keep record of times
   auto start = get_clock()->now();
