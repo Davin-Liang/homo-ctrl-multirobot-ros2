@@ -37,6 +37,8 @@ def generate_launch_description():
         "Kp_yaw": Kp_yaw,
         "K_ff": K_ff,
         "control_rate": control_rate,
+        "max_linear_vel": LaunchConfiguration("max_linear_vel"),
+        "max_angular_vel": LaunchConfiguration("max_angular_vel"),
     }
 
     follower1_node = Node(
@@ -88,6 +90,10 @@ def generate_launch_description():
                               description="Feedforward yaw gain"),
         DeclareLaunchArgument("control_rate", default_value="20.0",
                               description="Control loop frequency (Hz)"),
+        DeclareLaunchArgument("max_linear_vel", default_value="1.0",
+                              description="Max body linear velocity (m/s)"),
+        DeclareLaunchArgument("max_angular_vel", default_value="0.5",
+                              description="Max body angular velocity (rad/s)"),
         follower1_node,
         follower2_node,
     ])

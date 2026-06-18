@@ -245,8 +245,11 @@ Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考�
 | `wheel_max_omega` | double | 20.0 | 最大轮角速度 (rad/s)，超限等比缩放 |
 | `max_linear_accel` | double | 2.0 | 线加速度 slew rate 限幅 (m/s²) |
 | `max_angular_accel` | double | 4.0 | 角加速度 slew rate 限幅 (rad/s²) |
+| `max_linear_vel` | double | 1.0 | 线速度硬上限 (m/s)，硬限幅 |
+| `max_angular_vel` | double | 0.5 | 角速度硬上限 (rad/s)，硬限幅 |
 
 > 约束日志：轮速约束触发时每 2s 打印 `[WARN] 轮速约束触发: scale=X.XX`。
+> 速度上限与加速度限幅的区别：`max_linear_vel` 限制速度天花板，`max_linear_accel` 限制速度变化快慢。
 
 ### 消融实验参数（两套共享）
 

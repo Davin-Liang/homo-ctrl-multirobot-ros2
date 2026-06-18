@@ -32,6 +32,9 @@ FormationController4DCont::FormationController4DCont()
   double max_linear_accel  = declare_parameter("max_linear_accel",  2.0);
   double max_angular_accel = declare_parameter("max_angular_accel", 4.0);
 
+  max_linear_vel_  = declare_parameter("max_linear_vel",  1.0);
+  max_angular_vel_ = declare_parameter("max_angular_vel", 0.5);
+
   bool use_hpc = declare_parameter("use_hpc", true);
   ctrl_ = std::make_unique<LpcController4DCont>(radius, mass, omega_d, use_hpc);
 
@@ -148,12 +151,13 @@ void FormationController4DCont::timer_cb()
   double vy_body = -out[0] * std::sin(follower_yaw) + out[1] * std::cos(follower_yaw);
 
   geometry_msgs::msg::Twist cmd;
-  cmd.linear.x = std::clamp(vx_body, -1.0, 1.0);
-  cmd.linear.y = std::clamp(vy_body, -1.0, 1.0);
+  cmd.linear.x = std::clamp(vx_body, -max_linear_vel_, max_linear_vel_);
+  cmd.linear.y = std::clamp(vy_body, -max_linear_vel_, max_linear_vel_);
 
   double raw_err   = leader_yaw - follower_yaw;
   double norm_err  = std::atan2(std::sin(raw_err), std::cos(raw_err));
-  cmd.angular.z = std::clamp(norm_err * Kp_yaw_ + leader_az * K_ff_, -0.5, 0.5);
+  cmd.angular.z = std::clamp(norm_err * Kp_yaw_ + leader_az * K_ff_,
+                              -max_angular_vel_, max_angular_vel_);
 
   double dt = 1.0 / control_rate_;
   double wheel_scale = constraint_.apply(cmd.linear.x, cmd.linear.y, cmd.angular.z, dt);

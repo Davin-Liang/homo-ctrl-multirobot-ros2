@@ -22,6 +22,10 @@ def generate_launch_description():
     Kp_yaw = LaunchConfiguration("Kp_yaw")
     K_ff = LaunchConfiguration("K_ff")
 
+    # Velocity limits
+    max_linear_vel = LaunchConfiguration("max_linear_vel")
+    max_angular_vel = LaunchConfiguration("max_angular_vel")
+
     # Kinematic constraints
     wheel_radius = LaunchConfiguration("wheel_radius")
     base_radius = LaunchConfiguration("base_radius")
@@ -51,6 +55,8 @@ def generate_launch_description():
             "K_ff": K_ff,
             "wheel_radius": wheel_radius,
             "base_radius": base_radius,
+            "max_linear_vel": max_linear_vel,
+            "max_angular_vel": max_angular_vel,
             "wheel_max_omega": wheel_max_omega,
             "max_linear_accel": max_linear_accel,
             "max_angular_accel": max_angular_accel,
@@ -94,5 +100,9 @@ def generate_launch_description():
                               description="Max body linear acceleration (m/s^2)"),
         DeclareLaunchArgument("max_angular_accel", default_value="4.0",
                               description="Max body angular acceleration (rad/s^2)"),
+        DeclareLaunchArgument("max_linear_vel", default_value="1.0",
+                              description="Max body linear velocity (m/s)"),
+        DeclareLaunchArgument("max_angular_vel", default_value="0.5",
+                              description="Max body angular velocity (rad/s)"),
         formation_node,
     ])

@@ -29,6 +29,7 @@ private:
   // ---- 参数 ----------------------------------------------------------------
   std::string leader_ns_, follower_ns_;
   double Kp_yaw_, K_ff_;
+  double max_linear_vel_, max_angular_vel_;
   double control_rate_;
 
   // ---- 控制器 + 约束 -------------------------------------------------------
