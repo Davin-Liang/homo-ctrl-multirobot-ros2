@@ -7,12 +7,15 @@
   TF: map -> <prefix>_odom               — 恒等变换
   TF: <prefix>_odom -> <prefix>_base_footprint — 恒等变换
 
-运动模型（CCW）:
+运动模型（CCW，默认切向）:
   ω = speed / radius
   θ(t) = ω·t
   position:  (cx + radius·cos(θ),  cy + radius·sin(θ))
   yaw:       θ + π/2   （始终切向）
   body vx:   speed,  body vy: 0,  body wz: ω
+
+固定朝向模式（heading_fixed:=true）:
+  yaw 固定为 heading 角度，车体系速度由 map 系切线速度旋转而来，body wz = 0。
 
 使用:
   ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
@@ -21,6 +24,11 @@
   ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
     --ros-args -r __ns:=/virtual_leader \
     -p center_x:=0.0 -p center_y:=0.0 -p radius:=2.0 -p speed:=0.5
+
+  # 固定朝向（例如永远朝北 0°）
+  ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
+    --ros-args -r __ns:=/virtual_leader \
+    -p heading_fixed:=true -p heading:=0.0
 """
 
 import math
@@ -50,6 +58,8 @@ class VirtualLeaderCircle(Node):
         self.declare_parameter('speed', 0.5)
         self.declare_parameter('direction', 'ccw')
         self.declare_parameter('rate', 50.0)
+        self.declare_parameter('heading_fixed', False)
+        self.declare_parameter('heading', 0.0)
 
         cx = self.get_parameter('center_x').value
         cy = self.get_parameter('center_y').value
@@ -57,6 +67,8 @@ class VirtualLeaderCircle(Node):
         v = self.get_parameter('speed').value
         ccw = self.get_parameter('direction').value == 'ccw'
         hz = self.get_parameter('rate').value
+        heading_fixed = self.get_parameter('heading_fixed').value
+        heading_deg = self.get_parameter('heading').value
 
         self.cx = cx
         self.cy = cy
@@ -65,6 +77,9 @@ class VirtualLeaderCircle(Node):
         self.omega = v / R * (1.0 if ccw else -1.0)
         self.period = 2.0 * math.pi / abs(self.omega)
         self.dt = 1.0 / hz
+
+        self.heading_fixed = heading_fixed
+        self.heading_yaw = math.radians(heading_deg)
 
         # 从 namespace 推导 TF 前缀: /virtual_leader -> virtual_leader
         ns = self.get_namespace()
@@ -85,6 +100,7 @@ class VirtualLeaderCircle(Node):
             f'虚拟 Leader 绕圈: 圆心=({cx:.1f},{cy:.1f}) R={R:.1f}m '
             f'v={v:.2f}m/s ω={self.omega:.3f}rad/s 周期={self.period:.1f}s '
             f'{"逆时针" if ccw else "顺时针"} '
+            f'朝向={"固定"+str(heading_deg)+"°" if heading_fixed else "切向"} '
             f'odom_frame={self.odom_frame} base_frame={self.base_frame} '
             f'频率={hz:.0f}Hz'
         )
@@ -114,7 +130,23 @@ class VirtualLeaderCircle(Node):
 
         px = self.cx + self.R * math.cos(theta)
         py = self.cy + self.R * math.sin(theta)
-        yaw = theta + (math.pi / 2.0 if self.omega >= 0 else -math.pi / 2.0)
+
+        # map 系下圆上的切线速度
+        vx_map = -self.v * math.sin(theta)
+        vy_map =  self.v * math.cos(theta)
+
+        if self.heading_fixed:
+            yaw = self.heading_yaw
+            # 将 map 系速度旋转到固定朝向的车体系
+            ch = math.cos(yaw)
+            sh = math.sin(yaw)
+            body_vx =  ch * vx_map + sh * vy_map
+            body_vy = -sh * vx_map + ch * vy_map
+        else:
+            # 始终切向
+            yaw = theta + (math.pi / 2.0 if self.omega >= 0 else -math.pi / 2.0)
+            body_vx = self.v
+            body_vy = 0.0
 
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
@@ -125,9 +157,9 @@ class VirtualLeaderCircle(Node):
         odom.pose.pose.position.y = py
         odom.pose.pose.orientation = yaw_to_quaternion(yaw)
 
-        odom.twist.twist.linear.x = self.v
-        odom.twist.twist.linear.y = 0.0
-        odom.twist.twist.angular.z = self.omega
+        odom.twist.twist.linear.x = body_vx
+        odom.twist.twist.linear.y = body_vy
+        odom.twist.twist.angular.z = 0.0 if self.heading_fixed else self.omega
 
         self.odom_pub.publish(odom)
 
