@@ -166,6 +166,11 @@ ros2 launch homo_multirobot_gazebo sim_single_robot.launch.py
 
 ```bash
 ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
+
+# 指定 namespace 和初始位姿（例如只启动 robot2 作为 Follower）
+ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py \
+  robot_namespace:=/robot2 robot_prefix:=robot2_ \
+  robot_x:=2.0 robot_y:=0.0 robot_yaw:=0.0
 ```
 
 说明：该仿真总 launch 默认 `use_rviz:=true`（会同时启动 RViz）；如不需要可设置 `use_rviz:=false`。
@@ -236,6 +241,24 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.la
 双 follower（4D 版）：
 ```bash
 ros2 launch homo_multirobot_formation_control formation_two_followers.launch.py
+```
+
+虚拟 Leader 绕圈（不跑 leader 仿真/实车，程序虚拟发布 leader 状态）：
+```bash
+ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
+  --ros-args -r __ns:=/virtual_leader \
+  -p center_x:=0.0 -p center_y:=0.0 -p radius:=2.0 -p speed:=0.5
+
+# 编队控制器通过 leader_ns 参数对接虚拟 leader
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py \
+  leader_ns:=/virtual_leader follower_ns:=/robot2
+```
+
+轨迹记录与画图：
+```bash
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
+  -p duration:=30.0 -p out_dir:=/tmp/robot_traj
 ```
 
 键盘遥控领航者：

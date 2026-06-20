@@ -173,6 +173,7 @@ install(PROGRAMS
   scripts/leader_eight.py
   scripts/record_trajectory.py
   scripts/formation_control_py.py
+  scripts/virtual_leader_circle.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

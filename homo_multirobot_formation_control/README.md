@@ -437,16 +437,63 @@ ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/
 > 两个脚本均为纯开环速度指令，无位置反馈。`period` 控制指令频率而非实际轨迹周期。
 > Y 通道频率为 2ω（X 通道的 2 倍），对控制器带宽要求更高，需适当提高 `omega_d`。
 
+### virtual_leader_circle — 虚拟 Leader 绕圈
+
+不依赖仿真/实车，直接发布 Odometry + 静态 TF，虚拟一个在 map 系绕圈运动的 leader：
+
+```bash
+ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
+  --ros-args -r __ns:=/virtual_leader
+
+# 带参数
+ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
+  --ros-args -r __ns:=/virtual_leader \
+  -p center_x:=0.0 -p center_y:=0.0 -p radius:=2.0 -p speed:=0.5 -p direction:=ccw
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `center_x` | 0.0 | 圆心 X (map 系) |
+| `center_y` | 0.0 | 圆心 Y (map 系) |
+| `radius` | 2.0 | 圆半径 (m) |
+| `speed` | 0.5 | 切向线速度 (m/s) |
+| `direction` | ccw | ccw=逆时针, cw=顺时针 |
+| `rate` | 50.0 | 发布频率 (Hz) |
+
+与 `leader_circle.py`（开环 cmd_vel，依赖 Gazebo 提供里程计）不同，
+`virtual_leader_circle.py` 直接发布 `<ns>/odometry/filtered` 和 `map → <prefix>_odom` 静态 TF，
+**完全取代 leader 仿真/实车**，编队控制器通过 `leader_ns:=/virtual_leader` 即可对接。
+
+### record_trajectory — 轨迹记录与画图
+
+```bash
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
+  -p duration:=30.0 -p out_dir:=/tmp/robot_traj
+```
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `leader_ns` | /robot1 | Leader 命名空间 |
+| `follower_ns` | /robot2 | Follower 命名空间 |
+| `duration` | 30.0 | 记录时长 (s) |
+| `out_dir` | /tmp/robot_traj | 输出目录 |
+
+输出为带时间戳的 PNG 图片，含 3 个子图：轨迹图、X/时间曲线、Y/时间曲线。
+
 ## 完整联调
+
+### 标准双机联调（robot1=Leader 仿真, robot2=Follower 仿真）
 
 ```bash
 # 1. Gazebo 双机仿真 + 里程计链路 (rf2o + EKF)
 ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py \
-  use_rviz:=false robot2_x:=4.0 robot2_yaw:=1.57
+  use_rviz:=false
 
 # 2. 地图 + slam_toolbox 定位
 ros2 launch homo_multirobot_nav slam_toolbox_loc_two_robots.launch.py \
-  robot2_map_start_x:=4.0 robot2_map_start_yaw:=1.57
+  robot1_map_start_x:=0.0 robot1_map_start_y:=0.0 robot1_map_start_yaw:=0.0 \
+  robot2_map_start_x:=2.0 robot2_map_start_y:=0.0 robot2_map_start_yaw:=0.0
 
 # 3a. 编队控制 — 4D 版
 ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py
@@ -465,6 +512,30 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_mpc_6d.l
 
 # 4. 键盘遥控领航者
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot1/cmd_vel
+```
+
+### 虚拟 Leader 联调（只跑 Follower 仿真/实车，Leader 由程序虚拟）
+
+```bash
+# ===== 终端 1：只启动 Follower 的 Gazebo 仿真 + 定位链路 =====
+ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py \
+  robot_namespace:=/robot2 robot_prefix:=robot2_ \
+  robot_x:=2.0 robot_y:=0.0 robot_yaw:=0.0
+
+# ===== 终端 2：Follower 已知地图定位 =====
+ros2 launch homo_multirobot_nav slam_toolbox_loc_single_robot.launch.py \
+  namespace:=/robot2 prefix:=robot2_ \
+  map_name:=sim_room1_map \
+  map_start_x:=2.0 map_start_y:=0.0 map_start_yaw:=0.0
+
+# ===== 终端 3：虚拟 Leader 绕圈 =====
+ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
+  --ros-args -r __ns:=/virtual_leader \
+  -p center_x:=0.0 -p center_y:=0.0 -p radius:=2.0 -p speed:=0.5
+
+# ===== 终端 4：编队控制（robot2 跟随 virtual_leader）=====
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py \
+  leader_ns:=/virtual_leader follower_ns:=/robot2
 ```
 
 ## 验证

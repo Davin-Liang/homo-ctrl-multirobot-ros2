@@ -19,6 +19,10 @@ def generate_launch_description():
 
     robot_namespace = LaunchConfiguration("robot_namespace")
     robot_prefix = LaunchConfiguration("robot_prefix")
+    robot_x = LaunchConfiguration("robot_x")
+    robot_y = LaunchConfiguration("robot_y")
+    robot_z = LaunchConfiguration("robot_z")
+    robot_yaw = LaunchConfiguration("robot_yaw")
 
     # EKF frame override (ensure odom->base TF matches <prefix> convention)
     ekf_yaml_only = LaunchConfiguration("ekf_yaml_only")
@@ -53,6 +57,10 @@ def generate_launch_description():
             "publish_world_tf": publish_world_tf,
             "robot_namespace": robot_namespace,
             "robot_prefix": robot_prefix,
+            "robot_x": robot_x,
+            "robot_y": robot_y,
+            "robot_z": robot_z,
+            "robot_yaw": robot_yaw,
             "planar_publish_odom": planar_publish_odom,
             "planar_publish_odom_tf": planar_publish_odom_tf,
         }.items(),
@@ -100,6 +108,10 @@ def generate_launch_description():
             DeclareLaunchArgument("publish_world_tf", default_value="false"),
             DeclareLaunchArgument("robot_namespace", default_value="/robot1"),
             DeclareLaunchArgument("robot_prefix", default_value="robot1_"),
+            DeclareLaunchArgument("robot_x", default_value="0.0"),
+            DeclareLaunchArgument("robot_y", default_value="0.0"),
+            DeclareLaunchArgument("robot_z", default_value="0.0"),
+            DeclareLaunchArgument("robot_yaw", default_value="0.0"),
             DeclareLaunchArgument(
                 "ekf_yaml_only",
                 default_value="false",

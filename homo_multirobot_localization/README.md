@@ -101,11 +101,20 @@ ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py
  - `world_name:=sim_room1.world`（默认使用带墙体/结构的世界，rf2o 更稳定；如需切换可设为 `test_world.world` 或 `empty.world`）
 - `robot_namespace:=/robot1`
 - `robot_prefix:=robot1_`
+- `robot_x:=0.0`、`robot_y:=0.0`、`robot_z:=0.0`、`robot_yaw:=0.0`（初始位姿）
 - `use_rviz:=true`（默认会启动 RViz；如不需要可设为 `use_rviz:=false`）
 - `planar_publish_odom_tf:=false`
 - `rf2o_publish_tf:=false`
 
 也就是：**只让 EKF 发布** `robot1_odom -> robot1_base_footprint` 的 TF，避免多源 TF 冲突；并确保后续 `slam_toolbox` 能拿到完整 TF 链从而发布 `map -> robot1_odom`。
+
+示例：启动 Follower (robot2) 并指定初始位置：
+
+```bash
+ros2 launch homo_multirobot_localization sim_rf2o_ekf_single_robot.launch.py \
+  robot_namespace:=/robot2 robot_prefix:=robot2_ \
+  robot_x:=2.0 robot_y:=1.0 robot_yaw:=0.0
+```
 
 ### ⚠️ TF 策略（关键）
 
