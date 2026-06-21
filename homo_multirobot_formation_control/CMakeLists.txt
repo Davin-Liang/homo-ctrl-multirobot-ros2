@@ -47,32 +47,32 @@ install(TARGETS formation_control_node
 )
 
 # ---- 4D 连续边界投影控制器 ----------------------------------------------------
-add_executable(formation_control_node_4d_cont
-  src/main_4d_cont.cpp
-  src/formation_control_node_4d_cont.cpp
-)
+#add_executable(formation_control_node_4d_cont
+#  src/main_4d_cont.cpp
+#  src/formation_control_node_4d_cont.cpp
+#)
 
-target_include_directories(formation_control_node_4d_cont PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-)
+#target_include_directories(formation_control_node_4d_cont PUBLIC
+#  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+#)
 
-ament_target_dependencies(formation_control_node_4d_cont
-  rclcpp
-  geometry_msgs
-  nav_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-)
+#ament_target_dependencies(formation_control_node_4d_cont
+#  rclcpp
+#  geometry_msgs
+#  nav_msgs
+#  tf2
+#  tf2_ros
+#  tf2_geometry_msgs
+#)
 
-target_link_libraries(formation_control_node_4d_cont
-  Eigen3::Eigen
-)
+#target_link_libraries(formation_control_node_4d_cont
+#  Eigen3::Eigen
+#)
 
-install(TARGETS formation_control_node_4d_cont
-  DESTINATION lib/${PROJECT_NAME}
-)
+#install(TARGETS formation_control_node_4d_cont
+#  DESTINATION lib/${PROJECT_NAME}
+#)
 
 # ---- 以下目标在小车上内存不够编译，暂时跳过 ---- 可在 WSL/强机器上取消注释
 # ---- 6D 运动学模型控制器 (Layer 3) -------------------------------------------

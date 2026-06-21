@@ -10,6 +10,10 @@
 ///   3. 将 4 维状态向量送入 LpcController::lpc_calculate
 ///   4. 在 follower 命名空间下发布 cmd_vel
 
+
+
+
+
 #include "homo_multirobot_formation_control/formation_control_node.hpp"
 
 #include <tf2_ros/transform_listener.h>
