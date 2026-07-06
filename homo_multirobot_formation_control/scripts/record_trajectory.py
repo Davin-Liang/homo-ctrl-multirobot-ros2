@@ -2,7 +2,7 @@
 """
 记录两台车在 map 坐标系下的轨迹并画图保存。
 
-通过 TF (map → <ns>_odom) 将 EKF 里程计位置转换到 map 系。
+通过 TF (map -> <ns>_odom) 将 EKF 里程计位置转换到 map 系。
 话题有数据时开始计时，到时自动停止。文件名含时间戳防止覆盖。
 
 使用:
@@ -10,10 +10,11 @@
   ros2 run homo_multirobot_formation_control record_trajectory.py \
     --ros-args -p duration:=30.0 -p out_dir:=/tmp/robot_traj
 
-  # 虚拟 leader
+  # 虚拟 leader + 画编队距离参考线
   ros2 run homo_multirobot_formation_control record_trajectory.py \
     --ros-args \
     -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
+    -p radius:=1.0 \
     -p duration:=30.0 -p out_dir:=/tmp/robot_traj
 """
 
@@ -38,11 +39,13 @@ class TrajectoryRecorder(Node):
         self.declare_parameter('follower_ns', '/robot2')
         self.declare_parameter('duration', 30.0)
         self.declare_parameter('out_dir', '/tmp/robot_traj')
+        self.declare_parameter('radius', 0.0)
 
         self.leader_ns = self.get_parameter('leader_ns').value
         self.follower_ns = self.get_parameter('follower_ns').value
         self.duration = self.get_parameter('duration').value
         self.out_dir = self.get_parameter('out_dir').value
+        self.ideal_radius = self.get_parameter('radius').value
         os.makedirs(self.out_dir, exist_ok=True)
 
         self.tf_buffer = tf2_ros.Buffer()
@@ -66,7 +69,8 @@ class TrajectoryRecorder(Node):
         self.follower_label = f'Follower ({follower_short})'
         self.get_logger().info(
             f'等待数据... leader={self.leader_ns} follower={self.follower_ns} '
-            f'时长={self.duration:.0f}s 输出={self.out_dir}')
+            f'时长={self.duration:.0f}s 输出={self.out_dir}'
+            + (f' 理想半径={self.ideal_radius:.1f}m' if self.ideal_radius > 0 else ''))
 
     def _odom_to_map(self, ns, msg):
         odom_frame = ns.lstrip('/') + '_odom'
@@ -114,9 +118,10 @@ class TrajectoryRecorder(Node):
 
     def _plot_and_save(self):
         elapsed = time.time() - self.t0 if self.t0 else 0
-        fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
-        ax = axes[0]
+        # ---- 子图 1: 轨迹 ----
+        ax = axes[0][0]
         for xl, yl, name, c in [
             (self.t1_x, self.t1_y, self.leader_label, 'tab:blue'),
             (self.t2_x, self.t2_y, self.follower_label, 'tab:orange'),
@@ -130,19 +135,47 @@ class TrajectoryRecorder(Node):
         ax.set_title(f'Trajectory in map frame ({elapsed:.1f}s)')
         ax.legend(fontsize=7); ax.set_aspect('equal'); ax.grid(True, alpha=0.3)
 
-        for i, axis_name in enumerate(['X', 'Y']):
-            ax = axes[i + 1]
-            for xl, yl, tl, name, c in [
-                (self.t1_x, self.t1_y, self.t1_t, self.leader_label, 'tab:blue'),
-                (self.t2_x, self.t2_y, self.t2_t, self.follower_label, 'tab:orange'),
-            ]:
-                if not tl:
-                    continue
-                vals = xl if axis_name == 'X' else yl
-                ax.plot(tl, vals, linewidth=0.8, label=name, color=c)
-            ax.set_xlabel('Time (s)'); ax.set_ylabel(f'{axis_name} (m)')
-            ax.set_title(f'{axis_name} over time')
-            ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        # ---- 子图 2: X over time ----
+        ax = axes[0][1]
+        for xl, yl, tl, name, c in [
+            (self.t1_x, self.t1_y, self.t1_t, self.leader_label, 'tab:blue'),
+            (self.t2_x, self.t2_y, self.t2_t, self.follower_label, 'tab:orange'),
+        ]:
+            if not tl:
+                continue
+            ax.plot(tl, xl, linewidth=0.8, label=name, color=c)
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('X (m)')
+        ax.set_title('X over time')
+        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+
+        # ---- 子图 3: Y over time ----
+        ax = axes[1][0]
+        for xl, yl, tl, name, c in [
+            (self.t1_x, self.t1_y, self.t1_t, self.leader_label, 'tab:blue'),
+            (self.t2_x, self.t2_y, self.t2_t, self.follower_label, 'tab:orange'),
+        ]:
+            if not tl:
+                continue
+            ax.plot(tl, yl, linewidth=0.8, label=name, color=c)
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('Y (m)')
+        ax.set_title('Y over time')
+        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+
+        # ---- 子图 4: 编队距离 ----
+        ax = axes[1][1]
+        n = min(len(self.t1_x), len(self.t2_x))
+        if n > 0:
+            dist_t = self.t2_t[:n]
+            dist = [math.hypot(self.t1_x[i] - self.t2_x[i], self.t1_y[i] - self.t2_y[i])
+                    for i in range(n)]
+            ax.plot(dist_t, dist, linewidth=1.0, color='tab:red',
+                    label=f'Actual distance (mean={sum(dist)/n:.2f}m)')
+        if self.ideal_radius > 0:
+            ax.axhline(y=self.ideal_radius, color='gray', linestyle='--', linewidth=1.2,
+                       label=f'Ideal radius = {self.ideal_radius:.1f}m')
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('Distance (m)')
+        ax.set_title('Formation distance')
+        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         path = os.path.join(self.out_dir, f'trajectory_{ts}.png')

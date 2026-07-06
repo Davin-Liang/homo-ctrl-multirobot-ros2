@@ -103,6 +103,34 @@ install(TARGETS formation_control_node_6d
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- 6D 离散多边形编队控制器 ---------------------------------------------------
+add_executable(formation_control_node_6d_disc
+  src/main_6d_disc.cpp
+  src/formation_control_node_6d_disc.cpp
+)
+
+target_include_directories(formation_control_node_6d_disc PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+ament_target_dependencies(formation_control_node_6d_disc
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+target_link_libraries(formation_control_node_6d_disc
+  Eigen3::Eigen
+)
+
+install(TARGETS formation_control_node_6d_disc
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ## ---- 6D+OA 运动学模型控制器 (带避障) -----------------------------------------
 add_executable(formation_control_node_6d_oa
   src/main_6d_oa.cpp

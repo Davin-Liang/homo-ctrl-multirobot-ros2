@@ -3,7 +3,9 @@
 基于**齐次控制（Homogeneous Control）** 的 Leader-Follower 编队算法（C++ / Eigen），
 适配项目的 slam_toolbox / AMCL + EKF 定位体系。
 
-提供四套控制器：**4D 质点模型**（原版论文算法）、**6D 运动学模型**（考虑车身朝向 + 全向轮约束）、
+提供五套控制器：**4D 质点模型**（原版论文算法）、**4D Cont 连续边界投影**、
+**6D 运动学模型**（考虑车身朝向 + 全向轮约束 + 边界投影编队）、
+**6D Disc 离散多边形编队**（6D 模型 + 离散多边形策略）、
 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）、
 以及 **MPC 6D 运动学模型预测控制**（顺序线性化 + OSQP 求解，作为 HPC 的对照组）。
 
@@ -25,7 +27,8 @@
 |------|------------|-----------|---------|---------|---------|
 | **4D (原版)** | `formation_single_follower.launch.py` | `formation_control_node` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
-| **6D (运动学)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
+| **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
+| **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
 | **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
 | **MPC 6D (模型预测控制)** | `formation_single_follower_mpc_6d.launch.py` | `formation_control_node_mpc_6d` | 同 6D | 固定偏移（Leader 车体系） | 集成于 6D 主回路 |
 
@@ -371,6 +374,22 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.la
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py \
   safety_distance:=0.6 radius:=1.0 obstacle_weight:=1.5
 ```
+
+### 启动（6D Disc 单 follower，离散多边形）
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.launch.py
+```
+
+带参数：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.launch.py \
+  radius:=1.0 m_p:=4 tol:=0.1 \
+  mass:=1.5 I:=0.3 omega_d:=0.8 omega_d_theta:=0.8
+```
+
+与 6D 连续边界投影版本的区别：`m_p` 个编队点均匀分布在安全圆上，`tol` 提供切换迟滞，避免边界投影在小半径圆轨迹下的震荡。
 
 ### 启动（MPC 6D 单 follower）
 
