@@ -18,7 +18,7 @@ import argparse
 import time
 import numpy as np
 
-VELOCITY_THRESHOLD = 0.02  # m/s
+VELOCITY_THRESHOLD = 0.01  # m/s
 HOLD_DURATION = 0.3        # 必须连续静止这么久才算真停
 FORWARD_DURATION = 1.5     # 前进最长时间（超时也停车）
 REVERSE_DURATION = 2.0     # 倒车复位时间
@@ -33,7 +33,7 @@ class MotorLatencyMeter(Node):
         self.trials = trials
         self.raw_odom_topic = raw_odom_topic
 
-        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
+        qos = 10
 
         self.has_raw = False
         if raw_odom_topic:
@@ -67,6 +67,7 @@ class MotorLatencyMeter(Node):
         t0 = time.time()
         while time.time() - t0 < timeout:
             rclpy.spin_once(self, timeout_sec=0.02)
+            self.get_logger().info(f'dbg: ekf_v={self.ekf_odom_v}')
             is_stop = self.ekf_odom_v is not None and self.ekf_odom_v < VELOCITY_THRESHOLD
             if is_stop:
                 if stationary_since is None:
@@ -108,6 +109,7 @@ class MotorLatencyMeter(Node):
         ekf_delay = None
         t0 = time.time()
         while time.time() - t0 < FORWARD_DURATION:
+            self.cmd_pub.publish(twist)
             rclpy.spin_once(self, timeout_sec=0.005)
             if raw_delay is None and self.has_raw and self.raw_odom_v is not None \
                     and self.raw_odom_v > VELOCITY_THRESHOLD:
@@ -126,7 +128,7 @@ class MotorLatencyMeter(Node):
         self.cmd_pub.publish(Twist())
 
         # 5. 倒车复位
-        self.reverse_to_start()
+        # self.reverse_to_start()
 
         if self.has_raw and raw_delay is None:
             self.get_logger().warn(f'  Trial {trial_idx}: raw odom did not respond!')
