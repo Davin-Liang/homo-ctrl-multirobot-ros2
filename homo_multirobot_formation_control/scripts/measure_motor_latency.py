@@ -33,7 +33,7 @@ class MotorLatencyMeter(Node):
         self.trials = trials
         self.raw_odom_topic = raw_odom_topic
 
-        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.BEST_EFFORT)
+        qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE)
 
         self.has_raw = False
         if raw_odom_topic:
