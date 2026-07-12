@@ -9,6 +9,7 @@
 
 | # | 问题 | 分类 | 处理 |
 |---|------|------|------|
+| 28 | `ParameterValue` 对象无 `name` 属性 → record_trajectory 崩溃 | Python | zip 参数名与返回值 |
 | 1 | Gazebo odom ↔ slam_toolbox 定位数据不一致 → 振荡 | 架构 | EKF odom + TF 变换通道 |
 | 2 | 话题相对路径导致命名空间双重解析 | ROS 2 | 统一使用绝对路径 |
 | 3 | `MatrixExponential` / `MatrixSquareRoot` API 不存在 | C++ | 改用 `.exp()` / `.sqrt()` |
@@ -630,4 +631,40 @@ ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/
 
 这与连续边界投影无关——离散多边形方案在相同条件下也会出现 Y 轴滞后（同频率）。
 根本原因是 8 字轨迹 Y 通道的固有高频特性，需要足够的控制器带宽来跟踪。
+
+---
+
+## 28) `record_trajectory.py` 读取控制器参数时 `AttributeError: 'ParameterValue' object has no attribute 'name'`
+
+**现象**
+
+```bash
+ros2 run homo_multirobot_formation_control record_trajectory.py --ros-args -p mode:=sim
+```
+报错 `AttributeError: 'ParameterValue' object has no attribute 'name'`，进程退出。
+
+**原因**
+
+ROS 2 Humble 的 `rcl_interfaces/msg/ParameterValue` 消息不包含 `name` 字段。
+参数名来自请求数组的顺序，与返回值中的 values 数组按位置一一对应。
+
+原代码 `for pv in result.values: params[pv.name] = val` 假设 `ParameterValue` 有 `name`
+属性，但该属性不存在。
+
+**处理**
+
+改为用 `zip(CTRL_PARAM_NAMES, result.values)` 按顺序匹配参数名与值：
+
+```python
+for name, pv in zip(CTRL_PARAM_NAMES, result.values):
+    if pv.type == 3:       # PARAMETER_DOUBLE
+        val = pv.double_value
+    elif pv.type == 2:     # PARAMETER_INTEGER
+        val = pv.integer_value
+    else:
+        continue
+    params[name] = val
+```
+
+**修改文件**: `record_trajectory.py` → `_query_controller_params()`
 

@@ -52,6 +52,14 @@ private:
   // ---- 定时器 --------------------------------------------------------------
   rclcpp::TimerBase::SharedPtr timer_;
 
+  // ---- 诊断 -----------------------------------------------------------------
+  rclcpp::Time leader_odom_stamp_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time follower_odom_stamp_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_diag_time_{0, 0, RCL_ROS_TIME};
+  int diag_tick_ = 0;
+  double sum_leader_age_ = 0.0;
+  double sum_ekf_age_ = 0.0;
+
   // ---- 状态标志 ------------------------------------------------------------
   bool leader_ok_ = false, follower_ok_ = false;
   bool controller_initialized_ = false;

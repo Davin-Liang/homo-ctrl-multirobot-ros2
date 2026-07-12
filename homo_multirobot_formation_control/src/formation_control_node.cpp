@@ -64,12 +64,20 @@ FormationController::FormationController()
   auto qos = rclcpp::SensorDataQoS();
   leader_sub_ = create_subscription<nav_msgs::msg::Odometry>(
     leader_ns_ + "/odometry/filtered", qos,
-    [this](nav_msgs::msg::Odometry::SharedPtr m) { leader_odom_ = m; leader_ok_ = true; });
+    [this](nav_msgs::msg::Odometry::SharedPtr m) {
+      leader_odom_ = m; leader_ok_ = true;
+      leader_odom_stamp_ = m->header.stamp;
+    });
   follower_sub_ = create_subscription<nav_msgs::msg::Odometry>(
     follower_ns_ + "/odometry/filtered", qos,
-    [this](nav_msgs::msg::Odometry::SharedPtr m) { follower_odom_ = m; follower_ok_ = true; });
+    [this](nav_msgs::msg::Odometry::SharedPtr m) {
+      follower_odom_ = m; follower_ok_ = true;
+      follower_odom_stamp_ = m->header.stamp;
+    });
 
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+
+  last_diag_time_ = get_clock()->now();
 
   int ms = static_cast<int>(1000.0 / control_rate_);
   timer_ = create_wall_timer(std::chrono::milliseconds(ms), [this]() { timer_cb(); });
@@ -181,10 +189,12 @@ void FormationController::timer_cb()
   double vx_body =  out[0] * std::cos(follower_yaw) + out[1] * std::sin(follower_yaw);
   double vy_body = -out[0] * std::sin(follower_yaw) + out[1] * std::cos(follower_yaw);
 
-  // 构建并发布速度指令
+  // 构建速度指令
   geometry_msgs::msg::Twist cmd;
-  cmd.linear.x = std::clamp(vx_body, -max_linear_vel_, max_linear_vel_);
-  cmd.linear.y = std::clamp(vy_body, -max_linear_vel_, max_linear_vel_);
+  double vx_clamped = std::clamp(vx_body, -max_linear_vel_, max_linear_vel_);
+  double vy_clamped = std::clamp(vy_body, -max_linear_vel_, max_linear_vel_);
+  cmd.linear.x = vx_clamped;
+  cmd.linear.y = vy_clamped;
 
   // 偏航控制: 比例（归一化后）+ 前馈
   double raw_err   = leader_yaw - follower_yaw;
@@ -195,6 +205,31 @@ void FormationController::timer_cb()
   // 全向轮运动学约束（轮速 + 加速度限幅）
   double dt = 1.0 / control_rate_;
   double wheel_scale = constraint_.apply(cmd.linear.x, cmd.linear.y, cmd.angular.z, dt);
+
+  // 调试：raw=算法原始速度  clamped=硬限幅后  final=运动学约束后
+  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+    "raw=(%+6.3f,%+6.3f) clamped=(%+6.3f,%+6.3f) final=(%+6.3f,%+6.3f) scale=%.2f",
+    vx_body, vy_body, vx_clamped, vy_clamped, cmd.linear.x, cmd.linear.y, wheel_scale);
+
+  // 诊断：实际控制频率 + 平均数据新鲜度（每 5 秒输出平均值）
+  ++diag_tick_;
+  auto now = get_clock()->now();
+  sum_leader_age_ += (now - leader_odom_stamp_).seconds();
+  sum_ekf_age_    += (now - follower_odom_stamp_).seconds();
+  double diag_elapsed = (now - last_diag_time_).seconds();
+  if (diag_elapsed >= 5.0) {
+    double real_freq = diag_tick_ / diag_elapsed;
+    double avg_leader_age_ms = sum_leader_age_ / diag_tick_ * 1000.0;
+    double avg_ekf_age_ms    = sum_ekf_age_    / diag_tick_ * 1000.0;
+    RCLCPP_INFO(get_logger(),
+      "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms",
+      real_freq, avg_leader_age_ms, avg_ekf_age_ms);
+    diag_tick_ = 0;
+    sum_leader_age_ = 0.0;
+    sum_ekf_age_ = 0.0;
+    last_diag_time_ = now;
+  }
+
   if (wheel_scale < 0.99) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
       "轮速约束触发: scale=%.2f, 限幅后 cmd=(%.2f, %.2f, %.2f)",

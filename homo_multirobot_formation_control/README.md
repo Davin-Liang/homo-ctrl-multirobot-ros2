@@ -254,6 +254,55 @@ Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考�
 > 约束日志：轮速约束触发时每 2s 打印 `[WARN] 轮速约束触发: scale=X.XX`。
 > 速度上限与加速度限幅的区别：`max_linear_vel` 限制速度天花板，`max_linear_accel` 限制速度变化快慢。
 
+### 约束三层架构
+
+```
+raw 速度(lpc输出) → 硬限幅(±max_linear_vel) → 轮速约束(wheel_max_omega) → 加速度约束(max_linear_accel) → final cmd_vel
+    算法参数              │                              │                              │
+  mass, omega_d...    第 1 层                        第 2 层                        第 3 层
+```
+
+| 层 | 参数 | 作用 |
+|----|------|------|
+| 1 硬限幅 | `max_linear_vel`, `max_angular_vel` | 简单削顶，安全底线 |
+| 2 轮速约束 | `wheel_radius`, `base_radius`, `wheel_max_omega` | 反解三轮转速，超限等比缩放 |
+| 3 加速度约束 | `max_linear_accel`, `max_angular_accel` | per-axis slew rate 限幅，防止突变 |
+
+> **`mass` 不是物理质量**：论文将机器人建模为双积分器 `v̇ = u/m`，其中 m 是物理质量。
+> 但实物车的控制输出是 cmd_vel（速度指令），不是力。m 失去了牛顿第二定律的物理含义，
+> 变为纯调参参数——越大响应越慢/越平滑，越小响应越快/越容易震荡。
+
+### 在线调试输出
+
+4D 控制器内置两套调试日志：
+
+**速度三层对比**（每秒）：
+```
+raw=(+0.523,-0.187) clamped=(+0.523,-0.187) final=(+0.412,-0.147) scale=0.79
+```
+
+| 字段 | 含义 |
+|------|------|
+| `raw` | lpc_calculate 输出旋转到车体系，无任何限制 |
+| `clamped` | 硬限幅后（±max_linear_vel 削顶） |
+| `final` | 运动学约束后（轮速 + 加速度限幅），即最终发给车的值 |
+| `scale` | 轮速缩放比例，<1.0 说明被削 |
+
+raw 和 final 差值大的时候说明约束在干预控制输出。
+
+**系统诊断**（每 5 秒，窗口平均值）：
+```
+DIAG: freq=34.8Hz avg_leader_age=7ms avg_ekf_age=6ms
+```
+
+| 字段 | 含义 | 正常值 |
+|------|------|--------|
+| `freq` | 实际控制频率 | ≈ control_rate |
+| `avg_leader_age` | leader odom 从发布到被用的平均延迟 | 仿真 < 10ms，实物取决于 WiFi |
+| `avg_ekf_age` | follower 自身 odom 的平均新鲜度 | 接近 1000/EKF频率 ms |
+
+> `leader_age` 依赖两台机器时钟同步（chrony），否则测量值无意义。
+
 ### 消融实验参数（两套共享）
 
 | 参数 | 类型 | 默认值 | 作用 |
@@ -486,9 +535,15 @@ ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
 ### record_trajectory — 轨迹记录与画图
 
 ```bash
+# 仿真（自动读控制器参数生成标签，无需手动指定 tag）
 ros2 run homo_multirobot_formation_control record_trajectory.py \
-  --ros-args -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
-  -p duration:=30.0 -p out_dir:=/tmp/robot_traj
+  --ros-args -p mode:=sim -p duration:=30.0
+
+# 实物 + 自定义标签
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p mode:=real -p tag:=hpc_mass8_r2 \
+  -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
+  -p radius:=2.0 -p duration:=30.0
 ```
 
 | 参数 | 默认值 | 说明 |
@@ -496,9 +551,73 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 | `leader_ns` | /robot1 | Leader 命名空间 |
 | `follower_ns` | /robot2 | Follower 命名空间 |
 | `duration` | 30.0 | 记录时长 (s) |
-| `out_dir` | /tmp/robot_traj | 输出目录 |
+| `mode` | sim | `sim` 或 `real`，决定输出子目录 |
+| `tag` | 自动生成 | 文件名标签，留空则从控制器参数自动生成 |
+| `radius` | 0.0 | 编队理想半径，>0 时在距离图上画参考虚线 |
+| `out_dir` | 包内 robot_traj/ | 输出根目录 |
 
-输出为带时间戳的 PNG 图片，含 3 个子图：轨迹图、X/时间曲线、Y/时间曲线。
+**输出**：
+- `{out_dir}/{mode}/{mode}_{tag}_{timestamp}.png` — 四子图（轨迹、X时序、Y时序、编队距离）
+- `{out_dir}/{mode}/{mode}_{tag}_{timestamp}.csv` — MATLAB 可直接 readtable 的原始数据
+
+**自动参数读取**：如果不指定 `tag`，脚本从 follower 命名空间下的 `formation_control_node`
+自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, tol` 并：
+- 生成文件名标签（如 `sim_m8_r2_od1.5_f35_20260710_153000.png`）
+- 在图上方黄框中显示完整参数组合
+
+CSV 格式（`time_s, leader_x_m, leader_y_m, follower_x_m, follower_y_m, distance_m`），
+以 follower 时间为基准对齐 leader 数据点。
+
+## 诊断工具脚本
+
+### measure_motor_latency — 电机响应延迟测试
+
+测量 cmd_vel 发出到轮子实际转动的时间差（实物用）：
+
+```bash
+# 实物：对比 raw odom vs EKF 延迟
+python3 measure_motor_latency.py --ns /robot2 --raw-odom-topic /odom --trials 10
+
+# 仿真：只测 EKF 链路
+python3 measure_motor_latency.py --ns /robot1 --trials 5
+```
+
+每轮测试：静止检测 → 阶跃 cmd_vel → 检测 odom 速度越过阈值 → 倒车复位。
+同时测量 `/odom`（串口直出）和 `/odometry/filtered`（EKF 滤波）两路延迟，
+差值即为 EKF 滤波开销。
+
+### measure_cross_machine_delay — 跨机器话题延迟
+
+测量 WiFi 环境下 ROS 2 话题的端到端延迟（在 Follower 车上运行）：
+
+```bash
+python3 measure_cross_machine_delay.py --topic /robot1/odometry/filtered --duration 60 --csv /tmp/delay.csv
+```
+
+输出 avg/P50/P95/P99 延迟统计，CSV 可导出 MATLAB 画图。
+
+> 依赖两台机器时钟同步（chrony），否则 header.stamp 与 receive time 不在同一时间基准。
+
+### 系统延迟链路图
+
+```
+实物: 编码器 → STM32(20Hz) → 串口 → /odom(20Hz) → EKF(实际20Hz) → /odometry/filtered → 控制器(20Hz)
+                                                                         ↑ avg_ekf_age
+                                                                                        → cmd_vel → 串口 → STM32 → 电机
+                                                                                                        ↑ motor_latency
+Leader: .../odometry/filtered → DDS → WiFi → follower 回调 → timer 取用
+                                                    ↑ avg_leader_age
+```
+
+| 延迟段 | 测量工具 | 仿真典型值 | 实物待测 |
+|--------|---------|-----------|---------|
+| 网络（Leader→Follower） | `ros2 topic delay` + DIAGavg_leader_age | ~7ms | 待测 |
+| 电机响应（cmd_vel→轮转） | `measure_motor_latency.py` | ~80-100ms(rf2o) | 待测 |
+| EKF 滤波 | raw - ekf 差值 | ~14ms | 待测 |
+| 数据源频率上限 | `ros2 topic hz /odom` | ~10Hz(rf2o) | 20Hz(STM32固件) |
+
+> **实物 /odom = 20Hz 来自 STM32 固件**，`wheeltec_robot` 驱动无频率设置。
+> EKF 与控制频率不应超过此硬件上限，否则纯预测无测量更新。
 
 ## 完整联调
 
