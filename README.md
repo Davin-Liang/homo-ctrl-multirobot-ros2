@@ -35,7 +35,7 @@
 | **`homo_multirobot_gazebo`** | 空世界、双机 spawn、可选 RViz 配置与 `world` 静态 TF |
 | **`homo_multirobot_slam_toolbox`** | 多机器人建图封装：支持选定 `mapper_robot` 单机建图（两车复用同一张地图），并支持将 `/map` 重映射进机器人 namespace，便于在 `/robot1` 下调用 `save_map` |
 | **`homo_multirobot_nav`** | 已知地图定位（AMCL 或 slam_toolbox 纯定位）：单车/双车定位 launch + 地图加载 + RViz 配置 |
-| **`homo_multirobot_formation_control`** | Leader-Follower 编队控制（齐次控制算法，C++ / Eigen）。提供五套控制器：**4D 质点模型**（原版论文）+ **4D Cont 连续边界投影** + **6D 运动学模型**（车身朝向 + 全向轮约束 + 边界投影编队）+ **6D Disc 离散多边形编队** + **6D+OA（避障）**。通过 TF + EKF 获取状态，6D+OA 通过 /scan 实现 QP 避障融合 |
+| **`homo_multirobot_formation_control`** | Leader-Follower 编队控制（齐次控制算法，C++ / Eigen）。提供七套控制器：**4D 质点模型**（原版论文）+ **4D Cont 连续边界投影** + **6D 运动学模型**（车身朝向 + 全向轮约束 + 边界投影编队）+ **6D Disc 离散多边形编队** + **6D Bearing 方位角约束编队** + **6D+OA（避障）** + **MPC 6D**。通过 TF + EKF 获取状态，6D+OA 通过 /scan 实现 QP 避障融合 |
 | **`rf2o_laser_odometry`（third_party）** | 2D 激光里程计（rf2o，上游源码引入，ROS 2 分支），订阅 `/robot*/scan` 输出 `/robot*/rf2o/odom`（可选发布 TF） |
 | **`homo_multirobot_localization`** | 多机定位/里程计链路启动与配置：双机/单机 rf2o、双机/单机 EKF（`robot_localization`），以及仿真一键链路（Gazebo + rf2o + EKF） |
 | **`omnidirectional_controllers`（third_party）** | 上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |
@@ -219,7 +219,7 @@ ros2 launch homo_multirobot_nav amcl_single_robot.launch.py map:=/abs/path/to/my
 
 #### 3.5 Leader-Follower 编队控制
 
-提供五套控制器，可通过不同 launch 文件切换：
+提供七套控制器，可通过不同 launch 文件切换：
 
 **4D 质点模型**（原版论文算法，离散编队点 + 独立 yaw P+前馈）：
 ```bash
@@ -234,6 +234,11 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launc
 **6D Disc 离散多边形编队**（6D 模型 + 离散多边形策略，m_p 点 tol 切换）：
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.launch.py
+```
+
+**6D Bearing 方位角约束编队**（6D 模型 + 固定方位角 φ_d，无切换平滑弧线）：
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py
 ```
 
 **6D+OA 运动学+避障**（在 6D 基础上集成 QP 避障融合，基于 /scan 激光雷达）：
@@ -272,7 +277,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/ro
 ```
 
 更多：见 `homo_multirobot_formation_control/README.md` 与 `homo_multirobot_formation_control/BUG_RECORD.md`。
-数学推导：`homo_multirobot_formation_control/doc/kinematic_homogeneous_control.md`
+数学推导：`homo_multirobot_formation_control/doc/kinematic_homogeneous_control.md`（论文版：`doc/kinematic_homogeneous_control_full.md`）
 
 #### 3.6 建图（slam_toolbox）
 

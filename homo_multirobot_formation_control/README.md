@@ -3,9 +3,10 @@
 基于**齐次控制（Homogeneous Control）** 的 Leader-Follower 编队算法（C++ / Eigen），
 适配项目的 slam_toolbox / AMCL + EKF 定位体系。
 
-提供五套控制器：**4D 质点模型**（原版论文算法）、**4D Cont 连续边界投影**、
+提供七套控制器：**4D 质点模型**（原版论文算法）、**4D Cont 连续边界投影**、
 **6D 运动学模型**（考虑车身朝向 + 全向轮约束 + 边界投影编队）、
 **6D Disc 离散多边形编队**（6D 模型 + 离散多边形策略）、
+**6D Bearing 方位角约束编队**（6D 模型 + 固定方位角，无切换平滑弧线）、
 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）、
 以及 **MPC 6D 运动学模型预测控制**（顺序线性化 + OSQP 求解，作为 HPC 的对照组）。
 
@@ -29,6 +30,7 @@
 | **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
 | **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
+| **6D Bearing (运动学, 方位角约束)** | `formation_single_follower_6d_bearing.launch.py` | `formation_control_node_6d_bearing` | 同 6D | 固定方位角 $\phi_d$，无切换 | 集成于 6D 主回路 |
 | **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
 | **MPC 6D (模型预测控制)** | `formation_single_follower_mpc_6d.launch.py` | `formation_control_node_mpc_6d` | 同 6D | 固定偏移（Leader 车体系） | 集成于 6D 主回路 |
 
@@ -235,7 +237,7 @@ Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考�
 | `omega_d_theta` | double | 1.5 | 偏航通道临界阻尼带宽 |
 | `hpc_vel_threshold` | double | 0.3 | leader 速度变化触发 HPC 重算的阈值 |
 
-> 6D 版本中没有 `m_p`、`tol`（边界投影无需离散点）、`Kp_yaw`、`K_ff`（yaw 集成于主回路）。
+> 6D 版本中没有 `Kp_yaw`、`K_ff`（yaw 集成于主回路）。`6d`/`6d_oa` 使用连续边界投影（无离散点）；`6d_disc` 有 `m_p`/`tol` 参数；`6d_bearing` 使用 `phi_d` 替代 `m_p`/`tol`。
 
 ## 运动学约束参数
 
@@ -439,6 +441,36 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.
 ```
 
 与 6D 连续边界投影版本的区别：`m_p` 个编队点均匀分布在安全圆上，`tol` 提供切换迟滞，避免边界投影在小半径圆轨迹下的震荡。
+
+### 启动（6D Bearing 单 follower，方位角约束）
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py
+```
+
+带参数：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py \
+  radius:=2.0 phi_d:=3.1416 \
+  mass:=1.5 I:=0.3 omega_d:=0.8 omega_d_theta:=0.8
+
+# LPC 消融对照（关闭齐次升级）
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py \
+  use_hpc:=false
+
+# 右后方 45° 编队
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py \
+  phi_d:=-0.785
+```
+
+**Bearing 特有的编队参数**：
+
+| 参数 | 类型 | 默认值 | 作用 |
+|------|------|--------|------|
+| `phi_d` | double | 3.1416 ($\pi$) | Leader 车体系下目标方位角 (rad)。0=正前方，$\pi$=正后方，$\pi/2$=左侧，$-\pi/2$=右侧 |
+
+**与 6D 离散编队点 (Disc) 的区别**：编队偏移固定于方位角 $\phi_d$ 处，无需 `m_p`/`tol` 参数和切换逻辑。Cartesian 位置误差同时编码径向距离误差和切向方位角误差——径向将 Follower 推/拉到安全圆，切向驱动沿圆弧滑向目标方位，轨迹为连续平滑弧线。
 
 ### 启动（MPC 6D 单 follower）
 
