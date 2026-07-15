@@ -230,6 +230,9 @@ install(PROGRAMS
   scripts/record_trajectory.py
   scripts/formation_control_py.py
   scripts/virtual_leader_circle.py
+  scripts/measure_motor_latency.py
+  scripts/measure_cross_machine_delay.py
+  scripts/sim_motor_delay.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

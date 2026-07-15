@@ -1,6 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.conditions import IfCondition
 from launch_ros.actions import Node
 
 
@@ -36,12 +37,30 @@ def generate_launch_description():
     # Control rate
     control_rate = LaunchConfiguration("control_rate")
 
+    # Motor delay simulation
+    use_motor_delay = LaunchConfiguration("use_motor_delay")
+    motor_tau = LaunchConfiguration("motor_tau")
+    transport_delay = LaunchConfiguration("transport_delay")
+
+    # Delay node params (separate from controller's max_linear_accel)
+    delay_max_accel = LaunchConfiguration("delay_max_accel")
+
+    # Smith predictor
+    use_smith_predictor = LaunchConfiguration("use_smith_predictor")
+    smith_tau = LaunchConfiguration("smith_tau")
+    smith_Td = LaunchConfiguration("smith_Td")
+
+    # Delay on → controller outputs to cmd_vel_raw, delay node relays to cmd_vel
+    cmd_output_topic = PythonExpression([
+        "'cmd_vel_raw' if '", use_motor_delay, "' == 'true' else 'cmd_vel'"])
+
     formation_node = Node(
         package="homo_multirobot_formation_control",
         executable="formation_control_node",
         name="formation_control_node",
         namespace=PythonExpression(["'", follower_ns, "'"]),
         output="screen",
+        remappings=[("cmd_vel", cmd_output_topic)],
         parameters=[{
             "leader_ns": leader_ns,
             "follower_ns": follower_ns,
@@ -62,6 +81,26 @@ def generate_launch_description():
             "max_angular_accel": max_angular_accel,
             "control_rate": control_rate,
             "use_hpc": LaunchConfiguration("use_hpc"),
+            "use_smith_predictor": use_smith_predictor,
+            "smith_tau": smith_tau,
+            "smith_Td": smith_Td,
+        }],
+    )
+
+    delay_node = Node(
+        package="homo_multirobot_formation_control",
+        executable="sim_motor_delay.py",
+        name="sim_motor_delay",
+        namespace=PythonExpression(["'", follower_ns, "'"]),
+        output="screen",
+        condition=IfCondition(use_motor_delay),
+        parameters=[{
+            "input_topic": "cmd_vel_raw",
+            "output_topic": "cmd_vel",
+            "motor_tau": motor_tau,
+            "transport_delay": transport_delay,
+            "max_accel": delay_max_accel,
+            "rate": 100.0,
         }],
     )
 
@@ -104,5 +143,21 @@ def generate_launch_description():
                               description="Max body linear velocity (m/s)"),
         DeclareLaunchArgument("max_angular_vel", default_value="0.5",
                               description="Max body angular velocity (rad/s)"),
+        DeclareLaunchArgument("use_motor_delay", default_value="false",
+                              description="Simulate real motor response delay"),
+        DeclareLaunchArgument("motor_tau", default_value="0.12",
+                              description="Motor LP filter time constant (s)"),
+        DeclareLaunchArgument("transport_delay", default_value="0.05",
+                              description="Transport delay (s, e.g. serial)"),
+        DeclareLaunchArgument("delay_max_accel", default_value="2.0",
+                              description="Delay node linear accel limit (m/s^2). "
+                                          "1.0 = 300ms to 0.3 m/s"),
+        DeclareLaunchArgument("use_smith_predictor", default_value="false",
+                              description="Enable Smith predictor for motor delay compensation"),
+        DeclareLaunchArgument("smith_tau", default_value="0.12",
+                              description="Smith predictor motor LP time constant (s)"),
+        DeclareLaunchArgument("smith_Td", default_value="0.05",
+                              description="Smith predictor transport delay (s)"),
         formation_node,
+        delay_node,
     ])

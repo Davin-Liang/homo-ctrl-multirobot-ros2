@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-实物电机响应延迟测试（兼顾安全，不走丢）
-
-每轮: 静止检测 → 发阶跃(前进) → 检测响应 → 立刻倒车复位 → 静止 → 下一轮
+电机响应延迟测试：cmd_vel 发出 → 速度到达目标值的延迟。
 
 用法:
   python3 measure_motor_latency.py --ns /robot2 --trials 5
   python3 measure_motor_latency.py --ns /robot2 --trials 5 --raw-odom-topic /odom
+  python3 measure_motor_latency.py --ns /robot2 --velocity 0.3 --target-fraction 0.9
 """
 
 import rclpy
@@ -18,20 +17,22 @@ import argparse
 import time
 import numpy as np
 
-VELOCITY_THRESHOLD = 0.01  # m/s
-HOLD_DURATION = 0.3        # 必须连续静止这么久才算真停
-FORWARD_DURATION = 1.5     # 前进最长时间（超时也停车）
-REVERSE_DURATION = 2.0     # 倒车复位时间
-REVERSE_VEL = 0.15         # 倒车速度（慢一点）
+STATIONARY_THRESHOLD = 0.05   # m/s, 判断静止
+HOLD_DURATION = 0.3          # 必须连续静止这么久才算真停
+FORWARD_DURATION = 5.0       # 前进最长时间（超时也停车）
 
 
 class MotorLatencyMeter(Node):
-    def __init__(self, ns, step_vel, trials, raw_odom_topic):
+    def __init__(self, ns, step_vel, trials, raw_odom_topic,
+                 cmd_vel_topic='cmd_vel', target_fraction=0.9):
         super().__init__('motor_latency_meter')
         self.ns = ns.rstrip('/')
         self.step_vel = step_vel
         self.trials = trials
         self.raw_odom_topic = raw_odom_topic
+        self.cmd_vel_topic = cmd_vel_topic
+        self.target_speed = step_vel * target_fraction
+        self.target_fraction = target_fraction
 
         qos = 10
 
@@ -43,7 +44,9 @@ class MotorLatencyMeter(Node):
 
         self.ekf_sub = self.create_subscription(
             Odometry, f'{self.ns}/odometry/filtered', self.ekf_odom_cb, qos)
-        self.cmd_pub = self.create_publisher(Twist, f'{self.ns}/cmd_vel', 10)
+
+        cmd_topic = cmd_vel_topic if cmd_vel_topic.startswith('/') else f'{self.ns}/{cmd_vel_topic}'
+        self.cmd_pub = self.create_publisher(Twist, cmd_topic, 10)
 
         self.raw_odom_v = None
         self.raw_odom_time = None
@@ -67,8 +70,7 @@ class MotorLatencyMeter(Node):
         t0 = time.time()
         while time.time() - t0 < timeout:
             rclpy.spin_once(self, timeout_sec=0.02)
-            self.get_logger().info(f'dbg: ekf_v={self.ekf_odom_v}')
-            is_stop = self.ekf_odom_v is not None and self.ekf_odom_v < VELOCITY_THRESHOLD
+            is_stop = self.ekf_odom_v is not None and self.ekf_odom_v < STATIONARY_THRESHOLD
             if is_stop:
                 if stationary_since is None:
                     stationary_since = time.time()
@@ -80,55 +82,39 @@ class MotorLatencyMeter(Node):
         self.get_logger().error('  Timeout waiting for robot to stop!')
         return False
 
-    def reverse_to_start(self):
-        """倒车复位：按 REVERSE_DURATION 秒慢速后退"""
-        self.get_logger().info('  Reversing to reset position...')
-        twist = Twist()
-        twist.linear.x = -REVERSE_VEL
-        t0 = time.time()
-        while time.time() - t0 < REVERSE_DURATION:
-            self.cmd_pub.publish(twist)
-            rclpy.spin_once(self, timeout_sec=0.05)
-        self.cmd_pub.publish(Twist())
-        time.sleep(0.3)
-
     def measure_one_trial(self, trial_idx):
-        # 1. 等静止
         if not self.wait_stationary():
             return None, None
 
-        # 2. 发阶跃
         twist = Twist()
         twist.linear.x = float(self.step_vel)
         cmd_time = time.time()
         self.cmd_pub.publish(twist)
-        self.get_logger().info(f'  Trial {trial_idx}: cmd_vel={self.step_vel} m/s sent')
+        self.get_logger().info(
+            f'  Trial {trial_idx}: cmd_vel={self.step_vel} m/s, '
+            f'target={self.target_speed:.2f} m/s ({self.target_fraction*100:.0f}%)')
 
-        # 3. 检测响应
         raw_delay = None
         ekf_delay = None
-        t0 = time.time()
-        while time.time() - t0 < FORWARD_DURATION:
+        while time.time() - cmd_time < FORWARD_DURATION:
             self.cmd_pub.publish(twist)
             rclpy.spin_once(self, timeout_sec=0.005)
             if raw_delay is None and self.has_raw and self.raw_odom_v is not None \
-                    and self.raw_odom_v > VELOCITY_THRESHOLD:
+                    and self.raw_odom_v >= self.target_speed:
                 raw_delay = self.raw_odom_time - cmd_time
                 self.get_logger().info(
-                    f'    raw  odom responded in {raw_delay*1000:.1f} ms')
+                    f'    raw  odom reached {self.raw_odom_v:.2f} m/s '
+                    f'in {raw_delay*1000:.0f} ms')
             if ekf_delay is None and self.ekf_odom_v is not None \
-                    and self.ekf_odom_v > VELOCITY_THRESHOLD:
+                    and self.ekf_odom_v >= self.target_speed:
                 ekf_delay = self.ekf_odom_time - cmd_time
                 self.get_logger().info(
-                    f'    EKF  odom responded in {ekf_delay*1000:.1f} ms')
+                    f'    EKF  odom reached {self.ekf_odom_v:.2f} m/s '
+                    f'in {ekf_delay*1000:.0f} ms')
             if ((not self.has_raw or raw_delay is not None) and ekf_delay is not None):
                 break
 
-        # 4. 立即停车
         self.cmd_pub.publish(Twist())
-
-        # 5. 倒车复位
-        # self.reverse_to_start()
 
         if self.has_raw and raw_delay is None:
             self.get_logger().warn(f'  Trial {trial_idx}: raw odom did not respond!')
@@ -139,8 +125,9 @@ class MotorLatencyMeter(Node):
 
     def run(self):
         self.get_logger().info(
-            f'ns={self.ns}, step_vel={self.step_vel} m/s, trials={self.trials}, '
-            f'raw_odom={"N/A" if not self.has_raw else self.raw_odom_topic}')
+            f'ns={self.ns}, step_vel={self.step_vel} m/s, '
+            f'target={self.target_speed:.2f} m/s ({self.target_fraction*100:.0f}%), '
+            f'trials={self.trials}, raw_odom={"N/A" if not self.has_raw else self.raw_odom_topic}')
 
         self.get_logger().info('Warming up subscriptions...')
         for _ in range(50):
@@ -170,7 +157,9 @@ class MotorLatencyMeter(Node):
             print(f'    trials = {len(arr)}')
 
         print('\n' + '=' * 55)
-        print('  Motor Response Latency Report')
+        print(f'  Motor Response Latency Report')
+        print(f'  Target: {self.target_fraction*100:.0f}% of {self.step_vel} m/s '
+              f'(={self.target_speed:.2f} m/s)')
         print('=' * 55)
         stats('EKF FILTERED (/odometry/filtered)', self.results_ekf)
         if self.has_raw:
@@ -187,11 +176,17 @@ def main():
     parser.add_argument('--ns', default='/robot2')
     parser.add_argument('--velocity', type=float, default=0.3)
     parser.add_argument('--trials', type=int, default=5)
+    parser.add_argument('--target-fraction', type=float, default=0.9,
+                        help='Target speed fraction (0-1). 0.9 = time to reach 90%% of cmd_vel')
     parser.add_argument('--raw-odom-topic', default='',
                         help='Raw odom topic (e.g. /odom). Omit to measure EKF only.')
+    parser.add_argument('--cmd-vel-topic', default='cmd_vel',
+                        help='Cmd_vel topic (relative to ns, or absolute). Default: cmd_vel')
     args = parser.parse_args()
 
-    meter = MotorLatencyMeter(args.ns, args.velocity, args.trials, args.raw_odom_topic)
+    meter = MotorLatencyMeter(args.ns, args.velocity, args.trials,
+                              args.raw_odom_topic, args.cmd_vel_topic,
+                              args.target_fraction)
     meter.run()
     meter.destroy_node()
     rclpy.shutdown()

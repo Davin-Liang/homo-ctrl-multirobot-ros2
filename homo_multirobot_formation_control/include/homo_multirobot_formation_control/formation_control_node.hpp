@@ -17,6 +17,7 @@
 #include <memory>
 #include "homo_multirobot_formation_control/homo_controller.hpp"
 #include "homo_multirobot_formation_control/kinematic_constraint.hpp"
+#include "homo_multirobot_formation_control/motor_predictor.hpp"
 
 class FormationController : public rclcpp::Node
 {
@@ -32,9 +33,11 @@ private:
   double max_linear_vel_, max_angular_vel_;
   double control_rate_;
 
-  // ---- 控制器 + 约束 -------------------------------------------------------
+  // ---- 控制器 + 约束 + 预估器 -----------------------------------------------
   std::unique_ptr<formation_control::LpcController> ctrl_;
   formation_control::KinematicConstraint constraint_;
+  formation_control::MotorPredictor motor_predictor_;
+  bool use_smith_predictor_ = false;
 
   // ---- TF ------------------------------------------------------------------
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;

@@ -50,6 +50,11 @@ FormationController::FormationController()
   max_angular_vel_ = declare_parameter("max_angular_vel", 0.5);
 
   bool use_hpc = declare_parameter("use_hpc", true);
+
+  // Smith 预估器参数
+  use_smith_predictor_ = declare_parameter("use_smith_predictor", false);
+  double smith_tau = declare_parameter("smith_tau", 0.12);
+  double smith_Td  = declare_parameter("smith_Td",  0.05);
   ctrl_ = std::make_unique<LpcController>(m_p, radius, tol, mass, omega_d, use_hpc);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius,
@@ -78,6 +83,10 @@ FormationController::FormationController()
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 
   last_diag_time_ = get_clock()->now();
+
+  // Smith 预估器初始化
+  double dt = 1.0 / control_rate_;
+  motor_predictor_ = formation_control::MotorPredictor(smith_tau, smith_Td, dt);
 
   int ms = static_cast<int>(1000.0 / control_rate_);
   timer_ = create_wall_timer(std::chrono::milliseconds(ms), [this]() { timer_cb(); });
@@ -182,6 +191,15 @@ void FormationController::timer_cb()
     }
   }
 
+  // Smith 预估器：补偿电机响应延迟
+  if (use_smith_predictor_) {
+    // 补偿量从 body 帧旋转到 map 帧，叠加到 follower 速度状态
+    double comp_vx = motor_predictor_.comp_vx();
+    double comp_vy = motor_predictor_.comp_vy();
+    x2(2) += comp_vx * std::cos(follower_yaw) - comp_vy * std::sin(follower_yaw);
+    x2(3) += comp_vx * std::sin(follower_yaw) + comp_vy * std::cos(follower_yaw);
+  }
+
   // 齐次控制律（算法本身未修改）
   auto out = ctrl_->lpc_calculate(x1, x2);
 
@@ -208,8 +226,9 @@ void FormationController::timer_cb()
 
   // 调试：raw=算法原始速度  clamped=硬限幅后  final=运动学约束后
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
-    "raw=(%+6.3f,%+6.3f) clamped=(%+6.3f,%+6.3f) final=(%+6.3f,%+6.3f) scale=%.2f",
-    vx_body, vy_body, vx_clamped, vy_clamped, cmd.linear.x, cmd.linear.y, wheel_scale);
+    "raw=(%+6.3f,%+6.3f) clamped=(%+6.3f,%+6.3f) final=(%+6.3f,%+6.3f) scale=%.2f%s",
+    vx_body, vy_body, vx_clamped, vy_clamped, cmd.linear.x, cmd.linear.y, wheel_scale,
+    use_smith_predictor_ ? " [smith]" : "");
 
   // 诊断：实际控制频率 + 平均数据新鲜度（每 5 秒输出平均值）
   ++diag_tick_;
@@ -221,9 +240,16 @@ void FormationController::timer_cb()
     double real_freq = diag_tick_ / diag_elapsed;
     double avg_leader_age_ms = sum_leader_age_ / diag_tick_ * 1000.0;
     double avg_ekf_age_ms    = sum_ekf_age_    / diag_tick_ * 1000.0;
-    RCLCPP_INFO(get_logger(),
-      "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms",
-      real_freq, avg_leader_age_ms, avg_ekf_age_ms);
+    if (use_smith_predictor_) {
+      RCLCPP_INFO(get_logger(),
+        "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms smith=(%+.3f,%+.3f)",
+        real_freq, avg_leader_age_ms, avg_ekf_age_ms,
+        motor_predictor_.comp_vx(), motor_predictor_.comp_vy());
+    } else {
+      RCLCPP_INFO(get_logger(),
+        "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms",
+        real_freq, avg_leader_age_ms, avg_ekf_age_ms);
+    }
     diag_tick_ = 0;
     sum_leader_age_ = 0.0;
     sum_ekf_age_ = 0.0;
@@ -234,6 +260,11 @@ void FormationController::timer_cb()
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
       "轮速约束触发: scale=%.2f, 限幅后 cmd=(%.2f, %.2f, %.2f)",
       wheel_scale, cmd.linear.x, cmd.linear.y, cmd.angular.z);
+  }
+
+  // Smith 预估器：用最终发的 cmd_vel 更新模型
+  if (use_smith_predictor_) {
+    motor_predictor_.update(cmd.linear.x, cmd.linear.y);
   }
 
   cmd_pub_->publish(cmd);
