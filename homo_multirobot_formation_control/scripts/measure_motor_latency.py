@@ -86,6 +86,10 @@ class MotorLatencyMeter(Node):
         if not self.wait_stationary():
             return None, None
 
+        # 确保 odom 值确实低于 target（wait_stationary 只看 EKF < 0.05）
+        for _ in range(5):
+            rclpy.spin_once(self, timeout_sec=0.02)
+
         twist = Twist()
         twist.linear.x = float(self.step_vel)
         cmd_time = time.time()
@@ -135,10 +139,15 @@ class MotorLatencyMeter(Node):
 
         for i in range(self.trials):
             raw_d, ekf_d = self.measure_one_trial(i + 1)
-            if raw_d is not None:
+            # 丢弃负延迟（车没停稳导致的假值）
+            if raw_d is not None and raw_d > 0:
                 self.results_raw.append(raw_d)
-            if ekf_d is not None:
+            elif raw_d is not None:
+                self.get_logger().warn(f'  Trial {i+1}: raw delay={raw_d*1000:.0f}ms <0, discarded')
+            if ekf_d is not None and ekf_d > 0:
                 self.results_ekf.append(ekf_d)
+            elif ekf_d is not None:
+                self.get_logger().warn(f'  Trial {i+1}: EKF delay={ekf_d*1000:.0f}ms <0, discarded')
 
         self.print_report()
 
