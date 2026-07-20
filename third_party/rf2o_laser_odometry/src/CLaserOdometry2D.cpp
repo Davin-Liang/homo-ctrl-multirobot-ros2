@@ -989,6 +989,9 @@ void CLaserOdometry2D::PoseUpdate()
   double time_inc_sec = (current_scan_time - last_odom_time).seconds();
   last_odom_time = current_scan_time;
   lin_speed = acu_trans(0,2) / time_inc_sec;
+  // 全向底盘补丁: acu_trans(1,2) 是激光系 y 位移增量 (激光与 base 无偏转安装)，
+  // 上游只发布 x 分量导致 EKF 融合恒零的 vy，横向运动速度反馈失效
+  lin_speed_y = acu_trans(1,2) / time_inc_sec;
   //double lin_speed = sqrt( mrpt::math::square(robot_oldpose.x()-robot_pose.x()) + mrpt::math::square(robot_oldpose.y()-robot_pose.y()) )/time_inc_sec;
 
   double ang_inc = rf2o::getYaw(robot_pose_.rotation()) -

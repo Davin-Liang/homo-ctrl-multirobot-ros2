@@ -668,3 +668,78 @@ for name, pv in zip(CTRL_PARAM_NAMES, result.values):
 
 **修改文件**: `record_trajectory.py` → `_query_controller_params()`
 
+
+---
+
+## 29) rf2o 硬编码 vy=0 → EKF 融合后全向底盘横向速度反馈失效
+
+**现象**: 6D Motor 控制器持续输出 ±0.6 横向指令，但 `/odometry/filtered` vy 恒为零。
+leader 0.2 m/s 绕圈时 follower 编队距离震荡幅度大、周期慢。
+
+**原因**:
+1. 上游 rf2o 只考虑差速车，发布时 `odom.twist.twist.linear.y = 0.0` 硬编码，
+   但其核心算法 `kai_loc_ = [vx, vy, ω]` 实际估计了完整平面速度
+2. EKF 配置 `odom0_config` vy=true 将此恒零假测量当真值融合，
+   `/odometry/filtered` 的 vy 被强行压零
+
+**处理**: 补丁 third_party/rf2o_laser_odometry 三处：
+- `CLaserOdometry2D.hpp`: 新增成员 `lin_speed_y`
+- `CLaserOdometry2D.cpp`: `lin_speed_y = acu_trans(1,2)/dt`
+- `CLaserOdometry2DNode.cpp`: `odom.twist.twist.linear.y = rf2o_ref.lin_speed_y`
+
+**影响面**: 全系依赖 EKF vy 的控制器（4D/6D 全系列）；实车轮式里程计模式不受影响
+
+---
+
+## 30) v_cmd 积分步长与控制周期不一致 → 闭环极点失真、欠阻尼慢震荡
+
+**现象**: ω_d=0.8 时编队距离缓慢震荡（周期 ~3-4s），表现为"靠近→停止→拉开→重复"。
+
+**原因**: `lpc_calculate()` 中前向欧拉步长写死 `h=0.1`（照抄 4D），但 4D 的 h 只是
+输出线性整形系数（它的 v 每周期从 EKF 重新测量）；6D Motor 的 v_cmd 是跨周期
+积分状态，`goal = v_cmd + h·u/m` 中的 h 必须等于真实控制周期 0.05s。
+h=0.1 时等效 B 乘以 2 → 三阶极点 (s+λ)³ 变成 -0.33 实极点 + ζ≈0.6 的欠阻尼复极对；
+配合加速度限幅相位损失，产生弛豫振荡。
+
+**处理**: 构造器新增 `control_period` 参数 = 1/control_rate，节点构造时传入；
+`lpc_calculate` 用 `h_`（成员变量）替代硬编码 0.1。
+
+---
+
+## 31) HPC 的 c-clamp 下界 0.5 对 6D 三阶链的翘曲放大 ~30×（协同因素，非主因）
+
+**现象**: LPC-only 不震荡，开 HPC 后靠近目标时加速/震荡明显；
+omega_d 或 leader 速度越高越剧烈。
+
+**原因**: 6D Motor 齐次权重 [2,1,0] 比 4D [1,0] 深，c_min=0.5 时
+expm(Gd·1.69) 对位置通道放大约 30×（vs 4D 的 5×）。
+与 accel≤0.25 的慢执行器组合形成弛豫振荡。
+
+**重要更正**: 经后续隔离分析，震荡的主因是 ω_d 偏高（1.2–1.5）超过
+0.25 accel 物理上限 + h 步长 bug（等效 B 矩阵 ×2）+ rf2o vy=0 反馈盲区。
+c_min 的 30× 翘曲是在这些因素叠加下将信号进一步放大——在 ω_d=0.7
+（物理可达范围）+ h 修复 + rf2o 补丁后，c_min=0.5 不再导致震荡。
+
+**处理**: 新增 `hpc_c_min` 参数。在 ω_d 物理可达范围内，c_min=0.5（4D 默认）
+或 0.9 均可稳定运行；当前工程默认保留 0.9（保守侧）。
+纯 LPC 模式 (use_hpc=false) 不受此参数影响。
+
+---
+
+## 32) leader_vel_lpf_tau:=0 时滤波器冻结 leader 速度（而非关断）
+
+**现象**: `leader_vel_lpf_tau:=0` 后 follower 完全跟不上 leader。
+
+**原因**: alpha = 20/(20+1/0) = 0 → 低通滤波器冻结在初始测量值，
+leader 速度被永远锁死在启动瞬间的数值上。
+
+**处理**: `leader_vel_lpf_tau_ ≤ 0` 时跳过滤波、直通原始测量。
+默认值改为 0.0（关断），需要时设 0.2-0.3。
+
+---
+
+## 33) 三阶链 lambda 语义与 4D 对齐 + 自适应逻辑保留
+
+**说明**: 4D 的 `calculate_klin` 中 `a` 不是极点，闭环极点 = a/m（λ=a/m, λ≥ωd）。
+6D Motor 直接采用 λ 作为极点参数，`compute_channel_3rd` 内部先换算 λ=a/m，
+保证与 4D 的自适应逻辑（e_v 用 v_real 误差、clamp 到 ±ωd·M）完全兼容。

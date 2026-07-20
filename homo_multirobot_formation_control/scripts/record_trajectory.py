@@ -34,7 +34,8 @@ from datetime import datetime
 
 # 需要自动读取的控制器参数
 CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
-                    'm_p', 'Kp_yaw', 'K_ff', 'tol']
+                    'm_p', 'Kp_yaw', 'K_ff', 'tol',
+                    'tau', 'hpc_c_min', 'leader_vel_lpf_tau']
 
 
 class TrajectoryRecorder(Node):
@@ -48,6 +49,7 @@ class TrajectoryRecorder(Node):
         self.declare_parameter('radius', 0.0)
         self.declare_parameter('mode', 'sim')
         self.declare_parameter('tag', '')
+        self.declare_parameter('controller_node_name', 'formation_control_node')
 
         self.leader_ns = self.get_parameter('leader_ns').value
         self.follower_ns = self.get_parameter('follower_ns').value
@@ -59,6 +61,7 @@ class TrajectoryRecorder(Node):
         self.ideal_radius = self.get_parameter('radius').value
         self.mode = self.get_parameter('mode').value
         self.tag = self.get_parameter('tag').value
+        self.ctrl_node_name = self.get_parameter('controller_node_name').value
 
         # 查询控制器参数（自动生成 tag 和图上标题）
         self.ctrl_params = self._query_controller_params()
@@ -74,7 +77,9 @@ class TrajectoryRecorder(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.t1_x = []; self.t1_y = []; self.t1_t = []
+        self.t1_vx = []; self.t1_vy = []
         self.t2_x = []; self.t2_y = []; self.t2_t = []
+        self.t2_vx = []; self.t2_vy = []
 
         self.t0 = None
         self.done = False
@@ -95,8 +100,8 @@ class TrajectoryRecorder(Node):
             + (f' 理想半径={self.ideal_radius:.1f}m' if self.ideal_radius > 0 else ''))
 
     def _query_controller_params(self):
-        """从 follower 命名空间下的 formation_control_node 读取参数。"""
-        node_path = self.follower_ns.rstrip('/') + '/formation_control_node'
+        """从 follower 命名空间下的控制器节点读取参数。"""
+        node_path = self.follower_ns.rstrip('/') + '/' + self.ctrl_node_name
         svc_name = node_path + '/get_parameters'
         client = self.create_client(GetParameters, svc_name)
 
@@ -138,6 +143,11 @@ class TrajectoryRecorder(Node):
         parts.append(f"r{self._v(p, 'radius')}")
         parts.append(f"od{self._v(p, 'omega_d')}")
         parts.append(f"f{self._v(p, 'control_rate')}")
+        # 6D 电机模型专属参数 (存在才加)
+        if 'tau' in p:
+            parts.append(f"tau{self._v(p, 'tau')}")
+        if 'hpc_c_min' in p:
+            parts.append(f"cmin{self._v(p, 'hpc_c_min')}")
         return '_'.join(parts)
 
     @staticmethod
@@ -153,7 +163,8 @@ class TrajectoryRecorder(Node):
         p = self.ctrl_params
         if not p:
             return ''
-        names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'tol']
+        names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'tol',
+                 'tau', 'hpc_c_min', 'leader_vel_lpf_tau']
         parts = []
         for n in names:
             if n in p:
@@ -178,7 +189,7 @@ class TrajectoryRecorder(Node):
         return (tf_x + ekf_x * math.cos(tf_yaw) - ekf_y * math.sin(tf_yaw),
                 tf_y + ekf_x * math.sin(tf_yaw) + ekf_y * math.cos(tf_yaw))
 
-    def _record(self, msg, ns, xl, yl, tl):
+    def _record(self, msg, ns, xl, yl, tl, vxl, vyl):
         if self.done:
             return
         pos = self._odom_to_map(ns, msg)
@@ -191,11 +202,15 @@ class TrajectoryRecorder(Node):
         tl.append(now - self.t0)
         xl.append(pos[0])
         yl.append(pos[1])
+        vxl.append(msg.twist.twist.linear.x)
+        vyl.append(msg.twist.twist.linear.y)
 
     def cb_leader(self, msg):
-        self._record(msg, self.leader_ns, self.t1_x, self.t1_y, self.t1_t)
+        self._record(msg, self.leader_ns, self.t1_x, self.t1_y, self.t1_t,
+                     self.t1_vx, self.t1_vy)
     def cb_follower(self, msg):
-        self._record(msg, self.follower_ns, self.t2_x, self.t2_y, self.t2_t)
+        self._record(msg, self.follower_ns, self.t2_x, self.t2_y, self.t2_t,
+                     self.t2_vx, self.t2_vy)
 
     def check_done(self):
         if self.done or self.t0 is None:
@@ -221,25 +236,41 @@ class TrajectoryRecorder(Node):
         with open(csv_path, 'w', newline='') as f:
             w = csv.writer(f)
             w.writerow(['time_s', 'leader_x_m', 'leader_y_m',
-                        'follower_x_m', 'follower_y_m', 'distance_m'])
+                        'leader_vx_ms', 'leader_vy_ms',
+                        'follower_x_m', 'follower_y_m',
+                        'follower_vx_ms', 'follower_vy_ms',
+                        'distance_m'])
             n2 = len(self.t2_t)
             n1 = len(self.t1_t)
             for i2 in range(n2):
                 t = self.t2_t[i2]
                 fx = self.t2_x[i2]
                 fy = self.t2_y[i2]
+                fvx = self.t2_vx[i2]
+                fvy = self.t2_vy[i2]
                 # 找最接近的 leader 点
                 i1 = min(range(n1), key=lambda j: abs(self.t1_t[j] - t))
                 lx = self.t1_x[i1]
                 ly = self.t1_y[i1]
+                lvx = self.t1_vx[i1]
+                lvy = self.t1_vy[i1]
                 dist = math.hypot(lx - fx, ly - fy)
                 w.writerow([f'{t:.4f}', f'{lx:.4f}', f'{ly:.4f}',
-                            f'{fx:.4f}', f'{fy:.4f}', f'{dist:.4f}'])
+                            f'{lvx:.4f}', f'{lvy:.4f}',
+                            f'{fx:.4f}', f'{fy:.4f}',
+                            f'{fvx:.4f}', f'{fvy:.4f}',
+                            f'{dist:.4f}'])
         self.get_logger().info(f'CSV 已保存: {csv_path}')
+
+    def _plot_xy_vel(self, ax, tl, vl, name, c):
+        """画速度曲线"""
+        if not tl:
+            return
+        ax.plot(tl, vl, linewidth=0.8, label=name, color=c)
 
     def _plot_and_save(self, out_subdir, basename):
         elapsed = time.time() - self.t0 if self.t0 else 0
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig, axes = plt.subplots(3, 2, figsize=(16, 14))
 
         # ---- 子图 1: 轨迹 ----
         ax = axes[0][0]
@@ -256,14 +287,47 @@ class TrajectoryRecorder(Node):
         ax.set_title(f'[{self.mode}] {self.tag} ({elapsed:.1f}s)')
         ax.legend(fontsize=7); ax.set_aspect('equal'); ax.grid(True, alpha=0.3)
 
-        # 控制器参数显示在图最上方
-        if self.ctrl_title:
-            fig.suptitle(self.ctrl_title, fontsize=9, family='monospace',
-                         y=0.98, bbox=dict(boxstyle='round,pad=0.3',
-                                          facecolor='lightyellow', alpha=0.9))
-
-        # ---- 子图 2: X over time ----
+        # ---- 子图 2: 编队距离 ----
         ax = axes[0][1]
+        n = min(len(self.t1_x), len(self.t2_x))
+        if n > 0:
+            dist_t = self.t2_t[:n]
+            dist = [math.hypot(self.t1_x[i] - self.t2_x[i], self.t1_y[i] - self.t2_y[i])
+                    for i in range(n)]
+            ax.plot(dist_t, dist, linewidth=1.0, color='tab:red',
+                    label=f'Actual (mean={sum(dist)/n:.2f}m, '
+                          f'std={math.sqrt(max(0,sum((d-sum(dist)/n)**2 for d in dist)/n)):.2f}m)')
+        if self.ideal_radius > 0:
+            ax.axhline(y=self.ideal_radius, color='gray', linestyle='--', linewidth=1.2,
+                       label=f'Ideal radius = {self.ideal_radius:.1f}m')
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('Distance (m)')
+        ax.set_title('Formation distance')
+        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+
+        # ---- 子图 3: Vx (body frame) ----
+        ax = axes[1][0]
+        for tl, vl, name, c in [
+            (self.t1_t, self.t1_vx, self.leader_label, 'tab:blue'),
+            (self.t2_t, self.t2_vx, self.follower_label, 'tab:orange'),
+        ]:
+            self._plot_xy_vel(ax, tl, vl, name, c)
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('Vx body (m/s)')
+        ax.set_title('Body-frame Vx')
+        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+
+        # ---- 子图 4: Vy (body frame) ----
+        ax = axes[1][1]
+        for tl, vl, name, c in [
+            (self.t1_t, self.t1_vy, self.leader_label, 'tab:blue'),
+            (self.t2_t, self.t2_vy, self.follower_label, 'tab:orange'),
+        ]:
+            self._plot_xy_vel(ax, tl, vl, name, c)
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('Vy body (m/s)')
+        ax.set_title('Body-frame Vy')
+        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+
+        # ---- 子图 5: X over time ----
+        ax = axes[2][0]
         for xl, yl, tl, name, c in [
             (self.t1_x, self.t1_y, self.t1_t, self.leader_label, 'tab:blue'),
             (self.t2_x, self.t2_y, self.t2_t, self.follower_label, 'tab:orange'),
@@ -275,8 +339,8 @@ class TrajectoryRecorder(Node):
         ax.set_title('X over time')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 3: Y over time ----
-        ax = axes[1][0]
+        # ---- 子图 6: Y over time ----
+        ax = axes[2][1]
         for xl, yl, tl, name, c in [
             (self.t1_x, self.t1_y, self.t1_t, self.leader_label, 'tab:blue'),
             (self.t2_x, self.t2_y, self.t2_t, self.follower_label, 'tab:orange'),
@@ -288,21 +352,11 @@ class TrajectoryRecorder(Node):
         ax.set_title('Y over time')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 4: 编队距离 ----
-        ax = axes[1][1]
-        n = min(len(self.t1_x), len(self.t2_x))
-        if n > 0:
-            dist_t = self.t2_t[:n]
-            dist = [math.hypot(self.t1_x[i] - self.t2_x[i], self.t1_y[i] - self.t2_y[i])
-                    for i in range(n)]
-            ax.plot(dist_t, dist, linewidth=1.0, color='tab:red',
-                    label=f'Actual distance (mean={sum(dist)/n:.2f}m)')
-        if self.ideal_radius > 0:
-            ax.axhline(y=self.ideal_radius, color='gray', linestyle='--', linewidth=1.2,
-                       label=f'Ideal radius = {self.ideal_radius:.1f}m')
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('Distance (m)')
-        ax.set_title('Formation distance')
-        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        # 控制器参数显示在图最上方
+        if self.ctrl_title:
+            fig.suptitle(self.ctrl_title, fontsize=9, family='monospace',
+                         y=0.99, bbox=dict(boxstyle='round,pad=0.3',
+                                          facecolor='lightyellow', alpha=0.9))
 
         png_path = os.path.join(out_subdir, basename)
         plt.tight_layout(); plt.savefig(png_path, dpi=150); plt.close()

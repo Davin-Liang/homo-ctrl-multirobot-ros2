@@ -3,10 +3,11 @@
 基于**齐次控制（Homogeneous Control）** 的 Leader-Follower 编队算法（C++ / Eigen），
 适配项目的 slam_toolbox / AMCL + EKF 定位体系。
 
-提供七套控制器：**4D 质点模型**（原版论文算法）、**4D Cont 连续边界投影**、
+提供八套控制器：**4D 质点模型**（原版论文算法）、**4D Cont 连续边界投影**、
 **6D 运动学模型**（考虑车身朝向 + 全向轮约束 + 边界投影编队）、
 **6D Disc 离散多边形编队**（6D 模型 + 离散多边形策略）、
 **6D Bearing 方位角约束编队**（6D 模型 + 固定方位角，无切换平滑弧线）、
+**6D Motor 电机感知模型**（执行器一阶滞后显式增广，面向实物大延迟场景）、
 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）、
 以及 **MPC 6D 运动学模型预测控制**（顺序线性化 + OSQP 求解，作为 HPC 的对照组）。
 
@@ -15,6 +16,7 @@
 - [控制器版本](#控制器版本)
 - [算法原理 (4D)](#算法原理-4d)
 - [算法原理 (6D)](#算法原理-6d)
+- [算法原理 (6D Motor)](#算法原理-6d-motor)
 - [数据输入](#数据输入)
 - [参数详解](#参数详解)
 - [运动学约束参数](#运动学约束参数)
@@ -31,6 +33,7 @@
 | **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
 | **6D Bearing (运动学, 方位角约束)** | `formation_single_follower_6d_bearing.launch.py` | `formation_control_node_6d_bearing` | 同 6D | 固定方位角 $\phi_d$，无切换 | 集成于 6D 主回路 |
+| **6D Motor (电机感知模型)** | `formation_single_follower_6d_motor.launch.py` | `formation_control_node_6d_motor` | `[p_x,p_y,v_x^c,v_y^c,v_x^r,v_y^r]` (map 系, cmd/real 拆分) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
 | **MPC 6D (模型预测控制)** | `formation_single_follower_mpc_6d.launch.py` | `formation_control_node_mpc_6d` | 同 6D | 固定偏移（Leader 车体系） | 集成于 6D 主回路 |
 
@@ -41,6 +44,13 @@
 6D+OA 在 6D 基础上新增基于单线激光雷达的避障功能：通过 `/scan` 话题感知障碍物，
 将障碍物距离约束以软约束形式融入 QP 优化框架，求解最优速度指令平衡编队跟踪与避障。
 **适用于圆柱体等光滑曲面障碍物，不支持正方体等多面体。**
+
+**6D Motor** 面向实物大延迟场景（实测电机 T_90% ≈ 1.24s）：把 STM32 执行器一阶滞后
+显式增广进状态方程 `[p, v_cmd, v_real]`（每轴三阶链），使 HPC 天然感知
+"指令速度 ≠ 实际速度"，消除过度补偿震荡。v_cmd 为控制器内部积分状态
+（发布后用最终 cmd_vel 回写，抗饱和），v_real 来自 EKF。编队点策略与 4D 相同
+（离散多边形 + tol），可直接与 4D baseline 对比。关键参数 `tau`（默认 0.5，
+实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。
 
 三套控制器共享以下模块（不修改原 4D/6D 代码）：
 - `kinematic_constraint.hpp` — 全向轮轮速/加速度约束
@@ -72,6 +82,22 @@
 4. **时变 $A_l$ 矩阵**：含 leader 速度耦合项 $(\omega_l, v_{x,l}^b, v_{y,l}^b)$，
    每周期更新；HPC 参数在 leader 速度或 $\Delta\theta$ 变化超过阈值时重算
 5. **yaw 控制集成**：$\theta/\omega$ 作为 3×6 增益矩阵的第三通道，临界阻尼双极点设计
+
+## 算法原理 (6D Motor)
+
+详细的数学推导见 `doc/motor_homogeneous_control_full.md`。核心要点：
+
+1. **6D 电机感知状态**：$[p_x, p_y, v_x^{\mathrm{cmd}}, v_y^{\mathrm{cmd}}, v_x^{\mathrm{real}}, v_y^{\mathrm{real}}]^{\mathsf{T}}$（map 系），
+   将执行器一阶滞后 $\dot{v}^{\mathrm{real}} = (v^{\mathrm{cmd}} - v^{\mathrm{real}})/\tau$ 显式增广进系统矩阵，
+   使 HPC 天然感知 "指令速度 ≠ 实际速度"
+2. **三阶自适应极点配置**：每轴从 4D 的二阶链 $[p, v]$ 变为三阶链 $[p, v^{\mathrm{cmd}}, v^{\mathrm{real}}]$，
+   对 $(s+\lambda)^3$ 三重极点配置给出解析解（定理 1），$\lambda = a/m$ 与 4D 自适应逻辑兼容
+3. **v_cmd 内部积分**：初始化对齐 EKF，每周期 $v^{\mathrm{cmd}} \gets v^{\mathrm{cmd}} + h \cdot \mathbf{u}/m$，
+   发布后以最终 cmd_vel 回写（抗饱和）；Leader 取 $v^{\mathrm{cmd}} = v^{\mathrm{real}}$（稳态假设）
+4. **齐次链深度与翘曲放大**：6D 三阶链权重 $[2,1,0]$（4D 为 $[1,0]$），
+   近目标区域翘曲放大 ~30×（vs 4D 的 ~5×），必须提高 $c_{\min}$ 至 0.9 抑制弛豫振荡
+5. **A 常值**：无需 6D 运动学模型的时变重算，HPC 仅在编队点切换时更新
+6. **偏航独立**：P+前馈独立回路（与 4D 一致），偏航通道电机延迟通常显著小于线速度
 
 ## 算法原理 (6D+OA)
 
@@ -412,6 +438,55 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launc
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py \
   use_hpc:=false
 ```
+
+### 启动（6D Motor 单 follower，电机感知模型）
+
+```bash
+# 默认参数（经仿真实物联合标定，对齐 0.25 m/s² 实物加速度）
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 use_motor_delay:=true
+```
+
+带参数：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  use_motor_delay:=true motor_tau:=0.43 tau:=0.43 \
+  mass:=2.0 omega_d:=0.7 hpc_c_min:=0.9 max_linear_accel:=0.25
+```
+
+关键参数：
+
+| 参数 | 默认 | 含义 |
+|------|------|------|
+| `tau` | 0.43 | 电机时间常数（模型），越小响应越快 |
+| `mass` | 2.0 | 控制力→加速度增益（6D Motor 专用，4D 用 8.0） |
+| `omega_d` | 0.7 | 闭环带宽（须 ≤ 物理可达值，0.25 accel 时上限 ~1.0） |
+| `hpc_c_min` | 0.9 | HPC warp clamp 下界（6D 三阶链须高于 4D 的 0.5） |
+| `max_linear_accel` | 0.25 | 控制器侧加速度约束（对齐实物） |
+| `motor_tau` | 0.43 | 仿真注入延迟的时间常数（实物不启 `use_motor_delay`） |
+| `transport_delay` | 0.0 | 纯传输延迟 (s)，0=关断（v1 不建模死区） |
+| `delay_max_accel` | 0.25 | 仿真注入延迟的加速度限幅 |
+| `leader_vel_lpf_tau` | 0.0 | leader 速度低通 (s)，0=关断，噪声大时设 0.2–0.3 |
+
+LPC 消融对照（关闭齐次升级）：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 use_motor_delay:=true use_hpc:=false
+```
+
+轨迹记录（需指定 `controller_node_name` 以读取 6D Motor 专属参数）：
+
+```bash
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p mode:=sim -p duration:=45.0 \
+  -p controller_node_name:=formation_control_node_6d_motor
+```
+
+与 4D baseline 的区别：状态扩展为 $[p, v^{\mathrm{cmd}}, v^{\mathrm{real}}]$，执行器
+滞后显式写入系统矩阵，v_cmd 是跨周期积分状态；偏航控制独立（P+前馈，与 4D 一致）。
 
 ### 启动（6D+OA 单 follower，带避障）
 

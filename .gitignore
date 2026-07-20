@@ -16,3 +16,4 @@ log/
 
 # PDF papers
 *.pdf
+robot_traj/

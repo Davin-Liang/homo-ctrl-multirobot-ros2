@@ -1,0 +1,171 @@
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.conditions import IfCondition
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    leader_ns = LaunchConfiguration("leader_ns")
+    follower_ns = LaunchConfiguration("follower_ns")
+    use_sim_time = LaunchConfiguration("use_sim_time")
+
+    # Formation geometry
+    m_p = LaunchConfiguration("m_p")
+    radius = LaunchConfiguration("radius")
+    tol = LaunchConfiguration("tol")
+
+    # Robot dynamics
+    mass = LaunchConfiguration("mass")
+    tau = LaunchConfiguration("tau")
+    omega_d = LaunchConfiguration("omega_d")
+
+    # Yaw control
+    Kp_yaw = LaunchConfiguration("Kp_yaw")
+    K_ff = LaunchConfiguration("K_ff")
+
+    # Velocity limits
+    max_linear_vel = LaunchConfiguration("max_linear_vel")
+    max_angular_vel = LaunchConfiguration("max_angular_vel")
+
+    # Kinematic constraints
+    wheel_radius = LaunchConfiguration("wheel_radius")
+    base_radius = LaunchConfiguration("base_radius")
+    wheel_max_omega = LaunchConfiguration("wheel_max_omega")
+    max_linear_accel = LaunchConfiguration("max_linear_accel")
+    max_angular_accel = LaunchConfiguration("max_angular_accel")
+
+    # Control rate
+    control_rate = LaunchConfiguration("control_rate")
+
+    # Motor delay simulation
+    use_motor_delay = LaunchConfiguration("use_motor_delay")
+    motor_tau = LaunchConfiguration("motor_tau")
+    transport_delay = LaunchConfiguration("transport_delay")
+
+    # Delay node params (separate from controller's max_linear_accel)
+    delay_max_accel = LaunchConfiguration("delay_max_accel")
+
+    # Delay on → controller outputs to cmd_vel_raw, delay node relays to cmd_vel
+    cmd_output_topic = PythonExpression([
+        "'cmd_vel_raw' if '", use_motor_delay, "' == 'true' else 'cmd_vel'"])
+
+    formation_node = Node(
+        package="homo_multirobot_formation_control",
+        executable="formation_control_node_6d_motor",
+        name="formation_control_node_6d_motor",
+        namespace=PythonExpression(["'", follower_ns, "'"]),
+        output="screen",
+        remappings=[("cmd_vel", cmd_output_topic)],
+        parameters=[{
+            "leader_ns": leader_ns,
+            "follower_ns": follower_ns,
+            "use_sim_time": use_sim_time,
+            "m_p": m_p,
+            "radius": radius,
+            "tol": tol,
+            "mass": mass,
+            "tau": tau,
+            "omega_d": omega_d,
+            "Kp_yaw": Kp_yaw,
+            "K_ff": K_ff,
+            "wheel_radius": wheel_radius,
+            "base_radius": base_radius,
+            "max_linear_vel": max_linear_vel,
+            "max_angular_vel": max_angular_vel,
+            "wheel_max_omega": wheel_max_omega,
+            "max_linear_accel": max_linear_accel,
+            "max_angular_accel": max_angular_accel,
+            "control_rate": control_rate,
+            "use_hpc": LaunchConfiguration("use_hpc"),
+            "hpc_c_min": LaunchConfiguration("hpc_c_min"),
+            "leader_vel_lpf_tau": LaunchConfiguration("leader_vel_lpf_tau"),
+        }],
+    )
+
+    delay_node = Node(
+        package="homo_multirobot_formation_control",
+        executable="sim_motor_delay.py",
+        name="sim_motor_delay",
+        namespace=PythonExpression(["'", follower_ns, "'"]),
+        output="screen",
+        condition=IfCondition(use_motor_delay),
+        parameters=[{
+            "input_topic": "cmd_vel_raw",
+            "output_topic": "cmd_vel",
+            "motor_tau": motor_tau,
+            "transport_delay": transport_delay,
+            "max_accel": delay_max_accel,
+            "rate": 100.0,
+        }],
+    )
+
+    return LaunchDescription([
+        DeclareLaunchArgument("leader_ns", default_value="/robot1",
+                              description="Leader robot namespace"),
+        DeclareLaunchArgument("follower_ns", default_value="/robot2",
+                              description="Follower robot namespace"),
+        DeclareLaunchArgument("use_sim_time", default_value="true",
+                              description="Use simulation time"),
+        DeclareLaunchArgument("m_p", default_value="4",
+                              description="Number of safe formation points"),
+        DeclareLaunchArgument("radius", default_value="2.0",
+                              description="Formation circle radius (m)"),
+        DeclareLaunchArgument("tol", default_value="0.1",
+                              description="Switching tolerance between formation points"),
+        DeclareLaunchArgument("mass", default_value="2.0",
+                              description="Controller model mass (tuning, not physical)"),
+        DeclareLaunchArgument("tau", default_value="0.43",
+                              description="Motor first-order time constant (s). "
+                                          "Measured ~0.43 on real robot; must be >= 0.1"),
+        DeclareLaunchArgument("omega_d", default_value="0.7",
+                              description="Desired damping bandwidth"),
+        DeclareLaunchArgument("Kp_yaw", default_value="4.0",
+                              description="Proportional yaw gain"),
+        DeclareLaunchArgument("K_ff", default_value="1.0",
+                              description="Feedforward yaw gain"),
+        DeclareLaunchArgument("control_rate", default_value="20.0",
+                              description="Control loop frequency (Hz)"),
+        DeclareLaunchArgument("use_hpc", default_value="true",
+                              description="Enable homogeneous upgrade (false = pure LPC)"),
+        DeclareLaunchArgument("hpc_c_min", default_value="0.9",
+                              description="HPC warp clamp lower bound. 6D motor chain "
+                                          "(weights [2,1,0]) amplifies ~30x at c=0.5 "
+                                          "(vs ~5x for 4D). Default 0.9 (~1.17x) after "
+                                          "empirical sweep on real/sim hardware; 0.7 works "
+                                          "offline but not with EKF/TF noise. "
+                                          "Set 0.5 for 4D-compatible behavior."),
+        DeclareLaunchArgument("leader_vel_lpf_tau", default_value="0.0",
+                              description="Leader velocity low-pass filter time constant "
+                                          "(s). 0.0 = disabled (raw measurement). "
+                                          "Set 0.2-0.3 if rf2o noise causes small "
+                                          "accelerations at low leader speeds."),
+        DeclareLaunchArgument("wheel_radius", default_value="0.03",
+                              description="Wheel rolling radius (m)"),
+        DeclareLaunchArgument("base_radius", default_value="0.11",
+                              description="Distance from robot center to wheel (m)"),
+        DeclareLaunchArgument("wheel_max_omega", default_value="20.0",
+                              description="Max wheel angular velocity (rad/s)"),
+        DeclareLaunchArgument("max_linear_accel", default_value="0.25",
+                              description="Max body linear acceleration (m/s^2). "
+                                          "Matched to real motor limit (~0.25) for stability."),
+        DeclareLaunchArgument("max_angular_accel", default_value="4.0",
+                              description="Max body angular acceleration (rad/s^2)"),
+        DeclareLaunchArgument("max_linear_vel", default_value="1.0",
+                              description="Max body linear velocity (m/s)"),
+        DeclareLaunchArgument("max_angular_vel", default_value="0.5",
+                              description="Max body angular velocity (rad/s)"),
+        DeclareLaunchArgument("use_motor_delay", default_value="false",
+                              description="Simulate real motor response delay"),
+        DeclareLaunchArgument("motor_tau", default_value="0.43",
+                              description="Simulated motor LP time constant (s). "
+                                          "Match controller tau for model-plant alignment"),
+        DeclareLaunchArgument("transport_delay", default_value="0.0",
+                              description="Transport delay (s, e.g. serial). "
+                                          "0.0 = dead-time disabled (v1 limitation)."),
+        DeclareLaunchArgument("delay_max_accel", default_value="0.25",
+                              description="Delay node linear accel limit (m/s^2). "
+                                          "0.25 matches real motor (~0.22-0.27 m/s^2)."),
+        formation_node,
+        delay_node,
+    ])

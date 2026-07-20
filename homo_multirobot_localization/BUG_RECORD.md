@@ -168,3 +168,37 @@ ros2 run tf2_ros tf2_echo map robot1_odom
 
 **解决**: 作为 ROS 参数暴露，默认 5（仿真），实车 bringup 传 3。
 
+
+## 10. rf2o 硬编码 vy=0，EKF 融合后横向速度反馈失效（全向底盘致命）
+
+**现象**: 编队控制（尤其 6D Motor 模型）中，follower 横向指令 `cmd_vel.linear.y`
+持续 ±0.6 长达数秒，但 `/odometry/filtered` 的 `twist.linear.y` 恒为 ~0；
+控制器认为"y 怎么推都不动"而持续饱和输出，形成慢周期、大幅度的位置震荡。
+
+**原因**（两层叠加）:
+1. 上游 rf2o 只考虑差速车：`CLaserOdometry2DNode.cpp` 发布时
+   `odom.twist.twist.linear.y = 0.0` 硬编码，而其核心算法 `kai_loc_ = [vx, vy, ω]`
+   实际上估计了完整平面速度（`acu_trans(1,2)` 就是 y 位移增量）。
+2. EKF 配置 `odom0_config` 中 vy=true，把这个恒零的假测量当有效值融合，
+   于是 `/odometry/filtered` 的 vy 被强行压到零。
+
+**解决**: 补丁 third_party/rf2o_laser_odometry（三处）:
+- `CLaserOdometry2D.hpp`: 新增成员 `lin_speed_y`
+- `CLaserOdometry2D.cpp`: `lin_speed_y = acu_trans(1,2) / time_inc_sec`
+  （激光与 base 无偏转安装，`laser_joint rpy="0 0 0"`，无需旋转）
+- `CLaserOdometry2DNode.cpp`: `odom.twist.twist.linear.y = rf2o_ref.lin_speed_y`
+
+**验证**:
+
+```bash
+# 只启动仿真+定位链，发纯横向速度
+ros2 topic pub -r 10 /robot2/cmd_vel geometry_msgs/msg/Twist "{linear: {y: 0.3}}"
+# 三级链路依次检查 vy（应≈0.3，不再是 0）
+ros2 topic echo /robot2/rf2o/odom --field twist.twist.linear
+ros2 topic echo /robot2/odometry/filtered --field twist.twist.linear
+```
+
+**影响面**: 所有依赖 EKF 速度的控制器（4D/6D 全系）在横向机动时的速度反馈
+此前均为盲区；6D Motor 模型因显式使用 v_real 状态对此最敏感，故最先暴露。
+实车轮式里程计模式（odom_source:=wheel）不受此影响——STM32 轮式里程计
+本身提供 vy；实车 rf2o 模式（odom_source:=rf2o）同样受益于本补丁。

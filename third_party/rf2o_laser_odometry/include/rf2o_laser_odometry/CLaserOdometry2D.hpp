@@ -136,6 +136,8 @@ public:
   float g_mask[5];
 
   double lin_speed, ang_speed;
+  double lin_speed_y = 0.0;  // 横向速度 (base 系 y)。上游只发布 x 分量，
+                             // 全向底盘需要 y，否则 EKF 把 "vy=0" 当有效测量融合
 
   //rclcpp::wall	m_runtime;
 

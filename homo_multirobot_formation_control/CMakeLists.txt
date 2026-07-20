@@ -46,6 +46,35 @@ install(TARGETS formation_control_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- 6D 电机感知模型控制器（执行器一阶滞后增广，doc/6d_motor_model_design.md）----
+# 注意: 实车 ARM 内存不足时可注释掉本 target（同下方 6D 系列）
+add_executable(formation_control_node_6d_motor
+  src/main_6d_motor.cpp
+  src/formation_control_node_6d_motor.cpp
+)
+
+target_include_directories(formation_control_node_6d_motor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+ament_target_dependencies(formation_control_node_6d_motor
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+target_link_libraries(formation_control_node_6d_motor
+  Eigen3::Eigen
+)
+
+install(TARGETS formation_control_node_6d_motor
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # ---- 4D 连续边界投影控制器 ----------------------------------------------------
 # add_executable(formation_control_node_4d_cont
 #   src/main_4d_cont.cpp
