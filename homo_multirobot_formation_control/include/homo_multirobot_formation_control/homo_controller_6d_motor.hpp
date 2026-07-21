@@ -40,26 +40,21 @@ namespace formation_control {
 class LpcController6DMotor {
 public:
   /// @param m_p     安全编队点数量
-  /// @param radius  编队圆半径 (m)
-  /// @param tol     编队点切换容差 (m)
-  /// @param mass    控制力→加速度增益（调参用，非物理质量）
-  /// @param tau     电机一阶时间常数 (s)，实测约 0.43，不建议 < 0.1
-  /// @param omega_d 期望阻尼带宽
-  /// @param control_period 控制周期 (s) = 1/control_rate。
-  ///   注意: 与 4D 不同（4D 的 h 只是输出整形系数，v 每周期重新测量），
-  ///   本控制器的 v_cmd 是跨周期积分状态，积分步长必须等于真实控制周期，
-  ///   否则等效 B 矩阵被缩放、极点配置失真（h=0.1@20Hz 曾导致欠阻尼慢震荡）。
-  /// @param hpc_c_min HPC warp 的 c 下界 (hnorm clamp 下限)。
-  ///   6D Motor 的齐次链 (权重 [2,1,0]) 比 4D ([1,0]) 深——c_min=0.5 时
-  ///   expm(Gd·1.69) 对位置权重方向放大约 30×（vs 4D 的 5×），与慢执行器
-  ///   (accel≤0.25) 和 EKF/激光噪声组合产生弛豫振荡。0.7 离线够、实物不够；
-  ///   经扫参实测稳定值约 0.9（~1.17× 放大），将此设为默认。
-  ///   纯 LPC 模式 (use_hpc=false) 不受此参数影响。
+  /// @param tau_nominal  电机时间常数基准值 (s)，按 0.3 m/s 阶跃标定
+  /// @param tau_min      低速段 τ 下限 (s)，|v_cmd| 小时电机无加速度限幅拖累
+  /// @param tau_max      高速段 τ 上限 (s)，加速度限幅使等效 τ 变大
+  /// @param v_tau_trans  自适应 τ 的过渡速度 (m/s)，低于此值用 tau_min
+  ///   实测: τ_eff 随 |v_cmd| 从 244ms (@0.03) 变到 580ms (@0.40)。
+  ///   自适应 τ 使模型在大小指令下均匹配实物，消除低速缓慢爬和高指令震荡。
   LpcController6DMotor(int m_p = 4, double radius = 2.0, double tol = 0.1,
-                       double mass = 2.0, double tau = 0.43,
+                       double mass = 2.0, double tau_nominal = 0.43,
                        double omega_d = 0.7, bool use_hpc = true,
-                       double control_period = 0.05, double hpc_c_min = 0.9)
-    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), tau_(tau),
+                       double control_period = 0.05, double hpc_c_min = 0.9,
+                       double tau_min = 0.25, double tau_max = 0.55,
+                       double v_tau_trans = 0.10)
+    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass),
+      tau_(tau_nominal), tau_nominal_(tau_nominal),
+      tau_min_(tau_min), tau_max_(tau_max), v_tau_trans_(v_tau_trans),
       omega_d_(omega_d), h_(control_period), use_hpc_(use_hpc),
       hpc_c_min_(hpc_c_min)
   {
@@ -157,6 +152,16 @@ public:
                                     const Eigen::VectorXd& x2)
   {
     check_and_switch_target(x1, x2);
+
+    // 自适应 τ: |v_cmd| 小时的 τ_eff 小（~244ms），大时加速度限幅拖慢（~580ms）。
+    // 用 x2(2:3) = v_cmd 分量，低通过渡。
+    double vc_mag = std::hypot(x2(2), x2(3));
+    double ratio = std::clamp((vc_mag - v_tau_trans_) / (0.3 - v_tau_trans_), 0.0, 1.0);
+    tau_ = tau_min_ + ratio * (tau_max_ - tau_min_);
+    if (std::abs(tau_ - last_tau_) > 0.001) {
+      update_A_tau();                     // A 含 1/tau 项，tau 变则 A 变
+      last_tau_ = tau_;
+    }
 
     Eigen::VectorXd e = x2 - x1 - d_;
 
@@ -275,12 +280,23 @@ private:
   double radius_;    // 编队圆半径 (m)
   double tol_;       // 切换滞后容差 (m)
   double mass_;      // 模型质量（调参）
-  double tau_;       // 电机一阶时间常数 (s)
-  double omega_d_;   // 期望阻尼带宽
-  double h_;         // 控制周期 (s)，v_cmd 积分步长
+  double tau_;            // 当前有效 τ（自适应变化）
+  double tau_nominal_;    // τ 基准值 (如 0.43)
+  double tau_min_;        // 低速 τ 下限 (~0.25)
+  double tau_max_;        // 高速 τ 上限 (~0.55)
+  double v_tau_trans_;    // τ 自适应过渡速度 (m/s)
+  double last_tau_ = 0.0; // 避免每周期重建 A
+  double omega_d_;        // 期望阻尼带宽
+  double h_;              // 控制周期 (s)，v_cmd 积分步长
+
+  // 自适应 τ: 更新 A 中 4 个含 1/τ 的项
+  void update_A_tau() {
+    A_(4,2) =  1.0 / tau_;  A_(4,4) = -1.0 / tau_;
+    A_(5,3) =  1.0 / tau_;  A_(5,5) = -1.0 / tau_;
+  }
 
   // ---- 系统模型（双积分器 + 执行器一阶滞后） ---------------------------------
-  Eigen::MatrixXd A_;   // 6×6 常值
+  Eigen::MatrixXd A_;   // 6×6（τ 自适应时含 1/τ 的 4 个项可变）
   Eigen::MatrixXd B_;   // 6×2
 
   // ---- 控制器状态 -----------------------------------------------------------

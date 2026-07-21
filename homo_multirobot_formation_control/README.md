@@ -50,7 +50,7 @@
 "指令速度 ≠ 实际速度"，消除过度补偿震荡。v_cmd 为控制器内部积分状态
 （发布后用最终 cmd_vel 回写，抗饱和），v_real 来自 EKF。编队点策略与 4D 相同
 （离散多边形 + tol），可直接与 4D baseline 对比。关键参数 `tau`（默认 0.5，
-实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。
+实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。自适应 τ（tau_min/tau_max/v_tau_trans）匹配实物变加速度特性；Smith 预估器（smith_Td=0.22）补偿 ~220ms 死区。后续 8D Pade 全链路模型见 `doc/pade_deadtime_full.md`。
 
 三套控制器共享以下模块（不修改原 4D/6D 代码）：
 - `kinematic_constraint.hpp` — 全向轮轮速/加速度约束

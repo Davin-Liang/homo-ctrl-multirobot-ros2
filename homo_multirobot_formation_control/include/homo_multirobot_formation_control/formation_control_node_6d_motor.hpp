@@ -17,6 +17,7 @@
 #include <memory>
 #include "homo_multirobot_formation_control/homo_controller_6d_motor.hpp"
 #include "homo_multirobot_formation_control/kinematic_constraint.hpp"
+#include "homo_multirobot_formation_control/motor_predictor.hpp"
 
 class FormationController6DMotor : public rclcpp::Node
 {
@@ -30,11 +31,14 @@ private:
   std::string leader_ns_, follower_ns_;
   double Kp_yaw_, K_ff_;
   double max_linear_vel_, max_angular_vel_;
+  double min_cmd_vel_ = 0.03;  // 实物 STM32 死区 ~0.03 m/s, 指令低于此值不输出
   double control_rate_;
 
-  // ---- 控制器 + 约束 --------------------------------------------------------
+  // ---- 控制器 + 约束 + 预估器 -----------------------------------------------
   std::unique_ptr<formation_control::LpcController6DMotor> ctrl_;
   formation_control::KinematicConstraint constraint_;
+  formation_control::MotorPredictor motor_predictor_;
+  bool use_smith_predictor_ = false;
 
   // ---- v_cmd 内部状态（map 系）----------------------------------------------
   // 初始化时对齐 EKF 速度，之后由发布后的最终 cmd_vel 回写维护。

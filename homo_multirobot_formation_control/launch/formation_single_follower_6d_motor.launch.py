@@ -66,6 +66,9 @@ def generate_launch_description():
             "tol": tol,
             "mass": mass,
             "tau": tau,
+            "tau_min": LaunchConfiguration("tau_min"),
+            "tau_max": LaunchConfiguration("tau_max"),
+            "v_tau_trans": LaunchConfiguration("v_tau_trans"),
             "omega_d": omega_d,
             "Kp_yaw": Kp_yaw,
             "K_ff": K_ff,
@@ -80,6 +83,10 @@ def generate_launch_description():
             "use_hpc": LaunchConfiguration("use_hpc"),
             "hpc_c_min": LaunchConfiguration("hpc_c_min"),
             "leader_vel_lpf_tau": LaunchConfiguration("leader_vel_lpf_tau"),
+            "min_cmd_vel": LaunchConfiguration("min_cmd_vel"),
+            "use_smith_predictor": LaunchConfiguration("use_smith_predictor"),
+            "smith_tau": LaunchConfiguration("smith_tau"),
+            "smith_Td": LaunchConfiguration("smith_Td"),
         }],
     )
 
@@ -116,8 +123,21 @@ def generate_launch_description():
         DeclareLaunchArgument("mass", default_value="2.0",
                               description="Controller model mass (tuning, not physical)"),
         DeclareLaunchArgument("tau", default_value="0.43",
-                              description="Motor first-order time constant (s). "
-                                          "Measured ~0.43 on real robot; must be >= 0.1"),
+                              description="Motor time constant (s). With adaptive tau, "
+                                          "this is the nominal value; actual tau varies "
+                                          "between tau_min and tau_max based on |v_cmd|."),
+        DeclareLaunchArgument("tau_min", default_value="0.25",
+                              description="Adaptive tau lower bound (s). At low |v_cmd| "
+                                          "(<v_tau_trans), motor has no accel-limit lag; "
+                                          "tau_eff measured ~244ms @0.03 m/s."),
+        DeclareLaunchArgument("tau_max", default_value="0.55",
+                              description="Adaptive tau upper bound (s). At high |v_cmd| "
+                                          "(>0.3 m/s), accel limit dominates; "
+                                          "tau_eff measured ~550-580ms @0.3-0.4 m/s."),
+        DeclareLaunchArgument("v_tau_trans", default_value="0.10",
+                              description="Transition velocity (m/s) for adaptive tau. "
+                                          "Below this |v_cmd|, tau = tau_min; above, "
+                                          "linearly interpolates to tau_max at 0.3 m/s."),
         DeclareLaunchArgument("omega_d", default_value="0.7",
                               description="Desired damping bandwidth"),
         DeclareLaunchArgument("Kp_yaw", default_value="4.0",
@@ -140,6 +160,24 @@ def generate_launch_description():
                                           "(s). 0.0 = disabled (raw measurement). "
                                           "Set 0.2-0.3 if rf2o noise causes small "
                                           "accelerations at low leader speeds."),
+        DeclareLaunchArgument("min_cmd_vel", default_value="0.03",
+                              description="Minimum cmd_vel magnitude (m/s). Real robot "
+                                          "STM32 has a dead zone below ~0.03 m/s where "
+                                          "wheels don't move. Sub-threshold commands are "
+                                          "boosted to this value (preserving direction). "
+                                          "Set 0.0 to disable (simulation)."),
+        DeclareLaunchArgument("use_smith_predictor", default_value="false",
+                              description="Enable Smith predictor for dead-time compensation "
+                                          "(cmd→motor response blank window, ~220ms on real "
+                                          "robot). Uses τ+Td dual-model to push v_real "
+                                          "forward, eliminating over-compensation."),
+        DeclareLaunchArgument("smith_tau", default_value="0.43",
+                              description="Smith predictor motor LP time constant (s). "
+                                          "Should match controller tau_nominal."),
+        DeclareLaunchArgument("smith_Td", default_value="0.22",
+                              description="Smith predictor dead time (s). "
+                                          "Measured ~220ms on real robot (5% @0.3m/s step "
+                                          "minus EKF 48ms overhead)."),
         DeclareLaunchArgument("wheel_radius", default_value="0.03",
                               description="Wheel rolling radius (m)"),
         DeclareLaunchArgument("base_radius", default_value="0.11",

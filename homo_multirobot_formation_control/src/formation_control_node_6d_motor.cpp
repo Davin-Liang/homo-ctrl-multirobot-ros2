@@ -34,7 +34,10 @@ FormationController6DMotor::FormationController6DMotor()
   double radius = declare_parameter("radius",  2.0);
   double tol    = declare_parameter("tol",     0.1);
   double mass   = declare_parameter("mass",    8.0);
-  double tau    = declare_parameter("tau",     0.5);
+  double tau    = declare_parameter("tau",     0.43);
+  double tau_min = declare_parameter("tau_min", 0.25);
+  double tau_max = declare_parameter("tau_max", 0.55);
+  double v_tau_trans = declare_parameter("v_tau_trans", 0.10);
   double omega_d = declare_parameter("omega_d", 1.5);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
   K_ff_         = declare_parameter("K_ff",    1.0);
@@ -52,11 +55,21 @@ FormationController6DMotor::FormationController6DMotor()
   bool use_hpc = declare_parameter("use_hpc", true);
   double hpc_c_min = declare_parameter("hpc_c_min", 0.9);
   leader_vel_lpf_tau_ = declare_parameter("leader_vel_lpf_tau", 0.0);
+  min_cmd_vel_ = declare_parameter("min_cmd_vel", 0.03);
+
+  // Smith 预估器参数
+  use_smith_predictor_ = declare_parameter("use_smith_predictor", false);
+  double smith_tau = declare_parameter("smith_tau", 0.43);
+  double smith_Td  = declare_parameter("smith_Td",  0.22);
+  double dt = 1.0 / control_rate_;
+  motor_predictor_ = formation_control::MotorPredictor(smith_tau, smith_Td, dt);
 
   ctrl_ = std::make_unique<LpcController6DMotor>(m_p, radius, tol, mass, tau,
                                                  omega_d, use_hpc,
                                                  1.0 / control_rate_,
-                                                 hpc_c_min);
+                                                 hpc_c_min,
+                                                 tau_min, tau_max,
+                                                 v_tau_trans);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius,
                                     wheel_max_omega,
@@ -206,7 +219,12 @@ void FormationController6DMotor::timer_cb()
   if (!controller_initialized_) {
     vx_cmd_map_ = f_vx;
     vy_cmd_map_ = f_vy;
-    x2 << f_px, f_py, vx_cmd_map_, vy_cmd_map_, f_vx, f_vy;
+    double fvx_init = f_vx, fvy_init = f_vy;
+    if (use_smith_predictor_) {
+      fvx_init += motor_predictor_.comp_vx();
+      fvy_init += motor_predictor_.comp_vy();
+    }
+    x2 << f_px, f_py, vx_cmd_map_, vy_cmd_map_, fvx_init, fvy_init;
     try {
       ctrl_->controller_initial(x1, x2);
       controller_initialized_ = true;
@@ -217,8 +235,13 @@ void FormationController6DMotor::timer_cb()
     }
   }
 
-  // follower: v_cmd 来自内部状态，v_real 来自 EKF（每周期都读）
-  x2 << f_px, f_py, vx_cmd_map_, vy_cmd_map_, f_vx, f_vy;
+  // follower: v_cmd 来自内部状态，v_real 来自 EKF + Smith 前推补偿
+  double f_vx_comp = f_vx, f_vy_comp = f_vy;
+  if (use_smith_predictor_) {
+    f_vx_comp += motor_predictor_.comp_vx();
+    f_vy_comp += motor_predictor_.comp_vy();
+  }
+  x2 << f_px, f_py, vx_cmd_map_, vy_cmd_map_, f_vx_comp, f_vy_comp;
 
   // 齐次控制律 → map 系指令速度
   auto out = ctrl_->lpc_calculate(x1, x2);
@@ -231,6 +254,19 @@ void FormationController6DMotor::timer_cb()
   geometry_msgs::msg::Twist cmd;
   double vx_clamped = std::clamp(vx_body, -max_linear_vel_, max_linear_vel_);
   double vy_clamped = std::clamp(vy_body, -max_linear_vel_, max_linear_vel_);
+
+  // 最小速度补偿: 实物 STM32 死区 ~0.03 m/s, 低于此值轮子不转。
+  // 仅当控制器原始输出 (vx_body,vy_body) 非零但被 clamp 到死区以下时生效——
+  // 即"控制器想动但输出太小"。如果 raw 本身 ~0, 不 boost (确保能刹停)。
+  if (min_cmd_vel_ > 0.0) {
+    double raw_mag = std::hypot(vx_body, vy_body);
+    double cmd_mag = std::hypot(vx_clamped, vy_clamped);
+    if (raw_mag > 0.001 && cmd_mag > 0.0 && cmd_mag < min_cmd_vel_) {
+      double scale = min_cmd_vel_ / cmd_mag;
+      vx_clamped *= scale;
+      vy_clamped *= scale;
+    }
+  }
   cmd.linear.x = vx_clamped;
   cmd.linear.y = vy_clamped;
 
@@ -261,11 +297,20 @@ void FormationController6DMotor::timer_cb()
     double real_freq = diag_tick_ / diag_elapsed;
     double avg_leader_age_ms = sum_leader_age_ / diag_tick_ * 1000.0;
     double avg_ekf_age_ms    = sum_ekf_age_    / diag_tick_ * 1000.0;
-    RCLCPP_INFO(get_logger(),
-      "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms "
-      "vcmd_vs_vreal=(%+.3f,%+.3f)",
-      real_freq, avg_leader_age_ms, avg_ekf_age_ms,
-      vx_cmd_map_ - f_vx, vy_cmd_map_ - f_vy);
+    if (use_smith_predictor_) {
+      RCLCPP_INFO(get_logger(),
+        "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms "
+        "vcmd_vs_vreal=(%+.3f,%+.3f) smith=(%+.3f,%+.3f)",
+        real_freq, avg_leader_age_ms, avg_ekf_age_ms,
+        vx_cmd_map_ - f_vx, vy_cmd_map_ - f_vy,
+        motor_predictor_.comp_vx(), motor_predictor_.comp_vy());
+    } else {
+      RCLCPP_INFO(get_logger(),
+        "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms "
+        "vcmd_vs_vreal=(%+.3f,%+.3f)",
+        real_freq, avg_leader_age_ms, avg_ekf_age_ms,
+        vx_cmd_map_ - f_vx, vy_cmd_map_ - f_vy);
+    }
     diag_tick_ = 0;
     sum_leader_age_ = 0.0;
     sum_ekf_age_ = 0.0;
@@ -279,6 +324,11 @@ void FormationController6DMotor::timer_cb()
   }
 
   cmd_pub_->publish(cmd);
+
+  // Smith 预估器：用最终发的 cmd_vel 更新模型
+  if (use_smith_predictor_) {
+    motor_predictor_.update(cmd.linear.x, cmd.linear.y);
+  }
 
   // ---- v_cmd 回写（抗饱和）: 用最终发布值更新内部指令状态 ---------------------
   // clamp/轮速约束削掉的部分不计入 v_cmd，避免饱和时内部记账虚高、模型预测失真。
