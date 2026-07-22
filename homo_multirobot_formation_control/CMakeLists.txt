@@ -75,6 +75,34 @@ install(TARGETS formation_control_node_6d_motor
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- 8D Pade 死区增广控制器（doc/pade_deadtime_full.md）---------------------
+add_executable(formation_control_node_8d_motor
+  src/main_8d_motor.cpp
+  src/formation_control_node_8d_motor.cpp
+)
+
+target_include_directories(formation_control_node_8d_motor PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+ament_target_dependencies(formation_control_node_8d_motor
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+target_link_libraries(formation_control_node_8d_motor
+  Eigen3::Eigen
+)
+
+install(TARGETS formation_control_node_8d_motor
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # ---- 4D 连续边界投影控制器 ----------------------------------------------------
 # add_executable(formation_control_node_4d_cont
 #   src/main_4d_cont.cpp
