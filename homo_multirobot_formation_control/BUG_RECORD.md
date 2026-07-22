@@ -743,3 +743,18 @@ leader 速度被永远锁死在启动瞬间的数值上。
 **说明**: 4D 的 `calculate_klin` 中 `a` 不是极点，闭环极点 = a/m（λ=a/m, λ≥ωd）。
 6D Motor 直接采用 λ 作为极点参数，`compute_channel_3rd` 内部先换算 λ=a/m，
 保证与 4D 的自适应逻辑（e_v 用 v_real 误差、clamp 到 ±ωd·M）完全兼容。
+
+---
+
+## 34) 死区 Td 初步通过 Smith 外挂补偿 → 后续改为 Artstein 模型约简
+
+**背景**: 实物实测确认 ~220ms 指令死区（`measure_motor_latency.py`，5% @0.3m/s 阶跃
+的 EKF 延迟 P50=271ms，扣除 EKF 48ms 后 ≈ 220ms）。死区导致 4-5 个控制周期
+的虚假"无响应"信号，控制器在这些周期内过度补偿。
+
+**当前方案 (v1)**: Smith 预估器外挂（`motor_predictor.hpp`，τ+Td 双模型），
+`comp_vx/comp_vy` 加在 v_real 测量值上。
+
+**后续方案**: 采用 Artstein 模型约简——等价变换 $B_{\mathrm{eff}}=e^{-A T_d}B$，
+死区从外挂补偿升级为内部模型的等价修正，不增维、不动 HPC。详见
+`doc/artstein_reduction.md`。

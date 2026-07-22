@@ -103,7 +103,7 @@ m^{-1} & 0 \\ 0 & m^{-1} \\
 | cmd_vel 取自 $\mathbf{v}^{\mathrm{cmd}}$ | 发给 STM32 的应是指令值 |
 | 输入保持 2 维 | 偏航控制独立（P+前馈），与 4D 一致，便于对比 |
 
-**已知局限（v1）**：一阶滞后仅建模 ~1s 的爬升过程，不建模 ~250ms 的指令死区（纯时延 $T_d$）。死区补偿可后续通过 Pade 近似将 $(A,B)$ 扩展至 8D–10D，或叠加 `motor_predictor.hpp`（Smith 预估器，$\tau + T_d$ 双模型并行）。
+**已知局限（v1）**：一阶滞后仅建模 ~1s 的爬升过程，不建模 ~220ms 的指令死区（纯时延 $T_d$）。死区补偿已通过 Smith 预估器外挂实现（`motor_predictor.hpp`），后续采用 Artstein 模型约简（$B_{\mathrm{eff}} = e^{-A T_d}B$）将死区等价转化为无时延系统的 B 矩阵修正，不增维、不动 HPC 内部结构。详见 `doc/artstein_reduction.md`。
 
 ### 2.4 可控性与齐次性分析
 
