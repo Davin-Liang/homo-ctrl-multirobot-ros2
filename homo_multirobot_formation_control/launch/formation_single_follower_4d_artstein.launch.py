@@ -18,6 +18,7 @@ def generate_launch_description():
     # Robot dynamics
     mass = LaunchConfiguration("mass")
     tau = LaunchConfiguration("tau")
+    Td = LaunchConfiguration("Td")
     omega_d = LaunchConfiguration("omega_d")
 
     # Yaw control
@@ -42,8 +43,6 @@ def generate_launch_description():
     use_motor_delay = LaunchConfiguration("use_motor_delay")
     motor_tau = LaunchConfiguration("motor_tau")
     transport_delay = LaunchConfiguration("transport_delay")
-
-    # Delay node params (separate from controller's max_linear_accel)
     delay_max_accel = LaunchConfiguration("delay_max_accel")
 
     # Delay on → controller outputs to cmd_vel_raw, delay node relays to cmd_vel
@@ -69,6 +68,7 @@ def generate_launch_description():
             "tau_min": LaunchConfiguration("tau_min"),
             "tau_max": LaunchConfiguration("tau_max"),
             "v_tau_trans": LaunchConfiguration("v_tau_trans"),
+            "Td": Td,
             "omega_d": omega_d,
             "Kp_yaw": Kp_yaw,
             "K_ff": K_ff,
@@ -84,7 +84,6 @@ def generate_launch_description():
             "hpc_c_min": LaunchConfiguration("hpc_c_min"),
             "leader_vel_lpf_tau": LaunchConfiguration("leader_vel_lpf_tau"),
             "min_cmd_vel": LaunchConfiguration("min_cmd_vel"),
-            "Td": LaunchConfiguration("Td"),
         }],
     )
 
@@ -118,26 +117,28 @@ def generate_launch_description():
                               description="Formation circle radius (m)"),
         DeclareLaunchArgument("tol", default_value="0.1",
                               description="Switching tolerance between formation points"),
-        DeclareLaunchArgument("mass", default_value="2.0",
-                              description="Controller model mass (tuning, not physical)"),
+        DeclareLaunchArgument("mass", default_value="1.0",
+                              description="Velocity-channel equivalent gain (tuning). "
+                                          "In 4D Artstein model, mass is a dimensionless "
+                                          "gain for the adaptive pole-placement ratio, "
+                                          "not a physical mass."),
         DeclareLaunchArgument("tau", default_value="0.43",
                               description="Motor time constant (s). With adaptive tau, "
                                           "this is the nominal value; actual tau varies "
                                           "between tau_min and tau_max based on |v_cmd|."),
         DeclareLaunchArgument("tau_min", default_value="0.25",
-                              description="Adaptive tau lower bound (s). At low |v_cmd| "
-                                          "(<v_tau_trans), motor has no accel-limit lag; "
-                                          "tau_eff measured ~244ms @0.03 m/s."),
+                              description="Adaptive tau lower bound (s)."),
         DeclareLaunchArgument("tau_max", default_value="0.55",
-                              description="Adaptive tau upper bound (s). At high |v_cmd| "
-                                          "(>0.3 m/s), accel limit dominates; "
-                                          "tau_eff measured ~550-580ms @0.3-0.4 m/s."),
+                              description="Adaptive tau upper bound (s)."),
         DeclareLaunchArgument("v_tau_trans", default_value="0.10",
-                              description="Transition velocity (m/s) for adaptive tau. "
-                                          "Below this |v_cmd|, tau = tau_min; above, "
-                                          "linearly interpolates to tau_max at 0.3 m/s."),
+                              description="Transition velocity (m/s) for adaptive tau."),
+        DeclareLaunchArgument("Td", default_value="0.22",
+                              description="Actuator dead time (s). Real robot ~220ms. "
+                                          "Artstein reduction transforms the input-delay "
+                                          "system into an equivalent delay-free system. "
+                                          "Set 0.0 to disable Artstein compensation."),
         DeclareLaunchArgument("omega_d", default_value="0.7",
-                              description="Desired damping bandwidth"),
+                              description="Desired closed-loop bandwidth (rad/s)"),
         DeclareLaunchArgument("Kp_yaw", default_value="4.0",
                               description="Proportional yaw gain"),
         DeclareLaunchArgument("K_ff", default_value="1.0",
@@ -147,39 +148,22 @@ def generate_launch_description():
         DeclareLaunchArgument("use_hpc", default_value="true",
                               description="Enable homogeneous upgrade (false = pure LPC)"),
         DeclareLaunchArgument("hpc_c_min", default_value="0.9",
-                              description="HPC warp clamp lower bound. 6D motor chain "
-                                          "(weights [2,1,0]) amplifies ~30x at c=0.5 "
-                                          "(vs ~5x for 4D). Default 0.9 (~1.17x) after "
-                                          "empirical sweep on real/sim hardware; 0.7 works "
-                                          "offline but not with EKF/TF noise. "
-                                          "Set 0.5 for 4D-compatible behavior."),
+                              description="HPC warp clamp lower bound."),
         DeclareLaunchArgument("leader_vel_lpf_tau", default_value="0.0",
-                              description="Leader velocity low-pass filter time constant "
-                                          "(s). 0.0 = disabled (raw measurement). "
-                                          "Set 0.2-0.3 if rf2o noise causes small "
-                                          "accelerations at low leader speeds."),
+                              description="Leader velocity LPF time constant (s)."),
         DeclareLaunchArgument("min_cmd_vel", default_value="0.03",
-                              description="Minimum cmd_vel magnitude (m/s). Real robot "
-                                          "STM32 has a dead zone below ~0.03 m/s where "
-                                          "wheels don't move. Sub-threshold commands are "
-                                          "boosted to this value (preserving direction). "
+                              description="Minimum cmd_vel magnitude (m/s). "
                                           "Set 0.0 to disable (simulation)."),
-        DeclareLaunchArgument("Td", default_value="0.22",
-                              description="Actuator dead time for 4D Artstein prediction (s). "
-                                          "Real robot ~220ms. Artstein integral uses v_cmd "
-                                          "history over [t-Td, t] to predict the delay-free "
-                                          "state z = x + I. HPC operates on z instead of raw "
-                                          "measurements. Set 0.0 to disable Artstein (pure 6D "
-                                          "Motor, no delay compensation)."),
         DeclareLaunchArgument("wheel_radius", default_value="0.03",
                               description="Wheel rolling radius (m)"),
         DeclareLaunchArgument("base_radius", default_value="0.11",
                               description="Distance from robot center to wheel (m)"),
         DeclareLaunchArgument("wheel_max_omega", default_value="20.0",
                               description="Max wheel angular velocity (rad/s)"),
-        DeclareLaunchArgument("max_linear_accel", default_value="0.25",
+        DeclareLaunchArgument("max_linear_accel", default_value="2.0",
                               description="Max body linear acceleration (m/s^2). "
-                                          "Matched to real motor limit (~0.25) for stability."),
+                                          "Acts as actuator rate constraint in 4D model; "
+                                          "prevents v_cmd from jumping between steps."),
         DeclareLaunchArgument("max_angular_accel", default_value="4.0",
                               description="Max body angular acceleration (rad/s^2)"),
         DeclareLaunchArgument("max_linear_vel", default_value="1.0",
@@ -189,14 +173,11 @@ def generate_launch_description():
         DeclareLaunchArgument("use_motor_delay", default_value="false",
                               description="Simulate real motor response delay"),
         DeclareLaunchArgument("motor_tau", default_value="0.43",
-                              description="Simulated motor LP time constant (s). "
-                                          "Match controller tau for model-plant alignment"),
+                              description="Simulated motor LP time constant (s)."),
         DeclareLaunchArgument("transport_delay", default_value="0.0",
-                              description="Transport delay (s, e.g. serial). "
-                                          "0.0 = dead-time disabled (v1 limitation)."),
+                              description="Transport delay (s, e.g. serial)."),
         DeclareLaunchArgument("delay_max_accel", default_value="0.25",
-                              description="Delay node linear accel limit (m/s^2). "
-                                          "0.25 matches real motor (~0.22-0.27 m/s^2)."),
+                              description="Delay node linear accel limit (m/s^2)."),
         formation_node,
         delay_node,
     ])

@@ -35,7 +35,7 @@ from datetime import datetime
 # 需要自动读取的控制器参数
 CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
                     'm_p', 'Kp_yaw', 'K_ff', 'tol',
-                    'tau', 'hpc_c_min', 'leader_vel_lpf_tau']
+                    'tau', 'hpc_c_min', 'leader_vel_lpf_tau', 'Td']
 
 
 class TrajectoryRecorder(Node):
@@ -50,7 +50,6 @@ class TrajectoryRecorder(Node):
         self.declare_parameter('mode', 'sim')
         self.declare_parameter('tag', '')
         self.declare_parameter('controller_node_name', 'formation_control_node')
-
         self.leader_ns = self.get_parameter('leader_ns').value
         self.follower_ns = self.get_parameter('follower_ns').value
         self.duration = self.get_parameter('duration').value
@@ -63,8 +62,9 @@ class TrajectoryRecorder(Node):
         self.tag = self.get_parameter('tag').value
         self.ctrl_node_name = self.get_parameter('controller_node_name').value
 
-        # 查询控制器参数（自动生成 tag 和图上标题）
+        # 查询控制器参数 + 延迟节点参数（自动生成 tag 和图上标题）
         self.ctrl_params = self._query_controller_params()
+        self.delay_params = self._query_delay_node_params()
         if not self.tag:
             self.tag = self._build_auto_tag()
         self.ctrl_title = self._build_params_title()
@@ -77,9 +77,9 @@ class TrajectoryRecorder(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
         self.t1_x = []; self.t1_y = []; self.t1_t = []
-        self.t1_vx = []; self.t1_vy = []
+        self.t1_vx = []; self.t1_vy = []; self.t1_v = []
         self.t2_x = []; self.t2_y = []; self.t2_t = []
-        self.t2_vx = []; self.t2_vy = []
+        self.t2_vx = []; self.t2_vy = []; self.t2_v = []
 
         self.t0 = None
         self.done = False
@@ -133,6 +133,27 @@ class TrajectoryRecorder(Node):
             self.get_logger().warn('查询控制器参数失败，使用默认标签')
             return {}
 
+    def _query_delay_node_params(self):
+        """从 follower 命名空间下的 sim_motor_delay 节点读取参数（可选）。"""
+        node_path = self.follower_ns.rstrip('/') + '/sim_motor_delay'
+        svc_name = node_path + '/get_parameters'
+        client = self.create_client(GetParameters, svc_name)
+        if not client.wait_for_service(timeout_sec=2.0):
+            return {}
+        req = GetParameters.Request()
+        req.names = ['motor_tau', 'transport_delay', 'max_accel', 'rate']
+        future = client.call_async(req)
+        rclpy.spin_until_future_complete(self, future, timeout_sec=1.5)
+        if future.done() and future.result() is not None:
+            params = {}
+            for name, pv in zip(req.names, future.result().values):
+                if pv.type in (2, 3):
+                    params[name] = pv.double_value if pv.type == 3 else pv.integer_value
+            if params:
+                self.get_logger().info(f'已读取延迟节点参数: {params}')
+            return params
+        return {}
+
     def _build_auto_tag(self):
         """根据控制器参数自动生成文件名标签。"""
         p = self.ctrl_params
@@ -143,11 +164,21 @@ class TrajectoryRecorder(Node):
         parts.append(f"r{self._v(p, 'radius')}")
         parts.append(f"od{self._v(p, 'omega_d')}")
         parts.append(f"f{self._v(p, 'control_rate')}")
-        # 6D 电机模型专属参数 (存在才加)
         if 'tau' in p:
             parts.append(f"tau{self._v(p, 'tau')}")
         if 'hpc_c_min' in p:
             parts.append(f"cmin{self._v(p, 'hpc_c_min')}")
+        if 'Td' in p:
+            parts.append(f"Td{self._v(p, 'Td')}")
+        # 仿真延迟参数 (存在才加)
+        dp = self.delay_params
+        if dp:
+            if 'motor_tau' in dp:
+                parts.append(f"mtau{dp['motor_tau']:.2f}")
+            if 'transport_delay' in dp:
+                parts.append(f"td{dp['transport_delay']:.2f}")
+            if 'max_accel' in dp:
+                parts.append(f"da{dp['max_accel']:.2f}")
         return '_'.join(parts)
 
     @staticmethod
@@ -164,11 +195,17 @@ class TrajectoryRecorder(Node):
         if not p:
             return ''
         names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'tol',
-                 'tau', 'hpc_c_min', 'leader_vel_lpf_tau']
+                 'tau', 'hpc_c_min', 'leader_vel_lpf_tau', 'Td']
         parts = []
         for n in names:
             if n in p:
                 parts.append(f'{n}={self._v(p, n)}')
+        # 仿真延迟参数 (存在才加)
+        dp = self.delay_params
+        if dp:
+            for n in ['motor_tau', 'transport_delay', 'max_accel']:
+                if n in dp:
+                    parts.append(f'{n}={dp[n]}')
         return '  |  '.join(parts)
 
     def _odom_to_map(self, ns, msg):
@@ -189,7 +226,7 @@ class TrajectoryRecorder(Node):
         return (tf_x + ekf_x * math.cos(tf_yaw) - ekf_y * math.sin(tf_yaw),
                 tf_y + ekf_x * math.sin(tf_yaw) + ekf_y * math.cos(tf_yaw))
 
-    def _record(self, msg, ns, xl, yl, tl, vxl, vyl):
+    def _record(self, msg, ns, xl, yl, tl, vxl, vyl, vl):
         if self.done:
             return
         pos = self._odom_to_map(ns, msg)
@@ -204,13 +241,14 @@ class TrajectoryRecorder(Node):
         yl.append(pos[1])
         vxl.append(msg.twist.twist.linear.x)
         vyl.append(msg.twist.twist.linear.y)
+        vl.append(math.hypot(msg.twist.twist.linear.x, msg.twist.twist.linear.y))
 
     def cb_leader(self, msg):
         self._record(msg, self.leader_ns, self.t1_x, self.t1_y, self.t1_t,
-                     self.t1_vx, self.t1_vy)
+                     self.t1_vx, self.t1_vy, self.t1_v)
     def cb_follower(self, msg):
         self._record(msg, self.follower_ns, self.t2_x, self.t2_y, self.t2_t,
-                     self.t2_vx, self.t2_vy)
+                     self.t2_vx, self.t2_vy, self.t2_v)
 
     def check_done(self):
         if self.done or self.t0 is None:
@@ -236,9 +274,9 @@ class TrajectoryRecorder(Node):
         with open(csv_path, 'w', newline='') as f:
             w = csv.writer(f)
             w.writerow(['time_s', 'leader_x_m', 'leader_y_m',
-                        'leader_vx_ms', 'leader_vy_ms',
+                        'leader_vx_ms', 'leader_vy_ms', 'leader_v_ms',
                         'follower_x_m', 'follower_y_m',
-                        'follower_vx_ms', 'follower_vy_ms',
+                        'follower_vx_ms', 'follower_vy_ms', 'follower_v_ms',
                         'distance_m'])
             n2 = len(self.t2_t)
             n1 = len(self.t1_t)
@@ -256,9 +294,9 @@ class TrajectoryRecorder(Node):
                 lvy = self.t1_vy[i1]
                 dist = math.hypot(lx - fx, ly - fy)
                 w.writerow([f'{t:.4f}', f'{lx:.4f}', f'{ly:.4f}',
-                            f'{lvx:.4f}', f'{lvy:.4f}',
+                            f'{lvx:.4f}', f'{lvy:.4f}', f'{math.hypot(lvx,lvy):.4f}',
                             f'{fx:.4f}', f'{fy:.4f}',
-                            f'{fvx:.4f}', f'{fvy:.4f}',
+                            f'{fvx:.4f}', f'{fvy:.4f}', f'{math.hypot(fvx,fvy):.4f}',
                             f'{dist:.4f}'])
         self.get_logger().info(f'CSV 已保存: {csv_path}')
 
@@ -304,26 +342,28 @@ class TrajectoryRecorder(Node):
         ax.set_title('Formation distance')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 3: Vx (body frame) ----
+        # ---- 子图 3: Vx + Vy (body frame) ----
         ax = axes[1][0]
         for tl, vl, name, c in [
-            (self.t1_t, self.t1_vx, self.leader_label, 'tab:blue'),
-            (self.t2_t, self.t2_vx, self.follower_label, 'tab:orange'),
+            (self.t1_t, self.t1_vx, self.leader_label + ' Vx', 'tab:blue'),
+            (self.t2_t, self.t2_vx, self.follower_label + ' Vx', 'tab:orange'),
+            (self.t1_t, self.t1_vy, self.leader_label + ' Vy', 'deepskyblue'),
+            (self.t2_t, self.t2_vy, self.follower_label + ' Vy', 'gold'),
         ]:
             self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('Vx body (m/s)')
-        ax.set_title('Body-frame Vx')
-        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('Body velocity (m/s)')
+        ax.set_title('Body-frame Vx & Vy')
+        ax.legend(fontsize=6); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 4: Vy (body frame) ----
+        # ---- 子图 4: |V| body speed ----
         ax = axes[1][1]
         for tl, vl, name, c in [
-            (self.t1_t, self.t1_vy, self.leader_label, 'tab:blue'),
-            (self.t2_t, self.t2_vy, self.follower_label, 'tab:orange'),
+            (self.t1_t, self.t1_v, self.leader_label, 'tab:blue'),
+            (self.t2_t, self.t2_v, self.follower_label, 'tab:orange'),
         ]:
             self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('Vy body (m/s)')
-        ax.set_title('Body-frame Vy')
+        ax.set_xlabel('Time (s)'); ax.set_ylabel('|V| body (m/s)')
+        ax.set_title('Body-frame |V|')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
         # ---- 子图 5: X over time ----

@@ -1,22 +1,20 @@
-/// @file 6D 电机感知模型编队控制节点实现（4D Artstein 预测 + 6D HPC 级联）。
+/// @file 4D Artstein-HPC 编队控制节点实现。
 ///
 /// 数据流:
 ///   EKF odometry/filtered ──→ 缓冲区（回调存储最新消息）
 ///   TF  map→X_odom        ──→ 定时器读取当前 TF
 ///
 /// 定时器 (20 Hz):
-///   1. TF + EKF → map 系位置/偏航/速度
-///   2. 4D Artstein 积分:
-///        leader:   leader 测速 → buffer → I1 → z1_4d = x1_4d + I1
-///        follower: v_cmd_map_ → buffer → I2 → z2_4d = x2_4d + I2
-///   3. 嵌入 6D 状态:
-///        leader   x1 = [z1_p, v_meas, z1_vreal]   (v_cmd = v_real 稳态假设)
-///        follower x2 = [z2_p, v_cmd_map_, z2_vreal]
-///   4. LpcController6DMotor::lpc_calculate(x1, x2) → goal_v_cmd (map 系)
-///   5. 旋转到车体系 → clamp → 轮速约束 → 发布 cmd_vel
-///   6. v_cmd_map_ 回写 → 存入 follower Artstein 缓冲
+///   1. 查找两机器人的 map → odom TF + EKF 位姿 → map 系位置/偏航/速度
+///   2. 组装 4 维测量状态:
+///        leader   x1 = [p, v_real]  (4D, EKF 测量)
+///        follower x2 = [p, v_real]  (4D, EKF 测量)
+///   3. Artstein 积分 → z1, z2 (4D 预测状态)
+///   4. LpcController4DArtstein::lpc_calculate(z1, z2) → v_cmd (map 系)
+///   5. 旋转到车体系 → clamp → 加速度限幅 → 轮速约束 → 发布 cmd_vel
+///   6. 发布值旋转回 map 系 → 回写 vx_cmd_map_ / vy_cmd_map_ → 存入缓冲
 
-#include "homo_multirobot_formation_control/formation_control_node_6d_motor.hpp"
+#include "homo_multirobot_formation_control/formation_control_node_4d_artstein.hpp"
 
 #include <tf2_ros/transform_listener.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -26,7 +24,7 @@
 using namespace formation_control;
 
 // ============================================================================
-// 辅助函数
+// 辅助函数（与 6D Motor 节点相同）
 // ============================================================================
 
 static double tf2_yaw(const tf2::Quaternion& q)
@@ -42,6 +40,8 @@ static double msg_yaw(const geometry_msgs::msg::Quaternion& q)
                     1.0 - 2.0 * (q.y * q.y + q.z * q.z));
 }
 
+// 将 EKF 里程计变换到 map 坐标系（位置 + 测量速度 + 偏航）。
+// 与 6D Motor 节点的 ekf_to_map 相同，但返回 4 维相关量（无 v_cmd）。
 static bool ekf_to_map(tf2_ros::Buffer& tf, const std::string& ns,
                        const nav_msgs::msg::Odometry::SharedPtr& odom,
                        double& px, double& py, double& vx_meas, double& vy_meas,
@@ -85,20 +85,21 @@ static bool ekf_to_map(tf2_ros::Buffer& tf, const std::string& ns,
 // ============================================================================
 // 构造函数
 // ============================================================================
-FormationController6DMotor::FormationController6DMotor()
-: rclcpp::Node("formation_control_node_6d_motor")
+FormationController4DArtstein::FormationController4DArtstein()
+: rclcpp::Node("formation_control_node_4d_artstein")
 {
+  // ---- 通用参数 -------------------------------------------------------------
   leader_ns_   = declare_parameter("leader_ns",   "/robot1");
   follower_ns_ = declare_parameter("follower_ns", "/robot2");
   int m_p      = declare_parameter("m_p",      4);
   double radius = declare_parameter("radius",  2.0);
   double tol    = declare_parameter("tol",     0.1);
-  double mass   = declare_parameter("mass",    8.0);
+  double mass   = declare_parameter("mass",    1.0);   // 4D 中为速度通道等效增益
   double tau    = declare_parameter("tau",     0.43);
   double tau_min = declare_parameter("tau_min", 0.25);
   double tau_max = declare_parameter("tau_max", 0.55);
   double v_tau_trans = declare_parameter("v_tau_trans", 0.10);
-  double omega_d = declare_parameter("omega_d", 1.5);
+  double omega_d = declare_parameter("omega_d", 0.7);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
   K_ff_         = declare_parameter("K_ff",    1.0);
   control_rate_ = declare_parameter("control_rate", 20.0);
@@ -119,17 +120,13 @@ FormationController6DMotor::FormationController6DMotor()
   leader_vel_lpf_tau_ = declare_parameter("leader_vel_lpf_tau", 0.0);
   min_cmd_vel_ = declare_parameter("min_cmd_vel", 0.03);
 
-  double dt = 1.0 / control_rate_;
-
-  // ---- 4D Artstein 预测器 -----------------------------------------------
-  artstein_.build(tau, Td_, dt);
-
-  // ---- 6D Motor HPC 控制器（不包含 Smith 参数）--------------------------
-  ctrl_ = std::make_unique<LpcController6DMotor>(m_p, radius, tol, mass, tau,
-                                                 omega_d, use_hpc,
-                                                 dt, hpc_c_min,
-                                                 tau_min, tau_max,
-                                                 v_tau_trans);
+  // ---- 控制器 ---------------------------------------------------------------
+  ctrl_ = std::make_unique<LpcController4DArtstein>(m_p, radius, tol, mass, tau,
+                                                    omega_d, use_hpc,
+                                                    1.0 / control_rate_,
+                                                    hpc_c_min,
+                                                    tau_min, tau_max,
+                                                    v_tau_trans, Td_);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius,
                                     wheel_max_omega,
@@ -161,17 +158,16 @@ FormationController6DMotor::FormationController6DMotor()
   int ms = static_cast<int>(1000.0 / control_rate_);
   timer_ = create_wall_timer(std::chrono::milliseconds(ms), [this]() { timer_cb(); });
 
-  RCLCPP_INFO(get_logger(),
-    "6D Motor + 4D Artstein 级联编队控制节点已启动 (Td=%.3fs, tau=%.2fs)。",
-    Td_, tau);
+  RCLCPP_INFO(get_logger(), "4D Artstein-HPC 编队控制节点已启动 (Td=%.3fs, tau=%.2fs)。",
+              Td_, tau);
   RCLCPP_INFO(get_logger(), "  Leader: %s, Follower: %s",
-    leader_ns_.c_str(), follower_ns_.c_str());
+              leader_ns_.c_str(), follower_ns_.c_str());
 }
 
 // ============================================================================
 // 定时器回调 — 主控制循环 (~20 Hz)
 // ============================================================================
-void FormationController6DMotor::timer_cb()
+void FormationController4DArtstein::timer_cb()
 {
   if (!leader_ok_ || !follower_ok_) return;
 
@@ -199,68 +195,63 @@ void FormationController6DMotor::timer_cb()
     l_vx_f = lpf_leader_vx_; l_vy_f = lpf_leader_vy_;
   }
 
-  // ---- 步骤 3: Leader 4D Artstein 预测 -------------------------------------
-  int buf_sz = artstein_.buffer_size();
-  leader_vcmd_hist_.push_front(Eigen::Vector2d(l_vx_f, l_vy_f));
-  while (static_cast<int>(leader_vcmd_hist_.size()) > buf_sz)
-    leader_vcmd_hist_.pop_back();
+  // ---- 步骤 3: Leader Artstein 缓冲 + 积分 ----------------------------------
+  // Leader 的 v^cmd 不可直接观测，用其 EKF 测量速度近似（稳态假设，同 6D Motor）。
+  // 缓冲存储此近似 v^cmd，积分补偿 leader 自身的死区延迟。
+  int buf_size = ctrl_->artstein_buffer_size();
+  leader_vcmd_history_.push_front(Eigen::Vector2d(l_vx_f, l_vy_f));
+  while (static_cast<int>(leader_vcmd_history_.size()) > buf_size)
+    leader_vcmd_history_.pop_back();
 
-  Eigen::Vector4d x1_4d;
-  x1_4d << l_px, l_py, l_vx_f, l_vy_f;
-  Eigen::Vector4d I1 = artstein_.compute(leader_vcmd_hist_);
-  Eigen::Vector4d z1_4d = x1_4d + I1;
+  Eigen::Vector4d x1_meas;
+  x1_meas << l_px, l_py, l_vx_f, l_vy_f;
+  Eigen::Vector4d I1 = ctrl_->compute_artstein_integral(leader_vcmd_history_);
+  Eigen::Vector4d z1 = x1_meas + I1;   // leader Artstein 预测状态
 
-  // ---- 步骤 4: Follower 4D Artstein 预测 -----------------------------------
+  // ---- 步骤 4: Follower Artstein 缓冲 + 积分 --------------------------------
+  // 延迟初始化：收到第一帧完整数据后初始化控制器 + v^cmd 内部状态。
   if (!controller_initialized_) {
     vx_cmd_map_ = f_vx;
     vy_cmd_map_ = f_vy;
-    follower_vcmd_hist_.clear();
-    for (int i = 0; i < buf_sz; ++i)
-      follower_vcmd_hist_.push_back(Eigen::Vector2d(f_vx, f_vy));
 
-    Eigen::Vector4d x2_4d;
-    x2_4d << f_px, f_py, f_vx, f_vy;
-    Eigen::Vector4d I2_init = artstein_.compute(follower_vcmd_hist_);
-    Eigen::Vector4d z2_4d_init = x2_4d + I2_init;
+    // 用当前测量速度初始化 follower 缓冲（假设过去 Td 秒内 v^cmd = 当前测量值）
+    follower_vcmd_history_.clear();
+    for (int i = 0; i < buf_size; ++i)
+      follower_vcmd_history_.push_back(Eigen::Vector2d(f_vx, f_vy));
 
-    // 嵌入 6D 状态: [z_p, v_cmd(=v_real for init), z_vreal]
-    Eigen::VectorXd x1(6), x2(6);
-    x1 << z1_4d(0), z1_4d(1), l_vx_f, l_vy_f, z1_4d(2), z1_4d(3);
-    x2 << z2_4d_init(0), z2_4d_init(1), vx_cmd_map_, vy_cmd_map_,
-          z2_4d_init(2), z2_4d_init(3);
+    Eigen::Vector4d x2_meas;
+    x2_meas << f_px, f_py, f_vx, f_vy;
+    Eigen::Vector4d I2_init = ctrl_->compute_artstein_integral(follower_vcmd_history_);
+    Eigen::Vector4d z2_init = x2_meas + I2_init;
 
     try {
-      ctrl_->controller_initial(x1, x2);
+      ctrl_->controller_initial(z1, z2_init);
       controller_initialized_ = true;
-      RCLCPP_INFO(get_logger(), "6D Motor + 4D Artstein 级联控制器初始化完成。");
+      RCLCPP_INFO(get_logger(), "4D Artstein-HPC 控制器初始化完成。");
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "初始化失败: %s", e.what());
       return;
     }
   }
 
-  Eigen::Vector4d x2_4d;
-  x2_4d << f_px, f_py, f_vx, f_vy;
-  Eigen::Vector4d I2 = artstein_.compute(follower_vcmd_hist_);
-  Eigen::Vector4d z2_4d = x2_4d + I2;
+  // follower Artstein 积分（缓冲存实际发布的 v^cmd）
+  Eigen::Vector4d x2_meas;
+  x2_meas << f_px, f_py, f_vx, f_vy;
+  Eigen::Vector4d I2 = ctrl_->compute_artstein_integral(follower_vcmd_history_);
+  Eigen::Vector4d z2 = x2_meas + I2;   // follower Artstein 预测状态
 
-  // ---- 步骤 5: 嵌入 6D 状态 + HPC 控制 ------------------------------------
-  // Leader 6D: [z_p, v_cmd=v_meas, z_vreal]
-  Eigen::VectorXd x1(6), x2(6);
-  x1 << z1_4d(0), z1_4d(1), l_vx_f, l_vy_f, z1_4d(2), z1_4d(3);
+  // ---- 步骤 5: 齐次控制律 → map 系速度指令 ----------------------------------
+  auto out = ctrl_->lpc_calculate(z1, z2);
 
-  // Follower 6D: [z_p, v_cmd(internal), z_vreal]
-  x2 << z2_4d(0), z2_4d(1), vx_cmd_map_, vy_cmd_map_, z2_4d(2), z2_4d(3);
-
-  auto out = ctrl_->lpc_calculate(x1, x2);
-
-  // ---- 步骤 6: map → body 旋转 + clamp + 约束 + 发布 -----------------------
+  // ---- 步骤 6: map 系 → 车体系旋转 -----------------------------------------
   double vx_body =  out[0] * std::cos(follower_yaw) + out[1] * std::sin(follower_yaw);
   double vy_body = -out[0] * std::sin(follower_yaw) + out[1] * std::cos(follower_yaw);
 
+  // ---- 步骤 7: 速度 clamp ---------------------------------------------------
   double vx_clamped = std::clamp(vx_body, -max_linear_vel_, max_linear_vel_);
   double vy_clamped = std::clamp(vy_body, -max_linear_vel_, max_linear_vel_);
 
+  // ---- 步骤 8: 最小速度补偿（实物 STM32 死区 ~0.03 m/s）--------------------
   if (min_cmd_vel_ > 0.0) {
     double raw_mag = std::hypot(vx_body, vy_body);
     double cmd_mag = std::hypot(vx_clamped, vy_clamped);
@@ -271,6 +262,7 @@ void FormationController6DMotor::timer_cb()
     }
   }
 
+  // ---- 步骤 9: 偏航控制 -----------------------------------------------------
   geometry_msgs::msg::Twist cmd;
   cmd.linear.x = vx_clamped;
   cmd.linear.y = vy_clamped;
@@ -280,17 +272,19 @@ void FormationController6DMotor::timer_cb()
   cmd.angular.z = std::clamp(norm_err * Kp_yaw_ + leader_az * K_ff_,
                               -max_angular_vel_, max_angular_vel_);
 
+  // ---- 步骤 10: 轮速约束 + 加速度限幅 ---------------------------------------
   double dt = 1.0 / control_rate_;
   double wheel_scale = constraint_.apply(cmd.linear.x, cmd.linear.y, cmd.angular.z, dt);
 
-  // ---- 步骤 7: 诊断 ---------------------------------------------------------
+  // ---- 步骤 11: 调试输出 ----------------------------------------------------
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
     "raw=(%+6.3f,%+6.3f) final=(%+6.3f,%+6.3f) scale=%.2f "
-    "I=(%+5.2f,%+5.2f) z_p=(%+6.3f,%+6.3f) vcmd_vs_vreal=(%+5.3f,%+5.3f)",
+    "I=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) z=(%+6.3f,%+6.3f,%+6.3f,%+6.3f)",
     vx_body, vy_body, cmd.linear.x, cmd.linear.y, wheel_scale,
-    I2(0), I2(1), z2_4d(0), z2_4d(1),
-    vx_cmd_map_ - f_vx, vy_cmd_map_ - f_vy);
+    I2(0), I2(1), I2(2), I2(3),
+    z2(0), z2(1), z2(2), z2(3));
 
+  // ---- 诊断：实际控制频率 + 数据新鲜度（每 5 秒）----------------------------
   ++diag_tick_;
   auto now = get_clock()->now();
   sum_leader_age_ += (now - leader_odom_stamp_).seconds();
@@ -317,13 +311,16 @@ void FormationController6DMotor::timer_cb()
       wheel_scale, cmd.linear.x, cmd.linear.y, cmd.angular.z);
   }
 
-  // ---- 步骤 8: 发布 + 回写 + 入缓冲 -----------------------------------------
+  // ---- 步骤 12: 发布 cmd_vel ------------------------------------------------
   cmd_pub_->publish(cmd);
 
+  // ---- 步骤 13: v^cmd 回写 + 入缓冲 -----------------------------------------
+  // 将限幅后实际发布的值旋转回 map 系，回写内部状态，并存入 follower Artstein 缓冲。
+  // 缓冲存的是实际发出的值（限幅后），保证 Artstein 积分基于真实执行器历史。
   vx_cmd_map_ = cmd.linear.x * std::cos(follower_yaw) - cmd.linear.y * std::sin(follower_yaw);
   vy_cmd_map_ = cmd.linear.x * std::sin(follower_yaw) + cmd.linear.y * std::cos(follower_yaw);
 
-  follower_vcmd_hist_.push_front(Eigen::Vector2d(vx_cmd_map_, vy_cmd_map_));
-  while (static_cast<int>(follower_vcmd_hist_.size()) > buf_sz)
-    follower_vcmd_hist_.pop_back();
+  follower_vcmd_history_.push_front(Eigen::Vector2d(vx_cmd_map_, vy_cmd_map_));
+  while (static_cast<int>(follower_vcmd_history_.size()) > buf_size)
+    follower_vcmd_history_.pop_back();
 }

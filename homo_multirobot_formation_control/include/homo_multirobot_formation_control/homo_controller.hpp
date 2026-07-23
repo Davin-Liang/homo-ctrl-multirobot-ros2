@@ -84,6 +84,14 @@ public:
       P_  = res.P;
       nu_ = res.nu_min;
       Gd_ = Mat4d::Identity() + nu_ * G0_;
+
+      Eigen::EigenSolver<Eigen::Matrix4d> es_g0(G0_);
+      std::cout << "[HPC 4D init] nu=" << nu_ << " nu_max=" << res.nu_max
+                << " G0_eig=[" << es_g0.eigenvalues()(0).real()
+                << "," << es_g0.eigenvalues()(1).real()
+                << "," << es_g0.eigenvalues()(2).real()
+                << "," << es_g0.eigenvalues()(3).real() << "]"
+                << std::endl;
     }
   }
 
@@ -112,6 +120,15 @@ public:
       Mat4d  expm_g = (Gd_ * (1.0 - log_c)).exp();
       Vec4d  warped_e = expm_g * e;
       u2 = std::pow(c, 1.0 + nu_) * (k_lin_ * warped_e);
+
+      static int dbg_cnt_4d = 0;
+      if (++dbg_cnt_4d % 20 == 0) {
+        std::cout << "[HPC 4D diag] |e|=" << e.norm() << " nx=" << nx
+                  << " c=" << c << " nu=" << nu_
+                  << " warp_scale=" << std::pow(c, 1.0+nu_)
+                  << " |we|/|e|=" << warped_e.norm()/std::max(e.norm(),1e-6)
+                  << std::endl;
+      }
     } else {
       u2 = k_lin_ * e;  // 纯线性比例控制
     }

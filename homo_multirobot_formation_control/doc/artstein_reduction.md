@@ -1,171 +1,261 @@
 # Artstein 模型约简：输入时延系统的等价无时延齐次控制
 
-## 1. 动机
+## 1. 问题与动机
 
-6D Motor 模型通过一阶滞后 $\dot{v}^{\mathrm{real}} = (v^{\mathrm{cmd}} - v^{\mathrm{real}})/\tau$ 显式建模了电机爬升段。实物存在额外的 ~220ms 纯死区（指令发出到轮子响应的空窗期）——这是输入时延 $T_d$，不能由一阶滞后表达。目前通过 Smith 预估器（`motor_predictor.hpp`，$\tau + T_d$ 双模型）在反馈通道上外挂补偿。
+### 1.1 物理事实
 
-本文采用 **Artstein 模型约简**——将输入时延系统 $\dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u}(t-T_d)$ 通过状态预测变换**精确等价**为无时延系统 $\dot{\mathbf{z}} = A\mathbf{z} + B_{\mathrm{eff}}\,\mathbf{u}(t)$，其中 $B_{\mathrm{eff}} = e^{-A T_d}B$。$A$ 矩阵完全不变，齐次控制器内在结构零改动，死区补偿从外挂升级为模型内嵌。
+6D Motor 模型通过一阶滞后 $\dot{v}^{\mathrm{real}} = (v^{\mathrm{cmd}} - v^{\mathrm{real}})/\tau$ 建模电机爬升段。该模型假定等式右边的 $v^{\mathrm{cmd}}$ 和 $v^{\mathrm{real}}$ 是**同一时刻**的量——前者是控制指令，后者是该指令驱动下的实际速度，二者通过 $\tau$ 滞后建立因果。
 
-与此前评估过的 Pade 有理近似方案对比：
+实物存在 ~220ms 纯死区 $T_d$：控制器以 20 Hz 持续发出 $v^{\mathrm{cmd}}$，但每个指令要等 $T_d$ 后才开始被电机执行。因此在任意时刻 $t$，**正在驱动 $v^{\mathrm{real}}$ 的是 $T_d$ 前发出的那个指令**——管道里同时有 4~5 个更晚发出的指令在排队，但都还没出死区窗口：
 
-| | Pade | Artstein |
-|------|------|------|
-| 死区表达 | 近似（有理逼近，Pade(1,1) 含 undershoot） | **精确**（等价变换，无近似误差） |
-| 维度 | 8D（每轴 +1） | **6D（不增维）** |
-| 齐次链 | 加深 → 翘曲 54× → 需调高 $c_{\min}$ | 不变 → 翘曲 30× → $c_{\min}$ 复用 |
-| 极点配置 | 重新推导四阶 klin | **复用三阶 klin（定理 1）** |
-| 自适应 τ | 需叠加 | **直接兼容** |
-| 结论 | 被考虑但放弃 | **采用** |
+$$\dot{v}^{\mathrm{real}}(t) = \frac{v^{\mathrm{cmd}}(t-T_d) - v^{\mathrm{real}}(t)}{\tau}$$
 
-## 2. Artstein-Kwon-Pearson 变换
+等式右边是 $v^{\mathrm{cmd}}(t-T_d)$（220ms 前的指令），不是 $v^{\mathrm{cmd}}(t)$（控制器刚发出的新指令）。死区不是"每隔 $T_d$ 才收一次指令"，而是**每个指令都要排队 $T_d$**。
 
-### 2.1 标准形式
+物理时间线上：
 
-**定理（Artstein, 1982；Kwon & Pearson, 1980）**：对线性时不变系统 $\dot{\mathbf{x}}(t) = A\mathbf{x}(t) + B\mathbf{u}(t - T_d)$，定义 Artstein 状态变换：
+```
+t−Td:  发出 v_cmd(t−Td)
+         ↓  220ms 死区
+t:     v_cmd(t−Td) 开始驱动 v_real
+       控制器发出 v_cmd(t)（马上进入死区，Td 后才生效）
+       模型 ez 右边混入了两个时刻的量
+```
 
-$$\boxed{\mathbf{z}(t) = \mathbf{x}(t) + \int_{t-T_d}^{t} e^{A(t-s-T_d)}\,B\,\mathbf{u}(s)\,\mathrm{d}s}\tag{1}$$
+**6D 电机模型假定 $v^{\mathrm{cmd}}$ 和 $v^{\mathrm{real}}$ 同步——前者驱动后者。但死区使驱动关系变成 $v^{\mathrm{cmd}}(t-T_d) \to v^{\mathrm{real}}(t)$，中间差了 $T_d$。把不同步的量放入同一个状态向量，模型的基本等式不成立。**
 
-则 $\mathbf{z}(t)$ 满足**无时延**的 ODE：
+### 1.2 不处理的后果
 
-$$\boxed{\dot{\mathbf{z}}(t) = A\,\mathbf{z}(t) + \underbrace{e^{-A T_d}B}_{B_{\mathrm{eff}}}\,\mathbf{u}(t)}\tag{2}$$
+若将测到的 $v^{\mathrm{real}}(t)$（由 $v^{\mathrm{cmd}}(t-T_d)$ 驱动）和当前的 $v^{\mathrm{cmd}}(t)$ 一起送入模型：
 
-**物理含义**：$\mathbf{z}(t)$ 是 "$T_d$ 秒前发出的指令若瞬间到位，当前状态应该是什么"的精确预测。积分项 $\int_{t-T_d}^{t} e^{A(t-s-T_d)}\,B\,\mathbf{u}(s)\,\mathrm{d}s$ 是过去 $T_d$ 秒内所有未到期指令对当前状态的累积贡献。
+$$\dot{v}^{\mathrm{real}} \approx \frac{v^{\mathrm{cmd}}(t) - v^{\mathrm{real}}(t)}{\tau}$$
 
-**证明**（概要）：对 (1) 求导，利用 Leibniz 积分规则和 $\dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u}(t-T_d)$，消去含 $\mathbf{x}$ 和积分的项即得 (2)。完整的 $A, B$ 替换为 $(A, e^{-A T_d}B)$ 后系统**严格无时延**。
+等式左边的 $\dot{v}^{\mathrm{real}}$ 实际上由 $v^{\mathrm{cmd}}(t-T_d)$ 决定，右边代入的却是 $v^{\mathrm{cmd}}(t)$——驱动源被替换成了未来值。控制器看到"误差很大"→ 加大 $v^{\mathrm{cmd}}(t)$ → $T_d$ 后旧指令才追上 → 但此时 $v^{\mathrm{cmd}}$ 已变 → 新一轮"误差很大"。**不是参数问题，是模型中等式两边的变量在时间上不匹配。**
 
-### 2.2 应用于 6D Motor 模型
+### 1.3 解决思路
 
-6D Motor 的 $(A, B)$ 为：
+Artstein 模型约简（Artstein, 1982；Kwon & Pearson, 1980）：对输入时延系统 $\dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u}(t-T_d)$，构造预测状态变换：
 
-$$A = \begin{bmatrix}
-0 & 0 & 0 & 0 & 1 & 0 \\
-0 & 0 & 0 & 0 & 0 & 1 \\
-0 & 0 & 0 & 0 & 0 & 0 \\
-0 & 0 & 0 & 0 & 0 & 0 \\
-0 & 0 & \tau^{-1} & 0 & -\tau^{-1} & 0 \\
-0 & 0 & 0 & \tau^{-1} & 0 & -\tau^{-1}
+$$\mathbf{z}(t) = \mathbf{x}(t) + \int_{t-T_d}^{t} e^{A(t-s-T_d)} B \mathbf{u}(s) ds$$
+
+$\mathbf{z}(t)$ 满足无时延 ODE：$\dot{\mathbf{z}} = A\mathbf{z} + B_{\mathrm{eff}}\mathbf{u}(t)$，其中 $B_{\mathrm{eff}} = e^{-A T_d}B$。
+
+**物理直觉**：积分项是"过去 $T_d$ 秒内所有已发出但尚未变现的指令对状态的累积贡献"。加上它之后，$\mathbf{z}(t)$ 等价于"如果 220ms 前的指令瞬间到位，当前状态应该是什么"。此时 $\mathbf{z}$ 和 $\mathbf{u}(t)$ 在预测空间中处于同一时刻——模型等式恢复成立。
+
+Artstein 没有消除物理延迟（$T_d$ 仍在执行器链路中）。它做的是构造一个**预测空间**，让控制器在这个空间中决策——物理状态 $\mathbf{x}$ 经 $T_d$ 后追上预测状态 $\mathbf{z}$。
+
+### 1.4 与输出端延迟补偿方法的区别
+
+典型的工程补偿方法（如 Smith 预估器）在输出端对延迟效应做修正——利用模型预测无延迟输出与有延迟输出的差值，叠加到实测信号上。这类方法将延迟视为"输出需要修正的量"，补偿效果依赖于所选输出通道。
+
+Artstein 约简采取不同的路径：不是修正输出，而是**变换状态空间**。它将整个含时延的状态向量 $\mathbf{x}$ 映射为等价无时延的预测状态 $\mathbf{z}$，使延迟被吸收进变换本身。因此 $\mathbf{z}$ 自然保留了所有状态分量（位置、速度等）在延迟期间的累积信息，而不限于预先选定的输出通道。这一性质对于需要完整状态反馈的齐次控制器设计至关重要——HPC 的齐次投影和 Lyapunov 稳定性分析都在 $\mathbf{z}$-空间中进行，不因延迟的存在而需修改。
+
+## 2. 架构：4D Artstein 预测 + 6D Motor HPC 级联
+
+### 2.1 为什么不是纯 4D Artstein-HPC
+
+最初尝试将 Artstein 约简和 HPC 统一在一个 4D 模型（状态 $[p, v^{\mathrm{real}}]$，输入 $v^{\mathrm{cmd}}$）中。这要求 HPC 的齐次投影在 4D 系统 $(A_4, B_{\mathrm{eff}})$ 上进行。
+
+$A_4$ 含电机滞后的阻尼项 $-1/\tau$：
+
+$$A_4 = \begin{bmatrix} 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \\ 0 & 0 & -1/\tau & 0 \\ 0 & 0 & 0 & -1/\tau \end{bmatrix}$$
+
+$-1/\tau$ 使 $v^{\mathrm{real}}$ 成为"带阻尼的积分器"而非纯积分器。HPC 的齐次加权结构（`lpc2hpc_nd` 中的块可控分解）天然适配纯积分器链——每个积分器贡献一级齐次权重，形成 $[2,1,0]$ 的三层梯度。$-1/\tau$ 阻尼项破坏了严格积分链结构，导致块分解将 $v^{\mathrm{real}}$ 的齐次权重退化为 0，齐次度 $\nu = -1$，warp 缩放因子 $c^{1+\nu} = c^0 = 1$ 恒等——齐次翘曲完全失效。实验证实纯 4D HPC 在编队点附近持续大幅震荡。
+
+### 2.2 级联架构
+
+将 Artstein 约简和 HPC 分离到各自的优势空间中：
+
+```
+┌──────────────────────────────────────────────────┐
+│ 4D Artstein 层 — 死区时间对齐                       │
+│                                                    │
+│ 模型: [p, v_real] (4D), 输入 v_cmd (2D)             │
+│ A_4, B_4 含 τ 阻尼 → 准确建模执行器物理               │
+│                                                    │
+│ v_cmd 历史缓冲 → 积分 I(t) → z_4D = x_4D + I        │
+│                                                    │
+│ 输出: z_p (预测位置), z_vreal (预测实际速度)           │
+│ → z 和 v_cmd(t) 在预测空间中处于同一时刻               │
+└────────────────────┬─────────────────────────────┘
+                     │ 嵌入 6D 状态
+                     ↓
+┌──────────────────────────────────────────────────┐
+│ 6D Motor HPC 层 — 齐次控制                           │
+│                                                    │
+│ 状态: [z_p, v_cmd, z_vreal] (6D)                    │
+│ A_6 含 v_cmd 积分态 → 幂零 → 齐次权重 [2,1,0]         │
+│                                                    │
+│ 三阶极点配置 + HPC warp → 齐次控制律                   │
+│ A_6, B_6, K, G0, P, ν, Gd — 完全不变                │
+└──────────────────────────────────────────────────┘
+```
+
+**关键**：4D 层处理时间对齐（Artstein 的职责），6D 层处理齐次控制（HPC 的职责）。两层各用各的 $A$ 矩阵——Artstein 用物理准确的 $A_4$（含 $\tau$），HPC 用幂零的 $A_6$（含 $v^{\mathrm{cmd}}$ 积分态）。不互相破坏。
+
+### 2.3 $B_{\mathrm{eff}}$ 的级数展开与多通道补偿
+
+$B_{\mathrm{eff}}^{(4)} = e^{-A_4 T_d} B_4$ 的级数展开揭示了 Artstein 变换如何将延迟期间输入对各状态分量的累积影响编码进有效输入矩阵：
+
+$$B_{\mathrm{eff}} = B_4 - T_d A_4 B_4 + \frac{T_d^2}{2} A_4^2 B_4 - \cdots$$
+
+$$A_4 B_4 = \begin{bmatrix} 0 & 0 \\ 0 & 0 \\ -1/\tau^2 & 0 \\ 0 & -1/\tau^2 \end{bmatrix}, \quad
+A_4^2 B_4 = \begin{bmatrix} -1/\tau^2 & 0 \\ 0 & -1/\tau^2 \\ 1/\tau^3 & 0 \\ 0 & 1/\tau^3 \end{bmatrix}$$
+
+- **一阶项** $-T_d A_4 B_4$：修正 $v^{\mathrm{real}}$ 通道增益——延迟使有效驱动力减弱
+- **二阶项** $\frac{T_d^2}{2} A_4^2 B_4$：使**位置通道获得非零增益**——$T_d$ 内发出的 $v^{\mathrm{cmd}}$ 对当前位置的未到期位移累积贡献
+
+与仅针对输出响应的延迟补偿方法相比，Artstein 变换通过 $B_{\mathrm{eff}}$ 的状态空间表达自然保留了延迟对位置和速度通道的耦合影响。对于需要完整状态反馈的 HPC 设计，这意味着预测状态 $\mathbf{z}$ 的所有分量——而非仅是选定的输出通道——都经过了延迟补偿。
+
+## 3. 4D Artstein 预测层
+
+### 3.1 系统矩阵
+
+执行器模型（map 系，x/y 解耦）：状态 $\mathbf{x} = [p_x, p_y, v_x^{\mathrm{real}}, v_y^{\mathrm{real}}]^\top$，输入 $\mathbf{u} = [v_x^{\mathrm{cmd}}, v_y^{\mathrm{cmd}}]^\top$。
+
+$$\boxed{A_4 = \begin{bmatrix}
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1 \\
+0 & 0 & -\tau^{-1} & 0 \\
+0 & 0 & 0 & -\tau^{-1}
 \end{bmatrix}, \quad
-B = \begin{bmatrix}
-0 & 0 \\ 0 & 0 \\ m^{-1} & 0 \\ 0 & m^{-1} \\ 0 & 0 \\ 0 & 0
-\end{bmatrix}\tag{3}$$
+B_4 = \begin{bmatrix}
+0 & 0 \\ 0 & 0 \\ \tau^{-1} & 0 \\ 0 & \tau^{-1}
+\end{bmatrix}}$$
 
-有效输入矩阵 $B_{\mathrm{eff}} = e^{-A T_d}B$。$A$ 是分块对角（x/y 解耦），`expm(-A*Td)` 可由 Eigen 的矩阵指数计算（一次性，构造时完成）。
+动力学：$\dot{p} = v^{\mathrm{real}}$, $\dot{v}^{\mathrm{real}} = (v^{\mathrm{cmd}}(t-T_d) - v^{\mathrm{real}})/\tau$。
 
-**关键性质**：$e^{-A T_d}B$ 的前两行（位置通道的行）非零——这意味着 Artstein 变换自动将"$T_d$ 前发出的指令对当前位置的未到期贡献"编码进了 $B_{\mathrm{eff}}$。Smith 预估器只补偿 $v^{\mathrm{real}}$ 的速度分量，Artstein 同时补偿**位置与速度全状态**，是对死区的完整状态空间表达。
+### 3.2 积分离散化
 
-### 2.3 积分项的离散实现
+控制频率 20 Hz → $h = 0.05$ s。实物 STM32 固件同样以 20 Hz 更新 cmd_vel，因此 $v^{\mathrm{cmd}}(t)$ 在连续两个控制周期间确实保持恒定——Riemann 和的零阶保持假设与物理实际一致，不是纯数值近似。
 
-$T_d = 0.22$ s，控制周期 $dt = 0.05$ s → 缓冲 $N = \lceil T_d/dt \rceil = 5$ 个周期的 $\mathbf{u}$ 历史。每周期：
+$T_d = 0.22$ s，$T_d/h = 4.4$ 非整数，最旧样本使用截断权重：
 
-1. 存入当前 $\mathbf{u}$（发布后的 body 系 cmd_vel 旋转到 map 系）
-2. 计算积分项：
+$$N = \lceil T_d/h \rceil = 5, \quad w_k = \begin{cases} h & k = 0, \ldots, N-2 \\ T_d - (N-1)h & k = N-1 \end{cases}$$
 
-$$\mathbf{I}(t) = \int_{t-T_d}^{t} e^{A(t-s-T_d)}\,B\,\mathbf{u}(s)\,\mathrm{d}s \approx \sum_{k=0}^{N-1} e^{A(k\,dt - T_d)}\,B\,\mathbf{u}(t - k\,dt)\,dt\tag{4}$$
+即 $w_0 = w_1 = w_2 = w_3 = 0.05$, $w_4 = 0.02$。
 
-3. 构造预测状态：$\mathbf{z}(t) = \mathbf{x}(t) + \mathbf{I}(t)$
-4. 将 $\mathbf{z}_1, \mathbf{z}_2$（leader 和 follower 的 Artstein 状态）送入 `lpc_calculate`
+$$\boxed{\mathbf{I}(t) = \int_{t-T_d}^{t} e^{A_4(t-s-T_d)} B_4 \mathbf{v}^{\mathrm{cmd}}(s) ds
+\approx \sum_{k=0}^{N-1} e^{A_4(kh - T_d)} B_4 \mathbf{v}^{\mathrm{cmd}}(t - kh) w_k}$$
 
-矩阵 $e^{A(k\,dt - T_d)}B$（$k = 0, \ldots, N-1$）在构造时一次性预计算，每周期只需 $N$ 次矩阵-向量乘加。
+矩阵 $e^{A_4(kh - T_d)} B_4$（$k = 0, \dots, N-1$，每个 $4 \times 2$）在构造时预计算。
 
-## 3. 控制管线
+### 3.3 数据流
 
-### 3.1 改动范围
-
-| 改动点 | 内容 |
-|------|------|
-| 控制器构造 | 加 `Td` 参数，预计算 $B_{\mathrm{eff}} = e^{-A T_d}B$ 和 $N$ 个积分核矩阵 |
-| `lpc_calculate` | 不改——仍接收 $(\mathbf{z}_1, \mathbf{z}_2)$，内部 $A, K, \mathrm{HPC}$ 全不变 |
-| 节点 `timer_cb` | (1) 维护 $\mathbf{u}$ 历史环形缓冲；(2) 算积分项 $\mathbf{I}(t)$；(3) $\mathbf{z} = \mathbf{x} + \mathbf{I}$ 送入控制器。**Smith 相关代码删除** |
-| 构造参数 | `Td`（默认 0.22），无 `use_smith_predictor`/`smith_tau`/`smith_Td` |
-
-### 3.2 数据流
+每周期（~20 Hz）：
 
 ```
- EKF + TF → x (6D 测量状态)
-              │
-   u 历史缓冲 (环形, N=5) → 积分项 I(t)
-              │               │
-              └───────┬───────┘
-                      ↓
-              z = x + I  (Artstein 预测状态)
-                      ↓
-              LpcController6DMotor::lpc_calculate(z1, z2)
-              (内部: A 不变, B_eff = exp(-A*Td)*B)
-                      ↓
-              goal_v_cmd → 旋转 → clamp → 约束 → cmd_vel 发布
-                      ↓
-              u = 最终 body 系 cmd 旋转回 map 系 → 存入历史缓冲
-              v_cmd 回写（同 6D Motor）
+1. EKF/TF → leader, follower 的 4D 测量 [p_meas, v_real_meas]
+
+2. Leader Artstein:
+     vcmd_buffer_leader (存 leader 测速, 稳态 v_cmd ≈ v_real)
+     → I1 → z1_4D = x1_4D + I1
+
+3. Follower Artstein:
+     vcmd_buffer_follower (存 v_cmd_map_, 实际发布值)
+     → I2 → z2_4D = x2_4D + I2
+
+4. 嵌入 6D 状态:
+     leader:   x1 = [z1_p,   v_meas,   z1_vreal]
+     follower: x2 = [z2_p,   v_cmd_map_, z2_vreal]
+
+5. 6D HPC: lpc_calculate(x1, x2) → v_cmd_new
+
+6. v_cmd_new → 限幅 → 发布 cmd_vel → v_cmd_map_ 回写 → 存入 follower 缓冲
 ```
 
-### 3.3 与 Smith 方案的数学对应
+## 4. 6D Motor HPC 层
 
-Smith 的 `comp_vx, comp_vy` 本质是 Artstein 积分项中 $v^{\mathrm{real}}$ 通道的**一阶近似**：
+### 4.1 为什么 6D HPC 能工作
 
-- Smith: 用一阶低通 $\tau$ + 纯延迟 $T_d$ 两模型的速度差补偿
-- Artstein: 用 $e^{A(\cdot)}B$ 的全状态卷积积分——自动包含位置、指令、实际速度三个通道的预测修正
+6D Motor 模型的 $A_6$ 矩阵中，$v^{\mathrm{cmd}}$ 对应的第 3、4 行全零——**它是纯积分器，幂零**。
 
-Smith 只看到 $v^{\mathrm{real}}$ 的延迟，Artstein 看到**整个 6D 状态的延迟**——包括 $v^{\mathrm{cmd}}$ 通道的内部指令记忆和位置通道的位移累积。
+$$A_6 = \begin{bmatrix}
+0 & 0 & \mathbf{0} & 0 & 1 & 0 \\
+0 & 0 & 0 & \mathbf{0} & 0 & 1 \\
+0 & 0 & \mathbf{0} & 0 & 0 & 0 \\
+0 & 0 & 0 & \mathbf{0} & 0 & 0 \\
+0 & 0 & 1/\tau & 0 & -1/\tau & 0 \\
+0 & 0 & 0 & 1/\tau & 0 & -1/\tau
+\end{bmatrix}$$
 
-## 4. $B_{\mathrm{eff}}$ 的计算
+块可控分解得到每轴三层的齐次链：$p$（权重 2）→ $v^{\mathrm{real}}$（权重 1）→ $v^{\mathrm{cmd}}$（权重 0）。三层梯度使得 HPC warp 能有效运作——这是 4D Artstein 模型（仅有权重 $[1,0]$）失败的根本原因。
 
-Eigen 可直接算。`B_eff = (-A * Td).exp() * B`（不需要 C++ 代码改动，仅一行 `Eigen::MatrixXd` 操作）。逻辑放在 `controller_initial()` 和 `check_and_switch_target()` 中（切换编队点后重算 HPC 时同步更新 $B_{\mathrm{eff}}$）。
+### 4.2 控制器不变性
 
-## 5. 与自适应 τ 的兼容性
+级联架构中，6D HPC 控制器**零改动**：
 
-Artstein 变换是对 $(A, B)$ 系统的等价变换，$\tau$ 的变化影响 $A$ 矩阵。当自适应 τ 更新 $A$ 时：
+- 系统矩阵 $(A_6, B_6)$ 不变
+- 三阶极点配置 `compute_channel_3rd` 不变
+- `lpc2hpc_nd(A_6, B_6, K)` 不变
+- 齐次参数 $G_0, P, \nu, G_d$ 不变
+- 前向欧拉积分 $\dot{v}^{\mathrm{cmd}} = u_{\mathrm{ctl}}/m$ 不变
 
-1. `update_A_tau()` 修改 $A$ 中含 $1/\tau$ 的项（同 6D Motor）
-2. 重算 $B_{\mathrm{eff}} = e^{-A T_d}B$
-3. 更新积分核矩阵 $e^{A(k\,dt - T_d)}B$
+唯一变化是**反馈信号的来源**：$[p, v^{\mathrm{real}}]$ 从 EKF 原始测量替换为 4D Artstein 预测值。从 6D 控制器的视角看，它收到的始终是"无死区的等价状态"——死区的存在被 Artstein 层完全吸收。
 
-τ 的变化频率由 $|v^{\mathrm{cmd}}|$ 的演化速度决定（秒级），远低于控制频率（50ms），重算开销可忽略。
+### 4.3 自适应 τ
 
-## 6. 参数汇总
+电机时间常数 $\tau$ 随 $|v^{\mathrm{cmd}}|$ 变化（低速 ~0.25s，高速 ~0.55s）。每周期更新 $A_6$ 中含 $1/\tau$ 的四个项（与 6D Motor 原版相同）。Artstein 层的 $A_4, B_4$ 和积分核矩阵同步更新。
 
-| 参数 | 默认值 | 含义 |
-|------|--------|------|
-| $m$ | 2.0 | 控制力→加速度增益 |
-| $\tau$ | 0.43 | 电机爬段时间常数（可为自适应 τ 的基准值） |
-| $T_d$ | 0.22 | 死区时延（实物实测值） |
-| $\tau_{\min}$ | 0.25 | 自适应 τ 下限 |
-| $\tau_{\max}$ | 0.55 | 自适应 τ 上限 |
-| $v_{\tau,\mathrm{trans}}$ | 0.10 | 自适应 τ 过渡速度 |
-| $\omega_d$ | 0.7 | 期望闭环带宽 |
-| $c_{\min}$ | 0.9 | HPC warp clamp 下界 |
-| $h$ | 0.05 | 控制周期 |
+## 5. 实现
 
-## 7. 创新点论述（论文用）
-
-1. **首次将 Artstein 模型约简应用于全向移动机器人编队控制的输入时延问题**——将死区从外挂补偿（Smith 预估器）升级为状态空间的等价无时延变换，$A$ 矩阵和齐次控制器内部结构**零改动**。
-2. **揭示了 Artstein 积分项与 Smith 补偿量的数学关系**：Smith 的 `comp_vx/comp_vy` 是 Artstein 全状态卷积积分中 $v^{\mathrm{real}}$ 通道的一阶近似，Artstein 额外补偿了位置通道的未到期指令贡献。
-3. **提出 $B_{\mathrm{eff}} = e^{-A T_d}B$ 作为输入时延齐次控制的统一等效输入矩阵**——推导简洁（一行 expm），不需要 Pade 近似引入的额外状态维度和齐次链加深。
-4. **与 6D Motor 模型（爬升段建模）和自适应 τ（加速度限幅自适应）构成三层执行器动力学建模的完整体系**：爬升（$\tau$）+ 死区（$T_d$）+ 加速度限幅（自适应 τ）。
-
-## 8. 实现计划
-
-### 8.1 文件
+### 5.1 文件
 
 | 文件 | 改动 |
 |------|------|
-| `homo_controller_6d_motor.hpp` | +`Td_`, +`B_eff_`, +积分核矩阵预计算，+`compute_artstein_integral()`，**删除 Smith 相关** |
-| `formation_control_node_6d_motor.cpp` | u 历史缓冲 → Artstein 积分 → $\mathbf{z}$ 送入控制器；**删除 Smith 参数和代码** |
-| `formation_control_node_6d_motor.hpp` | 删除 Smith 成员，+`Td_` 参数 |
-| `launch/formation_single_follower_6d_motor.launch.py` | 删除 `use_smith_predictor/smith_tau/smith_Td`，+`Td`（默认 0.22） |
-| `doc/artstein_reduction.md` | （本文档）完整推导 |
+| `formation_control_node_6d_motor.hpp` | +`ArtsteinPredictor4D` 结构体（~70 行，含 $A_4, B_4$、积分核预计算、截断权重），+`Td_`, +`vcmd_hist_` 环形缓冲，−Smith 相关成员 |
+| `formation_control_node_6d_motor.cpp` | timer_cb 加 Artstein 积分管线：leader/follower 各维护 v_cmd 缓冲 → 积分 → z_4D → 嵌入 6D 状态 → `lpc_calculate`；−Smith 代码 |
+| `homo_controller_6d_motor.hpp` | **不改** |
+| `launch/formation_single_follower_6d_motor.launch.py` | −`use_smith_predictor`/`smith_tau`/`smith_Td`，+`Td`（默认 0.22） |
+| `launch/formation_single_follower_4d_artstein.launch.py` | 指向 6D motor 可执行文件，带 `Td` 默认值 |
 
-### 8.2 工作量
+### 5.2 运行
 
-| 步骤 | 时间 |
-|------|------|
-| 控制器加 Artstein 积分 + $B_{\mathrm{eff}}$ | ~1h |
-| 节点改 u 历史缓冲 + 删除 Smith | ~30min |
-| launch + 编译 | ~15min |
-| 仿真验证（$T_d$ 扫 0.15–0.30） | ~半天 |
-| 实物验证 | ~半天 |
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
+  leader_ns:=/virtual_leader follower_ns:=/robot2 \
+  Td:=0.22 use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.25
+```
+
+`Td:=0.0` 关闭 Artstein → 退化为原始 6D Motor（无死区补偿），可做对照实验。
+
+## 6. 贡献与创新点
+
+1. **针对全向移动机器人速度指令链路中的固定输入死区，提出 Artstein 预测层与 6D Motor HPC 控制层解耦的时延补偿架构**。预测层负责将含时延的执行器状态变换到无时延等价空间，控制层在等价空间中进行齐次控制器设计。该架构将延迟补偿从输出端修正提升为状态空间变换，使延迟被吸收进预测状态而非作为外加修正量，6D 控制器无需改动。
+
+2. **分析并解决了纯 4D Artstein-HPC 统一方案中电机阻尼项破坏齐次加权结构的问题**。带 $\tau$ 阻尼的执行器模型破坏了纯积分器链的齐次性条件，导致 HPC warp 失效。通过将 $\tau$ 阻尼保留在 4D 预测层、将 $v^{\mathrm{cmd}}$ 纯积分器保留在 6D 控制层的两层分离设计，在各自空间中满足各自的理论前提。
+
+3. **从 $B_{\mathrm{eff}}$ 的级数展开分析了 Artstein 变换中延迟对多状态通道的耦合影响**。一阶项修正速度通道增益，二阶项使位置通道获得非零增益——延迟不仅影响执行器响应速度，还通过位置通道对编队几何产生直接影响。这一分析与仅针对输出通道的补偿方法不同，反映了状态空间变换自然保留全部状态分量延迟信息的性质。
+
+4. **执行器时间尺度分解建模**：从控制器输出到执行器响应，依次建模指令死区（$T_d$，Artstein 约简）、电机爬升（$\tau$，一阶滞后）、加速度限幅（执行器速率约束），构成三层执行器动力学链路。
+
+## 附录：Leibniz 求导推导
+
+对 $\mathbf{z}(t) = \mathbf{x}(t) + \int_{t-T_d}^{t} e^{A(t-s-T_d)} B \mathbf{u}(s) ds$ 求导。
+
+令 $f(t, s) = e^{A(t-s-T_d)} B \mathbf{u}(s)$，$a(t)=t-T_d$, $b(t)=t$。Leibniz 积分规则：
+
+$$\frac{d}{dt}\int_{a(t)}^{b(t)} f(t,s) ds = f(t, b) \cdot b' - f(t, a) \cdot a' + \int_a^b \frac{\partial f}{\partial t} ds$$
+
+- **上界** ($s=t$)：$f(t,t) = e^{-A T_d} B \mathbf{u}(t)$
+- **下界** ($s=t-T_d$)：$f(t, t-T_d) = e^{A \cdot 0} B \mathbf{u}(t-T_d) = B \mathbf{u}(t-T_d)$
+- **偏导积分**：$\frac{\partial f}{\partial t} = A e^{A(t-s-T_d)} B \mathbf{u}(s)$
+
+代入 $\dot{\mathbf{x}} = A\mathbf{x} + B\mathbf{u}(t-T_d)$：
+
+$$\dot{\mathbf{z}} = [A\mathbf{x} + B\mathbf{u}(t-T_d)] + e^{-A T_d} B \mathbf{u}(t) - B\mathbf{u}(t-T_d) + A\int_{t-T_d}^{t} e^{A(t-s-T_d)} B \mathbf{u}(s) ds$$
+
+$B\mathbf{u}(t-T_d)$ 项抵消：
+
+$$\dot{\mathbf{z}} = A[\mathbf{x} + \int_{t-T_d}^{t} e^{A(t-s-T_d)} B \mathbf{u}(s) ds] + e^{-A T_d} B \mathbf{u}(t) = A\mathbf{z} + B_{\mathrm{eff}}\mathbf{u}(t)$$
+
+得证 $\dot{\mathbf{z}} = A\mathbf{z} + B_{\mathrm{eff}}\mathbf{u}(t)$，$B_{\mathrm{eff}} = e^{-A T_d} B$。
 
 ## 参考文献
 
 - Z. Artstein, "Linear systems with delayed controls: A reduction," *IEEE Trans. Autom. Control*, 27(4): 869–879, 1982.
 - W. H. Kwon and A. E. Pearson, "Feedback stabilization of linear systems with delayed control," *IEEE Trans. Autom. Control*, 25(2): 266–269, 1980.
-- M. Krstic, *Delay Compensation for Nonlinear, Adaptive, and PDE Systems*, Birkhäuser, 2009. (Chapter 2: Artstein reduction for LTI systems)
+- M. Krstic, *Delay Compensation for Nonlinear, Adaptive, and PDE Systems*, Birkhäuser, 2009.
+- J. Jiang et al., "Fully distributed time-varying formation tracking control of linear multi-agent systems with input delay and disturbances," *Systems & Control Letters*, 146, 2020. — Artstein 约简在多智能体编队中的直接应用。
+- Y. Li et al., "Fixed-time formation control for multi-USV systems with input delay," *Journal of Unmanned Undersea Systems*, 2025. — Artstein 约简在无人系统编队控制中的近期应用。
+- S. Y. Meng et al., "Safety-critical control with input delay in dynamic environment," *arXiv:2112.08445*, 2021. — 预测反馈在机器人输入时延场景中的应用。

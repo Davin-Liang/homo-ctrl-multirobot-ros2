@@ -130,7 +130,10 @@ public:
       if (res.G0.isZero(1e-12)) {
         throw std::runtime_error("6D Motor 控制器初始化失败: lpc2hpc 返回零结果。");
       }
-      G0_ = res.G0;
+      // 原始 4D: G0_eig=[-1,0], Gd=I-G0_eig=[2,1], 翘曲 2:1 → 温和.
+      // 6D 块分解: G0_eig=[-2,-1,0], Gd=I-G0_eig=[3,2,1] → 翘曲 3:2:1, 太陡.
+      // 缩放 G0×0.5: 特征值 → [-1,-0.5,0], Gd_eig=[2,1.5,1], 接近 4D.
+      G0_ = 0.5 * res.G0;
       P_  = res.P;
       nu_ = res.nu_min;
       Gd_ = Eigen::MatrixXd::Identity(6, 6) + nu_ * G0_;
@@ -173,6 +176,18 @@ public:
       Eigen::MatrixXd expm_g = (Gd_ * (1.0 - log_c)).exp();
       Eigen::VectorXd warped_e = expm_g * e;
       u2 = std::pow(c, 1.0 + nu_) * (k_lin_ * warped_e);
+
+      // 每秒打印一次 warp 诊断
+      static int dbg_cnt = 0;
+      if (++dbg_cnt % 20 == 0) {
+        double e_mag = e.norm();
+        double warp_scale = std::pow(c, 1.0 + nu_);
+        double w_e_ratio = warped_e.norm() / std::max(e_mag, 1e-6);
+        std::cout << "[HPC diag] |e|=" << e_mag << " nx=" << nx
+                  << " c=" << c << " nu=" << nu_
+                  << " warp_scale=" << warp_scale
+                  << " |warped_e|/|e|=" << w_e_ratio << std::endl;
+      }
     } else {
       u2 = k_lin_ * e;  // 纯线性比例控制
     }
@@ -226,7 +241,7 @@ private:
       if (use_hpc_) {
         auto res = lpc2hpc_nd(A_, B_, k_lin_);
         if (!res.G0.isZero(1e-12)) {
-          G0_ = res.G0;
+          G0_ = 0.5 * res.G0;
           P_  = res.P;
           nu_ = res.nu_min;
           Gd_ = Eigen::MatrixXd::Identity(6, 6) + nu_ * G0_;
@@ -249,13 +264,16 @@ private:
   static std::tuple<double, double, double> compute_channel_3rd(
       double e_p, double e_v, double M, double tau, double wd)
   {
-    // 防超调比值（同 4D）: a = −M · e_v / e_p，clamp 防止位置误差极小时增益爆炸
+    // 防超调自适应 λ:
+    //   val = −M · e_v / e_p: 正值 → 需要更激进 (e_v 和 e_p 同向趋近),
+    //                        负值 → 需要更保守 (e_v 和 e_p 反向, 已过冲).
+    //   仅保留下界 λ ≥ wd, 去掉上界 clamp 让 λ 真正自适应.
+    //   对上界设软帽: λ ≤ 3·wd, 避免 e_p → 0 时增益爆炸.
     double val = (std::abs(e_p) > 1e-6) ? -M * e_v / e_p : 0.0;
-    double max_ratio = wd * M;
-    val = std::clamp(val, -max_ratio, max_ratio);
     double a = std::max(val, wd * M);
+    a = std::min(a, 3.0 * wd * M);  // 软帽: λ ≤ 3·wd
 
-    // 三重极点 (s+λ)³, λ = a/M ≥ wd
+    // 三重极点 (s+λ)³, λ = a/M, wd ≤ λ ≤ 3·wd
     double lambda = a / M;
     double k1 = -lambda * lambda * lambda * M * tau;
     double k2 = M * (1.0 / tau - 3.0 * lambda);
