@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+﻿cmake_minimum_required(VERSION 3.8)
 project(homo_multirobot_formation_control)
 
 # Default to C++17 (std::clamp, etc.)
@@ -46,36 +46,36 @@ install(TARGETS formation_control_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# ---- 6D 电机感知模型控制器（执行器一阶滞后增广，doc/6d_motor_model_design.md）----
-# 注意: 实车 ARM 内存不足时可注释掉本 target（同下方 6D 系列）
-add_executable(formation_control_node_6d_motor
-  src/main_6d_motor.cpp
-  src/formation_control_node_6d_motor.cpp
-)
+# ---- 6D 鐢垫満鎰熺煡妯″瀷鎺у埗鍣紙鎵ц鍣ㄤ竴闃舵粸鍚庡骞匡紝doc/6d_motor_model_design.md锛?---
+# 娉ㄦ剰: 瀹炶溅 ARM 鍐呭瓨涓嶈冻鏃跺彲娉ㄩ噴鎺夋湰 target锛堝悓涓嬫柟 6D 绯诲垪锛?
+# add_executable(formation_control_node_6d_motor
+#   src/main_6d_motor.cpp
+#   src/formation_control_node_6d_motor.cpp
+# )
 
-target_include_directories(formation_control_node_6d_motor PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-)
+# target_include_directories(formation_control_node_6d_motor PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+# )
 
-ament_target_dependencies(formation_control_node_6d_motor
-  rclcpp
-  geometry_msgs
-  nav_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-)
+# ament_target_dependencies(formation_control_node_6d_motor
+#   rclcpp
+#   geometry_msgs
+#   nav_msgs
+#   tf2
+#   tf2_ros
+#   tf2_geometry_msgs
+# )
 
-target_link_libraries(formation_control_node_6d_motor
-  Eigen3::Eigen
-)
+# target_link_libraries(formation_control_node_6d_motor
+#   Eigen3::Eigen
+# )
 
-install(TARGETS formation_control_node_6d_motor
-  DESTINATION lib/${PROJECT_NAME}
-)
+# install(TARGETS formation_control_node_6d_motor
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
-# ---- 4D Artstein-HPC 控制器（输入时延等价变换，doc/artstein_reduction.md）----
+# ---- 4D Artstein-HPC 鎺у埗鍣紙杈撳叆鏃跺欢绛変环鍙樻崲锛宒oc/artstein_reduction.md锛?---
 add_executable(formation_control_node_4d_artstein
   src/main_4d_artstein.cpp
   src/formation_control_node_4d_artstein.cpp
@@ -103,35 +103,35 @@ install(TARGETS formation_control_node_4d_artstein
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# ---- 8D Pade 死区增广控制器（doc/pade_deadtime_full.md）---------------------
-add_executable(formation_control_node_8d_motor
-  src/main_8d_motor.cpp
-  src/formation_control_node_8d_motor.cpp
-)
+# ---- 8D Pade 姝诲尯澧炲箍鎺у埗鍣紙doc/pade_deadtime_full.md锛?--------------------
+# add_executable(formation_control_node_8d_motor
+#   src/main_8d_motor.cpp
+#   src/formation_control_node_8d_motor.cpp
+# )
 
-target_include_directories(formation_control_node_8d_motor PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-)
+# target_include_directories(formation_control_node_8d_motor PUBLIC
+#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+# )
 
-ament_target_dependencies(formation_control_node_8d_motor
-  rclcpp
-  geometry_msgs
-  nav_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-)
+# ament_target_dependencies(formation_control_node_8d_motor
+#   rclcpp
+#   geometry_msgs
+#   nav_msgs
+#   tf2
+#   tf2_ros
+#   tf2_geometry_msgs
+# )
 
-target_link_libraries(formation_control_node_8d_motor
-  Eigen3::Eigen
-)
+# target_link_libraries(formation_control_node_8d_motor
+#   Eigen3::Eigen
+# )
 
-install(TARGETS formation_control_node_8d_motor
-  DESTINATION lib/${PROJECT_NAME}
-)
+# install(TARGETS formation_control_node_8d_motor
+#   DESTINATION lib/${PROJECT_NAME}
+# )
 
-# ---- 4D 连续边界投影控制器 ----------------------------------------------------
+# ---- 4D 杩炵画杈圭晫鎶曞奖鎺у埗鍣?----------------------------------------------------
 # add_executable(formation_control_node_4d_cont
 #   src/main_4d_cont.cpp
 #   src/formation_control_node_4d_cont.cpp
@@ -159,8 +159,8 @@ install(TARGETS formation_control_node_8d_motor
 #   DESTINATION lib/${PROJECT_NAME}
 # )
 
-# ---- 以下目标在小车上内存不够编译，暂时跳过 ---- 可在 WSL/强机器上取消注释
-# ---- 6D 运动学模型控制器 (Layer 3) -------------------------------------------
+# ---- 浠ヤ笅鐩爣鍦ㄥ皬杞︿笂鍐呭瓨涓嶅缂栬瘧锛屾殏鏃惰烦杩?---- 鍙湪 WSL/寮烘満鍣ㄤ笂鍙栨秷娉ㄩ噴
+# ---- 6D 杩愬姩瀛︽ā鍨嬫帶鍒跺櫒 (Layer 3) -------------------------------------------
 # add_executable(formation_control_node_6d
 #   src/main_6d.cpp
 #   src/formation_control_node_6d.cpp
@@ -188,7 +188,7 @@ install(TARGETS formation_control_node_8d_motor
 #   DESTINATION lib/${PROJECT_NAME}
 # )
 
-# ---- 6D 方位角约束编队控制器 ---------------------------------------------------
+# ---- 6D 鏂逛綅瑙掔害鏉熺紪闃熸帶鍒跺櫒 ---------------------------------------------------
 # add_executable(formation_control_node_6d_bearing
 #   src/main_6d_bearing.cpp
 #   src/formation_control_node_6d_bearing.cpp
@@ -216,7 +216,7 @@ install(TARGETS formation_control_node_8d_motor
 #   DESTINATION lib/${PROJECT_NAME}
 # )
 
-# ---- 6D 离散多边形编队控制器 ---------------------------------------------------
+# ---- 6D 绂绘暎澶氳竟褰㈢紪闃熸帶鍒跺櫒 ---------------------------------------------------
 # add_executable(formation_control_node_6d_disc
 #   src/main_6d_disc.cpp
 #   src/formation_control_node_6d_disc.cpp
@@ -244,7 +244,7 @@ install(TARGETS formation_control_node_8d_motor
 #   DESTINATION lib/${PROJECT_NAME}
 # )
 
-## ---- 6D+OA 运动学模型控制器 (带避障) -----------------------------------------
+## ---- 6D+OA 杩愬姩瀛︽ā鍨嬫帶鍒跺櫒 (甯﹂伩闅? -----------------------------------------
 # add_executable(formation_control_node_6d_oa
 #   src/main_6d_oa.cpp
 #   src/formation_control_node_6d_oa.cpp
@@ -274,7 +274,7 @@ install(TARGETS formation_control_node_8d_motor
 #   DESTINATION lib/${PROJECT_NAME}
 # )
 
-## ---- MPC 6D 运动学模型控制器 (对照组) --------------------------------------
+## ---- MPC 6D 杩愬姩瀛︽ā鍨嬫帶鍒跺櫒 (瀵圭収缁? --------------------------------------
 #add_executable(formation_control_node_mpc_6d
 #  src/main_mpc_6d.cpp
 #  src/formation_control_node_mpc_6d.cpp
@@ -313,11 +313,13 @@ install(PROGRAMS
   scripts/leader_circle.py
   scripts/leader_eight.py
   scripts/record_trajectory.py
+  scripts/record_velocity_diagnostics.py
   scripts/formation_control_py.py
   scripts/virtual_leader_circle.py
   scripts/measure_motor_latency.py
   scripts/measure_cross_machine_delay.py
   scripts/sim_motor_delay.py
+  scripts/sim_4d_hpc_artstein_compare.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -326,3 +328,4 @@ install(DIRECTORY config launch
 )
 
 ament_package()
+

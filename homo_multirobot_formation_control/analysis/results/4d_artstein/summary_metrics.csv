@@ -1,0 +1,5 @@
+tau=0.430s, Td=0.220s
+case,max_distance,tail_mean_distance,final_distance
+ideal_4d_hpc,3.192967,0.010785,0.010805
+original_with_delay,3.593972,1.486547,1.551904
+artstein_prediction,3.181836,0.353266,0.356472

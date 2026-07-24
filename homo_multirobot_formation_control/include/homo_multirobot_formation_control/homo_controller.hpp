@@ -21,8 +21,13 @@ public:
   // m_p: 安全编队点数量   radius: 编队圆半径 (m)
   // tol: 编队点切换容差 (m)   mass: 双重积分器模型质量（调参用，非物理质量）
   LpcController(int m_p = 4, double radius = 2.0, double tol = 0.1, double mass = 2.0,
-               double omega_d = 1.5, bool use_hpc = true)
-    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), omega_d_(omega_d), use_hpc_(use_hpc)
+               double omega_d = 1.5, bool use_hpc = true, double hpc_c_min = 0.5,
+               double control_period = 0.1, double initial_min_lambda = 0.0,
+               double switch_min_lambda = 0.0)
+    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), omega_d_(omega_d), use_hpc_(use_hpc),
+      hpc_c_min_(hpc_c_min), h_(control_period),
+      initial_min_lambda_(initial_min_lambda > 0.0 ? initial_min_lambda : omega_d * mass),
+      switch_min_lambda_(switch_min_lambda > 0.0 ? switch_min_lambda : omega_d * mass)
   {
     // 2D 双重积分器: x = [px, py, vx, vy]
     A_ << 0, 0, 1, 0,
@@ -73,7 +78,7 @@ public:
     d_ = dl_.col(best_idx);
 
     Vec4d e = x2 - x1 - d_;
-    k_lin_ = calculate_klin(e);
+    k_lin_ = calculate_klin(e, initial_min_lambda_);
 
     if (use_hpc_) {
       auto res = lpc2hpc(A_, B_, k_lin_);
@@ -108,6 +113,24 @@ public:
   // --------------------------------------------------------------------------
   std::vector<double> lpc_calculate(const Vec4d& x1, const Vec4d& x2)
   {
+    Eigen::Vector2d u2 = accel_calculate(x1, x2);
+
+    // Forward Euler: v_desired = v_current + h * a
+    Vec4d goal_x2 = x2 + h_ * (A_ * x2 + B_ * u2);
+
+    // LPF is computed but not used, preserving the Python baseline behavior.
+    double alpha_lpf = 0.3;
+    double smooth_vx = (1.0 - alpha_lpf) * last_cmd_vel_(0) + alpha_lpf * goal_x2(2);
+    double smooth_vy = (1.0 - alpha_lpf) * last_cmd_vel_(1) + alpha_lpf * goal_x2(3);
+    last_cmd_vel_ << smooth_vx, smooth_vy;
+
+    (void)smooth_vx;
+    (void)smooth_vy;
+    return {goal_x2(2), goal_x2(3)};
+  }
+
+  Eigen::Vector2d accel_calculate(const Vec4d& x1, const Vec4d& x2)
+  {
     check_and_switch_target(x1, x2);
 
     Vec4d e = x2 - x1 - d_;
@@ -115,7 +138,7 @@ public:
     Eigen::Vector2d u2;
     if (use_hpc_) {
       double nx = hnorm(e, Gd_, P_);
-      double c = std::clamp(nx, 0.5, 1.0);
+      double c = std::clamp(nx, hpc_c_min_, 1.0);
       double log_c  = std::log(c);
       Mat4d  expm_g = (Gd_ * (1.0 - log_c)).exp();
       Vec4d  warped_e = expm_g * e;
@@ -130,22 +153,10 @@ public:
                   << std::endl;
       }
     } else {
-      u2 = k_lin_ * e;  // 纯线性比例控制
+      u2 = k_lin_ * e;  // Pure linear proportional control.
     }
 
-    // 前向欧拉: v_desired = v_current + h · a
-    double h = 0.1;
-    Vec4d goal_x2 = x2 + h * (A_ * x2 + B_ * u2);
-
-    // 一阶低通滤波（计算了但未使用——与 Python 原版行为一致）
-    double alpha_lpf = 0.3;
-    double smooth_vx = (1.0 - alpha_lpf) * last_cmd_vel_(0) + alpha_lpf * goal_x2(2);
-    double smooth_vy = (1.0 - alpha_lpf) * last_cmd_vel_(1) + alpha_lpf * goal_x2(3);
-    last_cmd_vel_ << smooth_vx, smooth_vy;
-
-    (void)smooth_vx;
-    (void)smooth_vy;
-    return {goal_x2(2), goal_x2(3)};
+    return u2;
   }
 
   // 跟随者到最近编队点的距离（调试/度量用）
@@ -181,7 +192,7 @@ private:
 
       // 切换到新编队点后重新计算增益和 HPC 参数
       Vec4d e = x2 - x1 - d_;
-      k_lin_ = calculate_klin(e);
+      k_lin_ = calculate_klin(e, switch_min_lambda_);
 
       if (use_hpc_) {
         auto res = lpc2hpc(A_, B_, k_lin_);
@@ -202,22 +213,21 @@ private:
   // 防超调设计: 特征值随 omega_d · mass 自适应缩放，
   // e_i_v / e_i_p 比值被 clamp 防止噪声下增益爆炸。
   // --------------------------------------------------------------------------
-  Mat24d calculate_klin(const Vec4d& e)
+  Mat24d calculate_klin(const Vec4d& e, double min_lambda)
   {
-    const double omega_d = omega_d_;
 
     // 防超调比值: a_i = −m · e_i_v / e_i_p
     double val_a = (std::abs(e(0)) > 1e-6) ? -mass_ * e(2) / e(0) : 0.0;
     double val_b = (std::abs(e(1)) > 1e-6) ? -mass_ * e(3) / e(1) : 0.0;
 
     // 限制比值范围，防止位置误差极小时（AMCL 微扰动）增益爆炸
-    double max_ratio = omega_d * mass_;
+    double max_ratio = std::max(min_lambda, 1e-6);
     val_a = std::clamp(val_a, -max_ratio, max_ratio);
     val_b = std::clamp(val_b, -max_ratio, max_ratio);
 
-    // 特征值至少为 omega_d · mass 保证最低收敛带宽
-    double a = std::max(val_a, omega_d * mass_);
-    double b = std::max(val_b, omega_d * mass_);
+    // 特征值至少为 min_lambda，和 Python 数值仿真的 min_lambda 对齐
+    double a = std::max(val_a, min_lambda);
+    double b = std::max(val_b, min_lambda);
 
     double k2_00 = -2.0 * a;
     double k2_11 = -2.0 * b;
@@ -250,6 +260,10 @@ private:
   Mat4d         Gd_;          // 膨胀生成元 (I + nu * G0)
   double        nu_;          // 齐次度
   bool          use_hpc_;     // false 时退化为纯 LPC
+  double        hpc_c_min_;   // hnorm clamp 下界
+  double        h_;           // 控制周期 (s)
+  double        initial_min_lambda_;  // 初始增益下界
+  double        switch_min_lambda_;   // 编队点切换后增益下界
 
   Eigen::Vector2d last_cmd_vel_;
 };

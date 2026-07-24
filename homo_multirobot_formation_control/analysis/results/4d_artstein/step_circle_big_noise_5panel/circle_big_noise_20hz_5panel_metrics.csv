@@ -1,0 +1,3 @@
+case,max_distance,tail_mean_distance,tail_std_distance,final_distance,max_speed,tail_mean_speed,tail_std_speed,tail_min_speed,tail_max_speed
+original_4d_delay_big_noise,1.748730,0.948457,0.292884,0.628741,2.121320,1.558901,0.056293,1.500000,1.863305
+artstein_prediction_big_noise,1.586662,0.260237,0.032640,0.244463,0.993989,0.566937,0.030452,0.479212,0.647118

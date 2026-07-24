@@ -1,0 +1,8 @@
+case,max_distance,tail_mean_distance,tail_std_distance,final_distance
+ideal_4d_hpc_matlab,3.192967,0.176982,0.060242,0.064002
+matlab_leader_original_delay,3.487041,3.263716,0.126771,3.487041
+matlab_leader_artstein_prediction,3.188282,1.996619,0.088157,1.856031
+circle_original_delay_clean,2.708211,2.563476,0.093771,2.708211
+circle_artstein_prediction_clean,1.698874,1.512140,0.084218,1.352140
+circle_original_delay_noise,2.738325,2.592230,0.094917,2.738325
+circle_artstein_prediction_noise,1.709525,1.527211,0.085145,1.364594

@@ -35,6 +35,7 @@ private:
   double Kp_yaw_, K_ff_;
   double max_linear_vel_, max_angular_vel_;
   double min_cmd_vel_ = 0.03;
+  std::string cmd_integrator_base_ = "pred";
   double Td_;       // 死区时延 (s)
   double control_rate_;
 

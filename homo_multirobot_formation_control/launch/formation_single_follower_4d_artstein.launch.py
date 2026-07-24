@@ -51,8 +51,8 @@ def generate_launch_description():
 
     formation_node = Node(
         package="homo_multirobot_formation_control",
-        executable="formation_control_node_6d_motor",
-        name="formation_control_node_6d_motor",
+        executable="formation_control_node_4d_artstein",
+        name="formation_control_node_4d_artstein",
         namespace=PythonExpression(["'", follower_ns, "'"]),
         output="screen",
         remappings=[("cmd_vel", cmd_output_topic)],
@@ -82,8 +82,11 @@ def generate_launch_description():
             "control_rate": control_rate,
             "use_hpc": LaunchConfiguration("use_hpc"),
             "hpc_c_min": LaunchConfiguration("hpc_c_min"),
+            "initial_min_lambda": LaunchConfiguration("initial_min_lambda"),
+            "switch_min_lambda": LaunchConfiguration("switch_min_lambda"),
             "leader_vel_lpf_tau": LaunchConfiguration("leader_vel_lpf_tau"),
             "min_cmd_vel": LaunchConfiguration("min_cmd_vel"),
+            "cmd_integrator_base": LaunchConfiguration("cmd_integrator_base"),
         }],
     )
 
@@ -117,11 +120,8 @@ def generate_launch_description():
                               description="Formation circle radius (m)"),
         DeclareLaunchArgument("tol", default_value="0.1",
                               description="Switching tolerance between formation points"),
-        DeclareLaunchArgument("mass", default_value="1.0",
-                              description="Velocity-channel equivalent gain (tuning). "
-                                          "In 4D Artstein model, mass is a dimensionless "
-                                          "gain for the adaptive pole-placement ratio, "
-                                          "not a physical mass."),
+        DeclareLaunchArgument("mass", default_value="2.0",
+                              description="Double-integrator HPC mass parameter. Default 2.0 matches the MATLAB/Python numerical tests."),
         DeclareLaunchArgument("tau", default_value="0.43",
                               description="Motor time constant (s). With adaptive tau, "
                                           "this is the nominal value; actual tau varies "
@@ -147,8 +147,12 @@ def generate_launch_description():
                               description="Control loop frequency (Hz)"),
         DeclareLaunchArgument("use_hpc", default_value="true",
                               description="Enable homogeneous upgrade (false = pure LPC)"),
-        DeclareLaunchArgument("hpc_c_min", default_value="0.9",
-                              description="HPC warp clamp lower bound."),
+        DeclareLaunchArgument("hpc_c_min", default_value="0.1",
+                              description="HPC warp clamp lower bound. Default 0.1 matches MATLAB lpc_hpc_distance_square.m."),
+        DeclareLaunchArgument("initial_min_lambda", default_value="1.0",
+                              description="Initial LPC pole lower bound, matching Python initial_min_lambda."),
+        DeclareLaunchArgument("switch_min_lambda", default_value="4.0",
+                              description="LPC pole lower bound after formation-point switching, matching Python switch_min_lambda."),
         DeclareLaunchArgument("leader_vel_lpf_tau", default_value="0.0",
                               description="Leader velocity LPF time constant (s)."),
         DeclareLaunchArgument("min_cmd_vel", default_value="0.03",
@@ -178,6 +182,8 @@ def generate_launch_description():
                               description="Transport delay (s, e.g. serial)."),
         DeclareLaunchArgument("delay_max_accel", default_value="0.25",
                               description="Delay node linear accel limit (m/s^2)."),
+        DeclareLaunchArgument("cmd_integrator_base", default_value="pred",
+                              description="Velocity command integration base: pred keeps current behavior; cmd integrates from previous published cmd_vel."),
         formation_node,
         delay_node,
     ])

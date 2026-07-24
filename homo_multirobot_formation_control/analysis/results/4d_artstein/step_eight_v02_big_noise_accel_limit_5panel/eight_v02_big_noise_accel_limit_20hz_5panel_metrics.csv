@@ -1,0 +1,3 @@
+case,max_distance,tail_mean_distance,tail_std_distance,final_distance,max_cmd_speed,tail_mean_cmd_speed,tail_std_cmd_speed,tail_mean_real_speed,tail_std_real_speed,tail_mean_leader_speed,max_leader_speed
+original_4d_delay_eight_big_noise_accel_limit,1.810856,0.744073,0.102994,0.573986,2.121320,1.167953,0.400699,0.400919,0.196022,0.140944,0.197990
+artstein_prediction_eight_big_noise_accel_limit,1.810856,0.051687,0.017710,0.063369,0.512717,0.162073,0.071924,0.145248,0.040525,0.140944,0.197990
