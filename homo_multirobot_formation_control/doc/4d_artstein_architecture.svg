@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">4D Artstein-HPC formation controller architecture</title>
+  <desc id="desc">Architecture diagram for the 4D Artstein prediction compensation formation controller, including ROS odometry inputs, TF map transform, Artstein delay compensation, motor forward prediction, 4D HPC, command constraints, cmd_vel output, and command-history feedback.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#263238"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#1e5aa8"/>
+    </marker>
+    <marker id="arrow-orange" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#b65a00"/>
+    </marker>
+    <style>
+      text {
+        font-family: "Noto Sans", "DejaVu Sans", Arial, sans-serif;
+        fill: #182024;
+      }
+      .title {
+        font-size: 34px;
+        font-weight: 700;
+        letter-spacing: 0;
+      }
+      .subtitle {
+        font-size: 18px;
+        fill: #52616a;
+      }
+      .lane-title {
+        font-size: 20px;
+        font-weight: 700;
+        fill: #33424a;
+      }
+      .box-title {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .box-text {
+        font-size: 15px;
+        fill: #415058;
+      }
+      .small {
+        font-size: 13px;
+        fill: #5b6a72;
+      }
+      .formula {
+        font-family: "DejaVu Sans Mono", "Consolas", monospace;
+        font-size: 14px;
+        fill: #37474f;
+      }
+      .lane {
+        fill: #f7f9fb;
+        stroke: #d8e0e6;
+        stroke-width: 1.5;
+      }
+      .box {
+        fill: #ffffff;
+        stroke: #9fb2bf;
+        stroke-width: 2;
+        rx: 8;
+      }
+      .input {
+        fill: #edf5ff;
+        stroke: #7ba7db;
+      }
+      .tf {
+        fill: #f0f7f1;
+        stroke: #7eb27c;
+      }
+      .predict {
+        fill: #fff7e8;
+        stroke: #d59a43;
+      }
+      .hpc {
+        fill: #f2efff;
+        stroke: #8b76c7;
+      }
+      .constraint {
+        fill: #fff0ef;
+        stroke: #cb7872;
+      }
+      .output {
+        fill: #eaf8f6;
+        stroke: #5aa69d;
+      }
+      .diag {
+        fill: #f4f6f7;
+        stroke: #a9b4ba;
+        stroke-dasharray: 6 5;
+      }
+      .arrow {
+        fill: none;
+        stroke: #263238;
+        stroke-width: 2.4;
+        marker-end: url(#arrow);
+      }
+      .blue-arrow {
+        fill: none;
+        stroke: #1e5aa8;
+        stroke-width: 2.4;
+        marker-end: url(#arrow-blue);
+      }
+      .orange-arrow {
+        fill: none;
+        stroke: #b65a00;
+        stroke-width: 2.4;
+        marker-end: url(#arrow-orange);
+      }
+      .feedback {
+        fill: none;
+        stroke: #b65a00;
+        stroke-width: 2.4;
+        stroke-dasharray: 8 6;
+        marker-end: url(#arrow-orange);
+      }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="1000" fill="#fbfcfd"/>
+
+  <text x="70" y="64" class="title">4D Artstein + Prediction Architecture</text>
+  <text x="72" y="96" class="subtitle">formation_control_node_4d_artstein: original 4D double-integrator HPC with external Td delay and tau motor compensation</text>
+
+  <rect x="60" y="130" width="1480" height="155" class="lane"/>
+  <text x="85" y="164" class="lane-title">ROS Inputs and Map Alignment</text>
+
+  <rect x="90" y="190" width="300" height="70" class="box input"/>
+  <text x="112" y="218" class="box-title">Leader EKF</text>
+  <text x="112" y="244" class="box-text">/robot1/odometry/filtered</text>
+
+  <rect x="90" y="300" width="300" height="70" class="box input"/>
+  <text x="112" y="328" class="box-title">Follower EKF</text>
+  <text x="112" y="354" class="box-text">/robot2/odometry/filtered</text>
+
+  <rect x="440" y="218" width="260" height="104" class="box tf"/>
+  <text x="462" y="248" class="box-title">TF Lookup</text>
+  <text x="462" y="274" class="box-text">map → robot*_odom</text>
+  <text x="462" y="298" class="box-text">pose, velocity, yaw into map frame</text>
+
+  <rect x="760" y="190" width="300" height="70" class="box input"/>
+  <text x="782" y="218" class="box-title">x1_meas</text>
+  <text x="782" y="244" class="formula">[p_x, p_y, v_x, v_y]_leader</text>
+
+  <rect x="760" y="300" width="300" height="70" class="box input"/>
+  <text x="782" y="328" class="box-title">x2_meas</text>
+  <text x="782" y="354" class="formula">[p_x, p_y, v_x, v_y]_follower</text>
+
+  <path d="M390 225 L440 252" class="blue-arrow"/>
+  <path d="M390 335 L440 292" class="blue-arrow"/>
+  <path d="M700 252 C725 232,735 225,760 225" class="blue-arrow"/>
+  <path d="M700 292 C725 312,735 335,760 335" class="blue-arrow"/>
+
+  <rect x="60" y="410" width="1480" height="270" class="lane"/>
+  <text x="85" y="444" class="lane-title">Prediction Compensation Layer</text>
+
+  <rect x="90" y="485" width="250" height="92" class="box predict"/>
+  <text x="112" y="514" class="box-title">Leader Velocity</text>
+  <text x="112" y="540" class="box-text">optional LPF: leader_vel_lpf_tau</text>
+  <text x="112" y="563" class="box-text">constant-velocity extrapolation</text>
+
+  <rect x="395" y="485" width="260" height="92" class="box predict"/>
+  <text x="417" y="514" class="box-title">x1_h</text>
+  <text x="417" y="540" class="box-text">leader predicted state</text>
+  <text x="417" y="563" class="formula">predict_leader_state(x1_meas)</text>
+
+  <rect x="90" y="610" width="250" height="92" class="box predict"/>
+  <text x="112" y="639" class="box-title">Artstein Integral</text>
+  <text x="112" y="665" class="box-text">input dead-time compensation: Td</text>
+  <text x="112" y="688" class="formula">z2 = x2_meas + I(v_cmd history)</text>
+
+  <rect x="395" y="610" width="260" height="92" class="box predict"/>
+  <text x="417" y="639" class="box-title">Motor Forward Prediction</text>
+  <text x="417" y="665" class="box-text">first-order actuator response: tau</text>
+  <text x="417" y="688" class="formula">x2_h = [p_pred, v_pred]</text>
+
+  <rect x="710" y="512" width="390" height="132" class="box hpc"/>
+  <text x="752" y="545" class="box-title">Original 4D Double-Integrator HPC</text>
+  <text x="752" y="574" class="box-text">inputs: x1_h, x2_h</text>
+  <text x="752" y="599" class="box-text">discrete formation point + tol switching</text>
+  <text x="752" y="624" class="formula">A_h^2 = 0,  x_h=[p_x,p_y,v_x,v_y]</text>
+
+  <rect x="1170" y="512" width="280" height="132" class="box hpc"/>
+  <text x="1192" y="545" class="box-title">Map-frame Command</text>
+  <text x="1192" y="574" class="box-text">cmd_integrator_base:=pred</text>
+  <text x="1192" y="599" class="box-text">or cmd-mode accel integration</text>
+  <text x="1192" y="624" class="formula">out_map = [v_x, v_y]</text>
+
+  <path d="M1060 225 C1130 225,1125 475,1170 540" class="blue-arrow"/>
+  <path d="M1060 335 C1135 360,1125 495,1170 615" class="blue-arrow"/>
+  <path d="M340 531 L395 531" class="orange-arrow"/>
+  <path d="M340 656 L395 656" class="orange-arrow"/>
+  <path d="M655 531 C680 531,685 552,710 552" class="arrow"/>
+  <path d="M655 656 C680 656,685 604,710 604" class="arrow"/>
+  <path d="M1100 578 L1170 578" class="arrow"/>
+
+  <rect x="60" y="730" width="1480" height="165" class="lane"/>
+  <text x="85" y="764" class="lane-title">Output Constraints, Publish, and Feedback</text>
+
+  <rect x="90" y="790" width="260" height="76" class="box constraint"/>
+  <text x="112" y="819" class="box-title">Frame Rotation</text>
+  <text x="112" y="845" class="box-text">map out_map → follower body frame</text>
+
+  <rect x="405" y="790" width="300" height="76" class="box constraint"/>
+  <text x="427" y="819" class="box-title">Velocity and Deadband</text>
+  <text x="427" y="845" class="box-text">linear clamp + min_cmd_vel + yaw P/FF</text>
+
+  <rect x="760" y="790" width="300" height="76" class="box constraint"/>
+  <text x="782" y="819" class="box-title">Kinematic Constraints</text>
+  <text x="782" y="845" class="box-text">accel limits + omni-wheel scaling</text>
+
+  <rect x="1115" y="790" width="250" height="76" class="box output"/>
+  <text x="1137" y="819" class="box-title">Publish Command</text>
+  <text x="1137" y="845" class="box-text">/&lt;follower_ns&gt;/cmd_vel</text>
+
+  <rect x="1150" y="680" width="330" height="74" class="box output"/>
+  <text x="1172" y="708" class="box-title">v_cmd Feedback</text>
+  <text x="1172" y="732" class="box-text">rotate published cmd to map, store history</text>
+
+  <path d="M1315 680 C1315 704,1060 714,865 714 C535 714,275 704,215 610" class="feedback"/>
+  <text x="565" y="728" class="small">feedback history: published map-frame v_cmd feeds the next Artstein integral</text>
+
+  <path d="M1310 644 C1310 662,1310 668,1310 680" class="feedback"/>
+  <path d="M1310 644 C1440 665,1470 710,1430 790" class="orange-arrow"/>
+  <path d="M1450 578 C1500 650,240 730,220 790" class="arrow"/>
+  <path d="M350 828 L405 828" class="arrow"/>
+  <path d="M705 828 L760 828" class="arrow"/>
+  <path d="M1060 828 L1115 828" class="arrow"/>
+  <path d="M1240 790 C1240 772,1240 766,1240 754" class="feedback"/>
+
+  <rect x="1215" y="185" width="275" height="128" class="box diag"/>
+  <text x="1237" y="216" class="box-title">Runtime Diagnostics</text>
+  <text x="1237" y="244" class="box-text">PRED_DIAG: real/pred distance</text>
+  <text x="1237" y="269" class="box-text">DIAG: freq, leader_age, ekf_age</text>
+  <text x="1237" y="294" class="box-text">wheel constraint warnings</text>
+  <path d="M1060 335 C1160 340,1180 245,1215 245" class="arrow"/>
+
+  <rect x="72" y="925" width="1455" height="45" fill="#eef3f6" stroke="#d8e0e6" rx="8"/>
+  <text x="92" y="954" class="small">Key design: Artstein handles Td input delay; tau is used only for pre-HPC first-order motor prediction; the HPC core remains the original 4D double-integrator homogeneous controller.</text>
+</svg>
