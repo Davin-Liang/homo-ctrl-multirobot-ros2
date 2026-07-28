@@ -32,6 +32,7 @@ source install/setup.bash
 ## Git / Push 约定
 
 - Codex 可以按需执行 `git status`、`git diff`、`git add`、`git commit` 等本地 Git 操作。
+- commit message 使用中文，简洁说明本次修改内容。
 - **不要执行 `git push`**。远程推送由用户手动完成。
 - 如果用户要求“更新到远程仓库”，先完成本地验证和 commit，然后给出待推送 commit 与手动 `git push origin main` 命令。
 
