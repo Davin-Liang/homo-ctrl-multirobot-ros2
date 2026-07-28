@@ -758,3 +758,63 @@ leader 速度被永远锁死在启动瞬间的数值上。
 **后续方案**: 采用 Artstein 模型约简——等价变换 $B_{\mathrm{eff}}=e^{-A T_d}B$，
 死区从外挂补偿升级为内部模型的等价修正，不增维、不动 HPC。详见
 `doc/artstein_reduction.md`。
+
+---
+
+## 35) record_velocity_diagnostics.py Exec format error
+
+**现象**: 执行
+
+```bash
+ros2 run homo_multirobot_formation_control record_velocity_diagnostics.py
+```
+
+报错：
+
+```text
+OSError: [Errno 8] Exec format error
+```
+
+**原因**: 脚本文件曾出现 Windows/BOM/换行或 shebang/可执行权限问题，导致 Linux
+不能按 Python 脚本执行。
+
+**处理**: 确保文件首行是：
+
+```python
+#!/usr/bin/env python3
+```
+
+并转换为 UTF-8 no BOM + LF，执行 `chmod +x`，重新 `colcon build` 或
+`source install/setup.bash`。
+
+---
+
+## 36) README 乱码
+
+**现象**: README 中 4D Artstein 和 `record_velocity_diagnostics` 段落出现 `?????` 乱码。
+
+**原因**: 可能是通过 Windows PowerShell/WSL 混合命令写入中文 Markdown 时编码不一致，
+或反引号被 shell 解释造成内容损坏。
+
+**处理**: 后续文档修改统一在 WSL 内使用 UTF-8 编辑，避免 PowerShell here-doc
+直接写含中文和反引号的 Markdown。
+
+---
+
+## 37) record_trajectory 实物 PNG 统计与 CSV 复算不一致
+
+**现象**: 实物图
+`real_m2_r1_od0.7_f20_tau0.4_cmin0.1_Td0.2_20000101_081420.png`
+中距离统计看起来和 CSV 复算结果不完全一致。
+
+**已复算结果**:
+
+```text
+all: distance 0.998 ± 0.056 m, range [0.895, 1.101]
+t>5s: distance 1.004 ± 0.055 m, range [0.918, 1.101]
+t>10s: distance 0.995 ± 0.056 m, range [0.918, 1.101]
+t>15s: distance 1.010 ± 0.055 m, range [0.921, 1.101]
+```
+
+**待查**: `record_trajectory.py` 是否存在绘图标签使用旧参数、旧数据、不同截断窗口，
+或 PNG/CSV 文件不匹配的问题。

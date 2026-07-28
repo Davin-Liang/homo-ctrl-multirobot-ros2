@@ -3,7 +3,7 @@
 基于**齐次控制（Homogeneous Control）** 的 Leader-Follower 编队算法（C++ / Eigen），
 适配项目的 slam_toolbox / AMCL + EKF 定位体系。
 
-提供八套控制器：**4D 质点模型**（原版论文算法）、**4D Cont 连续边界投影**、
+提供九套控制器：**4D 质点模型**（原版论文算法）、**4D Artstein-预测补偿**、**4D Cont 连续边界投影**、
 **6D 运动学模型**（考虑车身朝向 + 全向轮约束 + 边界投影编队）、
 **6D Disc 离散多边形编队**（6D 模型 + 离散多边形策略）、
 **6D Bearing 方位角约束编队**（6D 模型 + 固定方位角，无切换平滑弧线）、
@@ -15,6 +15,7 @@
 
 - [控制器版本](#控制器版本)
 - [算法原理 (4D)](#算法原理-4d)
+- [算法原理 (4D Artstein)](#算法原理-4d-artstein)
 - [算法原理 (6D)](#算法原理-6d)
 - [算法原理 (6D Motor)](#算法原理-6d-motor)
 - [数据输入](#数据输入)
@@ -29,6 +30,7 @@
 | 版本 | Launch 文件 | 可执行文件 | 状态模型 | 编队策略 | yaw 控制 |
 |------|------------|-----------|---------|---------|---------|
 | **4D (原版)** | `formation_single_follower.launch.py` | `formation_control_node` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系) | 离散多边形 + tol 切换 | 独立 P+前馈 |
+| **4D Artstein (预测补偿)** | `formation_single_follower_4d_artstein.launch.py` | `formation_control_node_4d_artstein` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
 | **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
@@ -52,6 +54,9 @@
 （离散多边形 + tol），可直接与 4D baseline 对比。关键参数 `tau`（默认 0.5，
 实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。自适应 τ（tau_min/tau_max/v_tau_trans）匹配实物变加速度特性；Smith 预估器（smith_Td=0.22）补偿 ~220ms 死区。后续 8D Pade 全链路模型见 `doc/pade_deadtime_full.md`。
 
+**4D Artstein** 是原始 4D 双积分 HPC 的输入延迟与电机响应预测补偿版本。上层 HPC 核心仍保持原始 4D 双积分器结构和 `A_h^2=0` 幂零性质；`Td` 只表示纯输入/传输延迟补偿参数，由 Artstein 输入时延补偿处理；`tau` 表示一阶电机响应预测参数，用于把测得的 Follower 状态向前预测到等效双积分状态。详见 `doc/4d_artstein_prediction_theory.md`；数值仿真说明见 `doc/4d_artstein_prediction_simulation.md`；早期 Artstein 约简草稿见 `doc/artstein_reduction.md`。
+
+约束和齐次控制基础模块：
 三套控制器共享以下模块（不修改原 4D/6D 代码）：
 - `kinematic_constraint.hpp` — 全向轮轮速/加速度约束
 - `types_nd.hpp`, `hnorm_nd.hpp`, `lpc2hpc_nd.hpp` — N-D 泛化齐次控制工具库
@@ -69,6 +74,20 @@
    跟随者自动选择最近的编队点，并在领航者移动时动态切换（切换阈值为 `tol`）
 5. **偏航控制**：比例 + 前馈，角度误差归一化到 [-π, π]
 
+## 算法原理 (4D Artstein)
+
+4D Artstein-预测补偿控制器的数据流为：
+
+```text
+measured follower [p, v_real]
+    -> Artstein input-delay compensation (Td)
+    -> first-order motor forward prediction (tau)
+    -> x_h=[p_pred, v_pred]
+    -> original 4D double-integrator HPC
+    -> cmd_vel
+```
+
+该版本不把 `-1/tau` 电机极点增广进 HPC 系统矩阵，而是在进入 HPC 前完成状态预测映射。因此 HPC 仍直接使用原始 4D 双积分模型、`A_h^2=0` 幂零结构和 4D 齐次权重。`Td` 是纯输入/传输延迟补偿参数；`tau` 是一阶电机响应预测参数。做严格消融实验时，若要测试“不使用延迟预测器”，不能只设置 `tau:=0.0 Td:=0.0`，还必须让仿真注入参数同步关断，例如 `transport_delay:=0.0`，必要时 `motor_tau` 也要对应设置。
 ## 算法原理 (6D)
 
 详细的数学推导见 `doc/kinematic_homogeneous_control.md`。核心要点：
@@ -245,166 +264,33 @@ Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考�
 | `radius` | double | 2.0 | 编队圆半径 (m) | 跟随距离增大 | 跟随更近 |
 | `tol` | double | 0.1 | 编队点切换容差 (m) | 不易频繁切换 | 切换更灵敏 |
 
-### 4D 偏航控制参数（launch 可改）
+### 启动（4D Artstein 预测补偿）
 
-| 参数 | 类型 | 默认值 | 作用 |
-|------|------|--------|------|
-| `Kp_yaw` | double | 4.0 | 偏航比例增益 |
-| `K_ff` | double | 1.0 | 偏航前馈增益 |
-
-### 6D 控制器参数（launch 可改）
-
-| 参数 | 类型 | 默认值 | 作用 |
-|------|------|--------|------|
-| `radius` | double | 2.0 | 安全圆半径 (m)。边界投影的目标距离 |
-| `mass` | double | 8.0 | 平移通道质量调谐参数 |
-| `I` | double | 1.0 | 偏航通道转动惯量调谐参数 |
-| `omega_d` | double | 1.5 | 位置通道临界阻尼带宽 |
-| `omega_d_theta` | double | 1.5 | 偏航通道临界阻尼带宽 |
-| `hpc_vel_threshold` | double | 0.3 | leader 速度变化触发 HPC 重算的阈值 |
-
-> 6D 版本中没有 `Kp_yaw`、`K_ff`（yaw 集成于主回路）。`6d`/`6d_oa` 使用连续边界投影（无离散点）；`6d_disc` 有 `m_p`/`tol` 参数；`6d_bearing` 使用 `phi_d` 替代 `m_p`/`tol`。
-
-## 运动学约束参数
-
-两个版本共享（基于 URDF 三全向轮几何，L=0.11m, r=0.03m）：
-
-| 参数 | 类型 | 默认值 | 作用 |
-|------|------|--------|------|
-| `wheel_radius` | double | 0.03 | 轮半径 (m) |
-| `base_radius` | double | 0.11 | 底盘半径 (m) |
-| `wheel_max_omega` | double | 20.0 | 最大轮角速度 (rad/s)，超限等比缩放 |
-| `max_linear_accel` | double | 2.0 | 线加速度 slew rate 限幅 (m/s²) |
-| `max_angular_accel` | double | 4.0 | 角加速度 slew rate 限幅 (rad/s²) |
-| `max_linear_vel` | double | 1.0 | 线速度硬上限 (m/s)，硬限幅 |
-| `max_angular_vel` | double | 0.5 | 角速度硬上限 (rad/s)，硬限幅 |
-
-> 约束日志：轮速约束触发时每 2s 打印 `[WARN] 轮速约束触发: scale=X.XX`。
-> 速度上限与加速度限幅的区别：`max_linear_vel` 限制速度天花板，`max_linear_accel` 限制速度变化快慢。
-
-### 约束三层架构
-
-```
-raw 速度(lpc输出) → 硬限幅(±max_linear_vel) → 轮速约束(wheel_max_omega) → 加速度约束(max_linear_accel) → final cmd_vel
-    算法参数              │                              │                              │
-  mass, omega_d...    第 1 层                        第 2 层                        第 3 层
-```
-
-| 层 | 参数 | 作用 |
-|----|------|------|
-| 1 硬限幅 | `max_linear_vel`, `max_angular_vel` | 简单削顶，安全底线 |
-| 2 轮速约束 | `wheel_radius`, `base_radius`, `wheel_max_omega` | 反解三轮转速，超限等比缩放 |
-| 3 加速度约束 | `max_linear_accel`, `max_angular_accel` | per-axis slew rate 限幅，防止突变 |
-
-> **`mass` 不是物理质量**：论文将机器人建模为双积分器 `v̇ = u/m`，其中 m 是物理质量。
-> 但实物车的控制输出是 cmd_vel（速度指令），不是力。m 失去了牛顿第二定律的物理含义，
-> 变为纯调参参数——越大响应越慢/越平滑，越小响应越快/越容易震荡。
-
-### 在线调试输出
-
-4D 控制器内置两套调试日志：
-
-**速度三层对比**（每秒）：
-```
-raw=(+0.523,-0.187) clamped=(+0.523,-0.187) final=(+0.412,-0.147) scale=0.79
-```
-
-| 字段 | 含义 |
-|------|------|
-| `raw` | lpc_calculate 输出旋转到车体系，无任何限制 |
-| `clamped` | 硬限幅后（±max_linear_vel 削顶） |
-| `final` | 运动学约束后（轮速 + 加速度限幅），即最终发给车的值 |
-| `scale` | 轮速缩放比例，<1.0 说明被削 |
-
-raw 和 final 差值大的时候说明约束在干预控制输出。
-
-**系统诊断**（每 5 秒，窗口平均值）：
-```
-DIAG: freq=34.8Hz avg_leader_age=7ms avg_ekf_age=6ms
-```
-
-| 字段 | 含义 | 正常值 |
-|------|------|--------|
-| `freq` | 实际控制频率 | ≈ control_rate |
-| `avg_leader_age` | leader odom 从发布到被用的平均延迟 | 仿真 < 10ms，实物取决于 WiFi |
-| `avg_ekf_age` | follower 自身 odom 的平均新鲜度 | 接近 1000/EKF频率 ms |
-
-> `leader_age` 依赖两台机器时钟同步（chrony），否则测量值无意义。
-
-### 消融实验参数（两套共享）
-
-| 参数 | 类型 | 默认值 | 作用 |
-|------|------|--------|------|
-| `use_hpc` | bool | true | 启用齐次升级（false 退化为纯线性比例控制 LPC，用于消融对照） |
-
-> 论文消融实验矩阵：
-> - 4D + HPC（原版 baseline）、4D + LPC（对照组）
-> - 6D + HPC（本文方法）、6D + LPC（消融组）
-
-### 控制频率（launch 可改）
-
-| 参数 | 类型 | 默认值 | 作用 |
-|------|------|--------|------|
-| `control_rate` | double | 20.0 | 控制循环频率 (Hz) |
-
-### 4D 进阶参数（代码内硬编码）
-
-以下参数在 `homo_controller.hpp` 中（不暴露为 launch 参数）：
-
-| 参数 | 默认值 | 作用 |
-|------|--------|------|
-| `c` clamp 下界 | 0.5 | 齐次范数下限（原版 Python 0.1，提升以抑制噪声放大） |
-| `h`（前向积分步长） | 0.1 | 前向欧拉步长 |
-
-> `omega_d` 已从硬编码升级为 launch 参数（默认 1.5），可在命令行直接调参。
-
-### 典型调参建议
-
-| 场景 | 4D 版 | 6D 版 |
-|------|------|------|
-| slam_toolbox 定位 | `mass:=8.0 Kp_yaw:=4.0` | `mass:=8.0 I:=1.0 radius:=2.0` |
-| 响应太慢 | 增大 `mass` 或 `omega_d` | 增大 `mass` 或 `omega_d` |
-| 边界震荡 | 降低 `omega_d` 或 `mass` | 降低 `omega_d` 或 `mass` |
-| 偏航跟不上 | 增大 `Kp_yaw`/`K_ff` | 增大 `omega_d_theta` 或 `I` |
-| 编队距离不对 | 调 `radius` | 调 `radius` |
-
-## 依赖
-
-- `rclcpp`、`geometry_msgs`、`nav_msgs`、`sensor_msgs`
-- `tf2_ros`、`tf2_geometry_msgs`
-- `Eigen 3.4`（`libeigen3-dev`）+ unsupported 模块（KroneckerProduct, MatrixFunctions）
-- `eigen3_cmake_module`
-- `osqp_vendor`（`ros-humble-osqp-vendor`，MPC 求解器依赖）
-
-## 编译与启动
-
-### 编译
+Gazebo 双车仿真，控制器预测参数与仿真注入延迟对齐：
 
 ```bash
-colcon build --packages-select homo_multirobot_formation_control --symlink-install
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  mass:=2.0 hpc_c_min:=0.1 \
+  initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
+  min_cmd_vel:=0.0 max_linear_accel:=0.5 \
+  use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.5 \
+  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0
 ```
 
-### 启动（4D 单 follower）
+只启动 Follower，Leader 使用 `/virtual_leader`，实物或外部延迟由底盘自身体现时关闭仿真注入：
 
 ```bash
-ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein.launch.py \
+  leader_ns:=/virtual_leader follower_ns:=/robot2 \
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  mass:=2.0 radius:=1.0 hpc_c_min:=0.1 \
+  initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
+  min_cmd_vel:=0.03 max_linear_accel:=0.25 \
+  use_motor_delay:=false \
+  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0
 ```
-
-带参数：
-
-```bash
-ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
-  mass:=2.0 radius:=2.0 Kp_yaw:=4.0 K_ff:=1.0
-
-# LPC 消融对照（关闭齐次升级）
-ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
-  use_hpc:=false
-
-# 提高带宽追移动目标
-ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
-  omega_d:=3.0 mass:=10.0
-```
-
 ### 启动（4D Cont 连续边界投影）
 
 ```bash
@@ -674,6 +560,26 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 
 CSV 格式（`time_s, leader_x_m, leader_y_m, follower_x_m, follower_y_m, distance_m`），
 以 follower 时间为基准对齐 leader 数据点。
+
+### record_velocity_diagnostics — 速度诊断记录
+
+记录控制器原始速度指令、最终速度指令和 Leader/Follower EKF 速度，用于分析预测补偿前后的限幅、延迟和实际速度响应。
+
+```bash
+ros2 run homo_multirobot_formation_control record_velocity_diagnostics.py \
+  --ros-args \
+  -p leader_ns:=/robot1 \
+  -p follower_ns:=/robot2 \
+  -p mode:=sim \
+  -p duration:=60.0 \
+  -p tag:=vel_diag_artstein_pred
+```
+
+输出图中：
+- `cmd_vel_raw |V|` = 控制器原始速度指令模长
+- `cmd_vel |V|` = 约束/限幅后的最终速度指令模长
+- `follower odom |V|` = Follower EKF 实际速度模长
+- `leader odom |V|` = Leader EKF 速度模长
 
 ## 诊断工具脚本
 
