@@ -29,6 +29,12 @@ source install/setup.bash
 
 从 workspace 根目录编译时，直接执行下方命令。
 
+## Git / Push 约定
+
+- Codex 可以按需执行 `git status`、`git diff`、`git add`、`git commit` 等本地 Git 操作。
+- **不要执行 `git push`**。远程推送由用户手动完成。
+- 如果用户要求“更新到远程仓库”，先完成本地验证和 commit，然后给出待推送 commit 与手动 `git push origin main` 命令。
+
 ## 构建与环境
 
 ```bash
@@ -256,7 +262,49 @@ ros2 launch turn_on_wheeltec_robot bringup_mini_omni.launch.py namespace:=robot2
 **频率限制**：`/odom` 发布频率 = 20Hz，由 STM32 固件决定，`wheeltec_robot` 驱动无频率设置参数。
 EKF 和控制器频率不应超过此硬件上限（目前全部 20Hz，最优配置）。
 
-**注意**：实车 ARM 内存有限，编译 `homo_multirobot_formation_control` 需 swap 且跳过 6D 目标。
+### 实物 ARM 编译注意事项
+
+实车 ARM 内存有限（通常 4GB），编译 `homo_multirobot_formation_control` 时模板实例化
+（Eigen + 大量 `expm` 调用）可能导致 OOM。处理方式：
+
+**1. 开启 swap（编译前一次性操作）**
+```bash
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+```
+
+**2. 实物编译命令**
+
+先清 build 缓存（避免 clock skew 等增量编译问题），再单 worker 编译：
+```bash
+rm -rf ~/homo_multirobot_ws/build/homo_multirobot_formation_control
+cd ~/homo_multirobot_ws
+MAKEFLAGS="-j1" colcon build --packages-select homo_multirobot_formation_control \
+  --symlink-install --executor sequential --parallel-workers 1 \
+  --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-O2" -DBUILD_TESTING=OFF
+```
+
+> 关键参数: `MAKEFLAGS="-j1"` + `--executor sequential` + `--parallel-workers 1`
+> 三重保证单线程编译，避免并行内存尖峰。`-O2` 优化级别在 ARM 上编译时间和
+> 内存占用比 `-O3` 温和。
+
+**3. 目标选择**
+
+> CMakeLists.txt 中已默认注释掉大部分 6D/MPC 目标，当前仅编译
+> `formation_control_node` (4D) 和 `formation_control_node_4d_artstein`。
+> 如需编译 6D Motor 等目标，先取消对应 `add_executable` 的注释再编译，
+> 编译完成后建议重新注释以减轻后续编译内存压力。
+
+**4. 编译后确认可执行文件**
+```bash
+ls install/homo_multirobot_formation_control/lib/homo_multirobot_formation_control/
+# 当前包含: formation_control_node, formation_control_node_4d_artstein
+```
+
+**5. 编译后关闭 swap（可选，释放磁盘空间）**
+```bash
+sudo swapoff /swapfile && sudo rm /swapfile
+```
 
 ## 系统延迟诊断
 
