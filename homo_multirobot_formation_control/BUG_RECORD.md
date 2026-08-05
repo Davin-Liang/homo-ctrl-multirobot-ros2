@@ -873,3 +873,61 @@ ros2 topic info -v /robot2/cmd_vel_raw
 
 若 `/robot2/cmd_vel_raw` 有值但 `/robot2/cmd_vel` 无值，优先检查延迟节点是否启动、
 `input_topic/output_topic` 参数是否正确，以及 `use_motor_delay` 是否为 `true`。
+
+---
+
+## 39) 6D Artstein Disc 与 4D Artstein 公平对比时控制偏激
+
+**现象**: 在相同名义参数下比较 4D Artstein 与 6D Artstein Disc，例如：
+
+```bash
+initial_min_lambda:=1.5 switch_min_lambda:=2.5 mass:=2.0 \
+hpc_c_min:=0.5 delay_max_accel:=0.4 max_linear_accel:=0.4
+```
+
+6D Artstein Disc 的 follower 轨迹更容易出现速度振幅偏大、跟踪震荡或局部效果差于
+4D Artstein。用户侧降低 leader 速度后两者差异减小，但中速圆轨迹下 6D 仍明显更激进。
+
+**原因**: 代码实现中存在三处和 4D Artstein 不一致的额外变量：
+
+1. 6D `calculate_klin()` 将 `min_lambda` 额外乘以 `mass/inertia`：
+
+```cpp
+val = clamp(val, -min_lambda * M, min_lambda * M);
+a = max(val, min_lambda * M);
+```
+
+因此 `mass=2.0, initial_min_lambda=1.5` 时，6D 平移通道实际极点尺度为 3.0，
+而 4D Artstein 仍为 1.5，导致 6D 平移反馈等效更激进。
+
+2. 6D 每周期重算 `K_lin`，但 `G0/P/Gd` 只在 leader twist 或相对 yaw 超阈值时重建。
+这会产生“新 `K_lin` 配旧 HPC 矩阵”的不一致，理论上不对应同一冻结线性系统。
+
+3. 6D 延迟注入节点运行频率曾设为 `control_rate`（常用 20 Hz），而 4D Artstein
+延迟注入节点为 100 Hz，导致执行器延迟仿真的离散化条件不同。
+
+**处理**:
+
+- 6D `initial_min_lambda/switch_min_lambda` 语义改为和 4D 一致：直接表示闭环极点尺度下界，
+  不再乘 `mass/inertia`。
+- HPC 模式下仅在初始化、编队点切换、或 leader twist/相对 yaw 触发 HPC 重建时同步更新
+  `K_lin`；纯 LPC 模式仍可每周期更新 `K_lin`。
+- 6D `sim_motor_delay.py` rate 改为 100 Hz，与 4D Artstein 对齐。
+- 6D 日志补充 `|v_raw|/|v_clamped|/|v_final|` 和 `YAW_DIAG`，便于区分平移指令激进、
+  速度限幅、轮速缩放和 yaw 通道影响。
+
+**验证**:
+
+```bash
+# 临时 C++ 检查：mass=2.0, min_lambda=1.5 时，6D 平移通道应得到 k2=-3.0, k1=-1.125
+g++ -std=c++17 -Ihomo_multirobot_formation_control/include -I/usr/include/eigen3 ...
+
+cd /home/l1anggmgo/ros-projects/homo_multirobot_ws
+source /opt/ros/humble/setup.bash
+colcon build --packages-select homo_multirobot_formation_control --symlink-install --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py --show-args
+```
+
+修复后同组 Gazebo 参数下，6D Artstein Disc 的跟踪效果明显改善，说明原先差异中存在
+实现公平性因素，不应直接归因于 6D 理论模型本身。

@@ -119,6 +119,12 @@ measured follower [p_map, theta, v_body, omega]
 Leader 侧按当前 body twist 做常 twist 外推到 `Td + tau`，用于和预测后的 follower 状态对齐。
 固定航向 leader 绕圆时，Disc 编队偏移在 map 系近似为常值偏移，因此 follower 轨迹应接近 leader 圆轨迹的平移版本，便于和 4D Artstein 对比。
 
+当前实现中，`initial_min_lambda` 与 `switch_min_lambda` 的含义已和 4D Artstein 对齐：
+它们直接表示闭环极点尺度下界，而不是 `mass * min_lambda`。HPC 模式下 `K_lin`
+只在初始化、编队点切换、或 leader twist/相对 yaw 触发 HPC 重建时同步更新，避免
+`K_lin` 与 `G0/P/Gd` 使用不同线性化条件。`use_motor_delay:=true` 时，
+延迟注入节点以 100 Hz 运行，和 4D Artstein 的延迟仿真链路保持一致。
+
 需要注意：Artstein 预测只能补偿模型内的输入延迟和一阶执行器滞后，不能突破速度、轮速和加速度饱和。
 Gazebo 或实物中如果 `max_linear_vel/max_angular_vel/max_linear_accel/max_angular_accel` 设得过低，轨迹误差会主要由物理约束决定。
 `delay_max_accel` 只作用于 `sim_motor_delay.py` 延迟注入节点，不是控制器侧加速度上限；控制器侧上限必须单独设置 `max_linear_accel/max_angular_accel`。
@@ -487,6 +493,8 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 调参时先让 `max_linear_vel/max_angular_vel` 满足 leader 速度和目标圆半径所需的稳态速度，再用
 `max_linear_accel/max_angular_accel` 对齐实物能力；`delay_max_accel` 只用于模拟底盘响应，不会限制控制器内部命令。
 若实物加速度约为 0.25-0.30 m/s²，leader 速度 0.5 m/s 会明显受约束影响，建议优先增大轨迹半径、降低 yaw 角速度需求，或降低闭环带宽。
+控制器日志中的 `|v_raw|/|v_clamped|/|v_final|` 分别表示 6D Artstein 核心输出、速度分量限幅后、
+以及轮速/加速度约束后的线速度模长；`YAW_DIAG` 用于判断 yaw 通道是否正在主导轮速缩放或角速度饱和。
 
 ### 启动（6D Bearing 单 follower，方位角约束）
 

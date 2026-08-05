@@ -109,7 +109,7 @@ def generate_launch_description():
                 "motor_tau": motor_tau,
                 "transport_delay": transport_delay,
                 "max_accel": delay_max_accel,
-                "rate": control_rate,
+                "rate": 100.0,
             },
         ],
     )

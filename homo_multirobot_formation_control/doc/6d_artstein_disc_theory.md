@@ -747,6 +747,17 @@ launch/formation_single_follower_6d_artstein_disc.launch.py
 6. 输出 summary/diagnostic: pred error, hpc fallback count, max eig real part。
 ```
 
+和 4D Artstein 做公平对比时，6D 实现还需满足以下一致性约定：
+
+```text
+1. initial_min_lambda / switch_min_lambda 直接表示闭环极点尺度下界，
+   不再额外乘以 mass 或 inertia。
+2. HPC 模式下，K_lin 与 G0/P/Gd 必须在同一个冻结线性化条件下生成；
+   若 leader twist 或相对 yaw 未触发 HPC 重建，则复用上一组 K_lin。
+3. use_motor_delay:=true 时，sim_motor_delay.py 的运行频率与 4D Artstein
+   保持为 100 Hz，避免延迟注入离散化频率成为额外变量。
+```
+
 当前数值仿真已验证无延迟、延迟、Artstein 预测补偿三种情况：
 
 ```text

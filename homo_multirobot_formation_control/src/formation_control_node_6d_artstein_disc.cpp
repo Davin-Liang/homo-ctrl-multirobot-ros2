@@ -283,11 +283,16 @@ void FormationController6DArtsteinDisc::timer_cb()
   Eigen::VectorXd x2_h = predict_follower_state(follower);
 
   auto out = ctrl_->lpc_calculate(x1_h, x2_h);
+  const double raw_linear_mag = std::hypot(out[0], out[1]);
 
   geometry_msgs::msg::Twist cmd;
   cmd.linear.x = std::clamp(out[0], -max_linear_vel_, max_linear_vel_);
   cmd.linear.y = std::clamp(out[1], -max_linear_vel_, max_linear_vel_);
   cmd.angular.z = std::clamp(out[2], -max_angular_vel_, max_angular_vel_);
+  const double clamped_linear_mag = std::hypot(cmd.linear.x, cmd.linear.y);
+  const double omega_raw = out[2];
+  const double omega_clamped = cmd.angular.z;
+  const double prev_wcmd = last_wcmd_;
 
   if (min_cmd_vel_ > 0.0) {
     double raw_mag = std::hypot(out[0], out[1]);
@@ -302,16 +307,30 @@ void FormationController6DArtsteinDisc::timer_cb()
   double dt = 1.0 / control_rate_;
   double wheel_scale = constraint_.apply(cmd.linear.x, cmd.linear.y,
                                          cmd.angular.z, dt);
+  const double final_linear_mag = std::hypot(cmd.linear.x, cmd.linear.y);
+  const double omega_final = cmd.angular.z;
+  const double domega_cmd = (omega_final - prev_wcmd) / dt;
 
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
     "6D_ART pred_shift=(%.3f, %.3f, %.3f) cmd=(%+.3f,%+.3f,%+.3f) "
+    "|v_raw|=%.3f |v_clamped|=%.3f |v_final|=%.3f "
     "target=%d hpc_valid=%d fallback=%d eig=%.3f scale=%.2f",
     x2_h(0) - follower.x(0),
     x2_h(1) - follower.x(1),
     wrap_angle(x2_h(2) - follower.x(2)),
     cmd.linear.x, cmd.linear.y, cmd.angular.z,
+    raw_linear_mag, clamped_linear_mag, final_linear_mag,
     ctrl_->target_idx(), ctrl_->hpc_valid() ? 1 : 0,
     ctrl_->hpc_fallback_count(), ctrl_->last_max_real_eig(), wheel_scale);
+
+  RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
+    "YAW_DIAG yaw_l=%.3f yaw_f=%.3f yaw_lp=%.3f yaw_fp=%.3f "
+    "omega_l=%.3f omega_f=%.3f omega_lp=%.3f omega_fp=%.3f "
+    "omega_raw=%+.3f omega_clamped=%+.3f omega_final=%+.3f "
+    "domega_cmd=%+.3f scale=%.2f",
+    leader.x(2), follower.x(2), x1_h(2), x2_h(2),
+    leader.x(5), follower.x(5), x1_h(5), x2_h(5),
+    omega_raw, omega_clamped, omega_final, domega_cmd, wheel_scale);
 
   ++diag_tick_;
   auto now = get_clock()->now();

@@ -123,12 +123,14 @@ public:
 
     double dtheta, cos_dt, sin_dt;
     Eigen::VectorXd e = compute_error(x1, x2, dtheta, cos_dt, sin_dt);
-    k_lin_ = calculate_klin(e);
 
     Eigen::Vector3d leader_vel(x1(3), x1(4), x1(5));
     bool vel_changed = (leader_vel - last_hpc_leader_vel_).norm() > hpc_vel_threshold_;
     bool yaw_changed = std::abs(wrap_angle(dtheta - last_dtheta_)) > hpc_yaw_threshold_;
-    if (vel_changed || yaw_changed) {
+    if (!use_hpc_ || vel_changed || yaw_changed) {
+      k_lin_ = calculate_klin(e);
+    }
+    if (use_hpc_ && (vel_changed || yaw_changed)) {
       rebuild_hpc(false);
       last_hpc_leader_vel_ = leader_vel;
       last_dtheta_ = dtheta;
@@ -282,8 +284,9 @@ private:
   {
     auto compute_channel = [this](double e_p, double e_v, double M) {
       double val = (std::abs(e_p) > 1e-6) ? -M * e_v / e_p : 0.0;
-      val = std::clamp(val, -min_lambda_ * M, min_lambda_ * M);
-      double a = std::max(val, min_lambda_ * M);
+      double max_ratio = std::max(min_lambda_, 1e-6);
+      val = std::clamp(val, -max_ratio, max_ratio);
+      double a = std::max(val, min_lambda_);
       double k2 = -2.0 * a;
       double k1 = a * (k2 + a) / M;
       return std::make_pair(k1, k2);
