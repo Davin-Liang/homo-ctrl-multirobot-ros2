@@ -818,3 +818,58 @@ t>15s: distance 1.010 ± 0.055 m, range [0.921, 1.101]
 
 **待查**: `record_trajectory.py` 是否存在绘图标签使用旧参数、旧数据、不同截断窗口，
 或 PNG/CSV 文件不匹配的问题。
+
+---
+
+## 38) 6D Artstein Disc 开启延迟注入后控制器有输出但机器人不动
+
+**现象**: 启动
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 use_motor_delay:=true
+```
+
+控制器日志持续输出非零命令，例如：
+
+```text
+6D_ART pred_shift=(-0.135, -0.113, -0.142) cmd=(-0.372,+0.455,-0.455)
+DIAG: freq=20.2Hz avg_leader_age=32ms avg_ekf_age=32ms vcmd_map=(-0.459,-0.370) wcmd=-0.460
+```
+
+但 Gazebo 中 follower 不移动，或 `/robot2/cmd_vel` 没有最终速度命令。
+
+**原因**: `formation_single_follower_6d_artstein_disc.launch.py` 最初把控制器输出重映射到
+`cmd_vel_raw`，同时尝试用 remap 方式连接 `sim_motor_delay.py` 的
+`cmd_vel_in/cmd_vel_out`。实际 `sim_motor_delay.py` 不使用这两个 remap 名称，而是通过参数
+`input_topic` 和 `output_topic` 决定订阅/发布话题。结果是控制器发布到了
+`/robot2/cmd_vel_raw`，延迟节点没有正确订阅并转发到 `/robot2/cmd_vel`，底盘插件收不到命令。
+
+**处理**: 延迟节点改为显式传参：
+
+```python
+"input_topic": "cmd_vel_raw",
+"output_topic": "cmd_vel",
+```
+
+当 `use_motor_delay:=true` 时链路为：
+
+```text
+/robot2/formation_control_node_6d_artstein_disc -> /robot2/cmd_vel_raw
+/robot2/sim_motor_delay                         -> /robot2/cmd_vel
+Gazebo/实物底盘                                  <- /robot2/cmd_vel
+```
+
+当 `use_motor_delay:=false` 时控制器直接发布 `/robot2/cmd_vel`。
+
+**排查命令**:
+
+```bash
+ros2 topic echo /robot2/cmd_vel_raw --once
+ros2 topic echo /robot2/cmd_vel --once
+ros2 topic info -v /robot2/cmd_vel
+ros2 topic info -v /robot2/cmd_vel_raw
+```
+
+若 `/robot2/cmd_vel_raw` 有值但 `/robot2/cmd_vel` 无值，优先检查延迟节点是否启动、
+`input_topic/output_topic` 参数是否正确，以及 `use_motor_delay` 是否为 `true`。

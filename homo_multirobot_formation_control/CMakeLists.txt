@@ -103,6 +103,34 @@ install(TARGETS formation_control_node_4d_artstein
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- 6D Artstein Disc 控制器（方向 A: 平移/偏航预测 + 6D Disc HPC）--------
+add_executable(formation_control_node_6d_artstein_disc
+  src/main_6d_artstein_disc.cpp
+  src/formation_control_node_6d_artstein_disc.cpp
+)
+
+target_include_directories(formation_control_node_6d_artstein_disc PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+ament_target_dependencies(formation_control_node_6d_artstein_disc
+  rclcpp
+  geometry_msgs
+  nav_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+
+target_link_libraries(formation_control_node_6d_artstein_disc
+  Eigen3::Eigen
+)
+
+install(TARGETS formation_control_node_6d_artstein_disc
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # ---- 8D Pade 姝诲尯澧炲箍鎺у埗鍣紙doc/pade_deadtime_full.md锛?--------------------
 # add_executable(formation_control_node_8d_motor
 #   src/main_8d_motor.cpp
@@ -320,6 +348,7 @@ install(PROGRAMS
   scripts/measure_cross_machine_delay.py
   scripts/sim_motor_delay.py
   scripts/sim_4d_hpc_artstein_compare.py
+  scripts/sim_6d_disc_artstein_compare.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

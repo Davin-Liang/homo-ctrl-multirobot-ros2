@@ -3,9 +3,10 @@
 基于**齐次控制（Homogeneous Control）** 的 Leader-Follower 编队算法（C++ / Eigen），
 适配项目的 slam_toolbox / AMCL + EKF 定位体系。
 
-提供九套控制器：**4D 质点模型**（原版论文算法）、**4D Artstein-预测补偿**、**4D Cont 连续边界投影**、
+提供十套控制器：**4D 质点模型**（原版论文算法）、**4D Artstein-预测补偿**、**4D Cont 连续边界投影**、
 **6D 运动学模型**（考虑车身朝向 + 全向轮约束 + 边界投影编队）、
 **6D Disc 离散多边形编队**（6D 模型 + 离散多边形策略）、
+**6D Artstein Disc**（map 系平移预测 + yaw 预测 + 6D Disc HPC 核心）、
 **6D Bearing 方位角约束编队**（6D 模型 + 固定方位角，无切换平滑弧线）、
 **6D Motor 电机感知模型**（执行器一阶滞后显式增广，面向实物大延迟场景）、
 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）、
@@ -16,6 +17,7 @@
 - [控制器版本](#控制器版本)
 - [算法原理 (4D)](#算法原理-4d)
 - [算法原理 (4D Artstein)](#算法原理-4d-artstein)
+- [算法原理 (6D Artstein Disc)](#算法原理-6d-artstein-disc)
 - [算法原理 (6D)](#算法原理-6d)
 - [算法原理 (6D Motor)](#算法原理-6d-motor)
 - [数据输入](#数据输入)
@@ -34,6 +36,7 @@
 | **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
 | **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
+| **6D Artstein Disc (预测补偿)** | `formation_single_follower_6d_artstein_disc.launch.py` | `formation_control_node_6d_artstein_disc` | 同 6D，进入 HPC 前做平移/yaw 预测 | 离散多边形 + tol 切换 | 2D Artstein 预测后集成于 6D 主回路 |
 | **6D Bearing (运动学, 方位角约束)** | `formation_single_follower_6d_bearing.launch.py` | `formation_control_node_6d_bearing` | 同 6D | 固定方位角 $\phi_d$，无切换 | 集成于 6D 主回路 |
 | **6D Motor (电机感知模型)** | `formation_single_follower_6d_motor.launch.py` | `formation_control_node_6d_motor` | `[p_x,p_y,v_x^c,v_y^c,v_x^r,v_y^r]` (map 系, cmd/real 拆分) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
@@ -55,6 +58,15 @@
 实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。自适应 τ（tau_min/tau_max/v_tau_trans）匹配实物变加速度特性；Smith 预估器（smith_Td=0.22）补偿 ~220ms 死区。后续 8D Pade 全链路模型见 `doc/pade_deadtime_full.md`。
 
 **4D Artstein** 是原始 4D 双积分 HPC 的输入延迟与电机响应预测补偿版本。上层 HPC 核心仍保持原始 4D 双积分器结构和 `A_h^2=0` 幂零性质；`Td` 只表示纯输入/传输延迟补偿参数，由 Artstein 输入时延补偿处理；`tau` 表示一阶电机响应预测参数，用于把测得的 Follower 状态向前预测到等效双积分状态。详见 `doc/4d_artstein_prediction_theory.md`；数值仿真说明见 `doc/4d_artstein_prediction_simulation.md`；早期 Artstein 约简草稿见 `doc/artstein_reduction.md`。
+
+**6D Artstein Disc** 是方向 A 的 6D 延迟补偿实现。它不把 `R(theta)` 引入一个全局常值 6x3 Artstein kernel，
+而是在进入 6D Disc HPC 前分别做：
+- map 系平移通道 4D Artstein 预测；
+- yaw 通道 2D Artstein 预测；
+- 预测后的 map 速度再按预测 yaw 转回 body 系，组成 `[p_x,p_y,theta,v_x^b,v_y^b,omega]`。
+
+这样 6D Disc 的车体级 HPC 核心、离散编队点和全向轮约束保持不变，理论结论只按 nominal/local 预测补偿表述。
+详见 `doc/6d_artstein_disc_theory.md`，数值仿真脚本为 `scripts/sim_6d_disc_artstein_compare.py`。
 
 约束和齐次控制基础模块：
 三套控制器共享以下模块（不修改原 4D/6D 代码）：
@@ -88,6 +100,29 @@ measured follower [p, v_real]
 ```
 
 该版本不把 `-1/tau` 电机极点增广进 HPC 系统矩阵，而是在进入 HPC 前完成状态预测映射。因此 HPC 仍直接使用原始 4D 双积分模型、`A_h^2=0` 幂零结构和 4D 齐次权重。`Td` 是纯输入/传输延迟补偿参数；`tau` 是一阶电机响应预测参数。做严格消融实验时，若要测试“不使用延迟预测器”，不能只设置 `tau:=0.0 Td:=0.0`，还必须让仿真注入参数同步关断，例如 `transport_delay:=0.0`，必要时 `motor_tau` 也要对应设置。
+
+## 算法原理 (6D Artstein Disc)
+
+6D Artstein Disc 的数据流为：
+
+```text
+measured follower [p_map, theta, v_body, omega]
+    -> v_body 转 map 系
+    -> map-frame 4D Artstein 平移预测 + 2D Artstein yaw 预测
+    -> 预测速度按预测 yaw 转回 body 系
+    -> predicted 6D Disc state [p_x,p_y,theta,v_x^b,v_y^b,omega]
+    -> 6D Disc HPC core
+    -> 全向轮/速度/加速度约束
+    -> cmd_vel
+```
+
+Leader 侧按当前 body twist 做常 twist 外推到 `Td + tau`，用于和预测后的 follower 状态对齐。
+固定航向 leader 绕圆时，Disc 编队偏移在 map 系近似为常值偏移，因此 follower 轨迹应接近 leader 圆轨迹的平移版本，便于和 4D Artstein 对比。
+
+需要注意：Artstein 预测只能补偿模型内的输入延迟和一阶执行器滞后，不能突破速度、轮速和加速度饱和。
+Gazebo 或实物中如果 `max_linear_vel/max_angular_vel/max_linear_accel/max_angular_accel` 设得过低，轨迹误差会主要由物理约束决定。
+`delay_max_accel` 只作用于 `sim_motor_delay.py` 延迟注入节点，不是控制器侧加速度上限；控制器侧上限必须单独设置 `max_linear_accel/max_angular_accel`。
+当前控制器和延迟注入节点的限幅均为分量限幅，不是二维速度/加速度模长限幅。
 ## 算法原理 (6D)
 
 详细的数学推导见 `doc/kinematic_homogeneous_control.md`。核心要点：
@@ -403,6 +438,56 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.
 
 与 6D 连续边界投影版本的区别：`m_p` 个编队点均匀分布在安全圆上，`tol` 提供切换迟滞，避免边界投影在小半径圆轨迹下的震荡。
 
+### 启动（6D Artstein Disc 单 follower，延迟预测补偿）
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py
+```
+
+Gazebo 双车仿真，开启延迟注入并让预测参数与注入参数对齐：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  use_motor_delay:=true \
+  motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.3 \
+  radius:=2.5 mass:=2.0 I:=1.0 \
+  m_p:=4 tol:=0.1 \
+  tau:=0.43 tau_yaw:=0.43 Td:=0.22 \
+  control_rate:=20.0 hpc_c_min:=0.7 \
+  initial_min_lambda:=1.0 switch_min_lambda:=2.5 \
+  max_linear_vel:=0.45 max_angular_vel:=0.3 \
+  max_linear_accel:=0.3 max_angular_accel:=0.5
+```
+
+LPC 消融对照（关闭齐次升级，仍保留 Artstein 预测层）：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 use_motor_delay:=true use_hpc:=false
+```
+
+关键参数：
+
+| 参数 | 默认 | 含义 |
+|------|------|------|
+| `tau` | 0.43 | 平移通道一阶执行器预测时间常数 |
+| `tau_yaw` | 0.43 | yaw 通道一阶执行器预测时间常数 |
+| `Td` | 0.22 | 纯输入/传输延迟补偿时间 |
+| `hpc_c_min` | 0.5 | HPC 齐次范数下界，调大可减弱近目标 warp 放大 |
+| `initial_min_lambda` | 1.0 | 初始目标点的最小线性闭环带宽 |
+| `switch_min_lambda` | 4.0 | 编队点切换后的临时最小闭环带宽 |
+| `hpc_vel_threshold` | 0.3 | leader twist 变化超过该阈值才重算 HPC |
+| `hpc_yaw_threshold` | 0.3 | leader/follower 相对 yaw 变化超过该阈值才重算 HPC |
+| `stability_margin` | 0.01 | `A+B*K` Hurwitz 检查裕度，不满足则复用上一组稳定 HPC 或退回线性控制 |
+| `max_linear_accel` | 2.0 | 控制器侧 body x/y 分量加速度约束 |
+| `max_angular_accel` | 4.0 | 控制器侧 yaw 加速度约束 |
+| `delay_max_accel` | 2.0 | 仿真延迟节点侧分量加速度约束，仅 `use_motor_delay:=true` 时生效 |
+
+调参时先让 `max_linear_vel/max_angular_vel` 满足 leader 速度和目标圆半径所需的稳态速度，再用
+`max_linear_accel/max_angular_accel` 对齐实物能力；`delay_max_accel` 只用于模拟底盘响应，不会限制控制器内部命令。
+若实物加速度约为 0.25-0.30 m/s²，leader 速度 0.5 m/s 会明显受约束影响，建议优先增大轨迹半径、降低 yaw 角速度需求，或降低闭环带宽。
+
 ### 启动（6D Bearing 单 follower，方位角约束）
 
 ```bash
@@ -660,6 +745,11 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.la
 # 3d. 编队控制 — MPC 6D 版（对照组）
 ros2 launch homo_multirobot_formation_control formation_single_follower_mpc_6d.launch.py \
   formation_offset_x:=-1.0 mpc_q_px:=20.0 mpc_q_py:=20.0
+
+# 3e. 编队控制 — 6D Artstein Disc 版（延迟预测补偿）
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  use_motor_delay:=true tau:=0.43 tau_yaw:=0.43 Td:=0.22
 
 # 4. 键盘遥控领航者
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/robot1/cmd_vel
