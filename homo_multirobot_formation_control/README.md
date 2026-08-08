@@ -73,6 +73,9 @@
 - `kinematic_constraint.hpp` — 全向轮轮速/加速度约束
 - `types_nd.hpp`, `hnorm_nd.hpp`, `lpc2hpc_nd.hpp` — N-D 泛化齐次控制工具库
 
+论文写作与课题规划参考：
+- `doc/thesis_structure_recommendation.md` — 硕士论文推荐章节结构、参考文献、创新性定位、算法对比矩阵和风险表述。
+
 ## 算法原理 (4D)
 
 1. 将机器人建模为**双重积分器**（4 阶状态：位置 x, y + 速度 vx, vy），
