@@ -588,3 +588,72 @@ MPC 的优势在于约束表达直接、调参直观；
 4. 有延迟下轨迹可记录并能和 4D Artstein-HPC 同图比较；
 5. 日志能看出 target、solve_ms、u0、速度限幅/轮速限幅触发情况。
 ```
+
+## 12. 参考文献
+
+后续写毕业论文或小论文时，可从下面条目中选择引用。第 1-4 条用于支撑
+Artstein/predictor 延迟补偿，第 5-8 条用于支撑 constrained MPC / QP 求解，第 9-12
+条用于支撑 MPC 在多机器人编队中的合理性。
+
+[1] Z. Artstein, “Linear Systems with Delayed Controls: A Reduction,”
+*IEEE Transactions on Automatic Control*, vol. 27, no. 4, pp. 869-879, 1982.
+DOI: 10.1109/TAC.1982.1103023.
+https://weizmann.elsevierpure.com/en/publications/linear-systems-with-delayed-controls-a-reduction/
+
+[2] A. Z. Manitius and A. W. Olbrot, “Finite Spectrum Assignment Problem for Systems with Delays,”
+*IEEE Transactions on Automatic Control*, vol. 24, no. 4, pp. 541-553, 1979.
+DOI: 10.1109/TAC.1979.1102124.
+https://ui.adsabs.harvard.edu/abs/1979ITAC...24..541M/abstract
+
+[3] M. Krstic, *Delay Compensation for Nonlinear, Adaptive, and PDE Systems*.
+Birkhauser, 2009.
+
+[4] I. Karafyllis and M. Krstic,
+*Predictor Feedback for Delay Systems: Implementations and Approximations*.
+Birkhauser, 2017.
+
+[5] D. Q. Mayne, J. B. Rawlings, C. V. Rao, and P. O. M. Scokaert,
+“Constrained Model Predictive Control: Stability and Optimality,”
+*Automatica*, vol. 36, no. 6, pp. 789-814, 2000.
+DOI: 10.1016/S0005-1098(99)00214-9.
+https://www.sciencedirect.com/science/article/abs/pii/S0005109899002149
+
+[6] P. O. M. Scokaert and J. B. Rawlings,
+“Constrained Linear Quadratic Regulation,”
+*IEEE Transactions on Automatic Control*, vol. 43, no. 8, pp. 1163-1169, 1998.
+DOI: 10.1109/9.704994.
+https://ieeexplore.ieee.org/document/704994/
+
+[7] J. B. Rawlings, D. Q. Mayne, and M. Diehl,
+*Model Predictive Control: Theory, Computation, and Design*, 2nd ed., 2017.
+https://sites.engineering.ucsb.edu/~jbraw/mpc/
+
+[8] B. Stellato, G. Banjac, P. Goulart, A. Bemporad, and S. Boyd,
+“OSQP: an Operator Splitting Solver for Quadratic Programs,”
+*Mathematical Programming Computation*, vol. 12, pp. 637-672, 2020.
+DOI: 10.1007/s12532-020-00179-2.
+https://link.springer.com/article/10.1007/s12532-020-00179-2
+
+[9] W. B. Dunbar and R. M. Murray,
+“Distributed Receding Horizon Control for Multi-Vehicle Formation Stabilization,”
+*Automatica*, vol. 42, no. 4, pp. 549-558, 2006.
+DOI: 10.1016/j.automatica.2005.12.008.
+https://www.sciencedirect.com/science/article/abs/pii/S0005109806000136
+
+[10] P. Wang and B. Ding,
+“Distributed RHC for Tracking and Formation of Nonholonomic Multi-Vehicle Systems,”
+*IEEE Transactions on Automatic Control*, vol. 59, no. 6, pp. 1439-1453, 2014.
+DOI: 10.1109/TAC.2014.2304175.
+https://ui.adsabs.harvard.edu/abs/2014ITAC...59.1439W/abstract
+
+[11] H. Xiao, Z. Li, and C. L. P. Chen,
+“Formation Control of Leader-Follower Mobile Robots' Systems Using Model Predictive Control Based on Neural-Dynamic Optimization,”
+*IEEE Transactions on Industrial Electronics*, vol. 63, no. 9, pp. 5752-5762, 2016.
+DOI: 10.1109/TIE.2016.2542788.
+https://ieeexplore.ieee.org/document/7434605/
+
+[12] Z. Li, Y. Yuan, F. Ke, W. He, and C.-Y. Su,
+“Robust Vision-Based Tube Model Predictive Control of Multiple Mobile Robots for Leader-Follower Formation,”
+*IEEE Transactions on Industrial Electronics*, vol. 67, no. 4, pp. 3096-3106, 2020.
+DOI: 10.1109/TIE.2019.2913813.
+https://ieeexplore.ieee.org/document/8705683/
