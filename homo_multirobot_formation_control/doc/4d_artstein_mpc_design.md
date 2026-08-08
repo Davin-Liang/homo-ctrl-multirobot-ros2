@@ -131,15 +131,15 @@ HPC 和 MPC，而不是来自工程链路不同。
     “Robust Vision-Based Tube Model Predictive Control of Multiple Mobile Robots for Leader-Follower Formation,”
     IEEE Transactions on Industrial Electronics, 67(4):3096-3106, 2020.
     DOI: 10.1109/TIE.2019.2913813.
-    参考列表来源：
-    https://dergipark.org.tr/en/pub/gujs/article/1504962
+    资料页：
+    https://ieeexplore.ieee.org/document/8705683/
 
     这篇属于更强的 tube MPC / 鲁棒 MPC 路线。本项目暂不建议上 tube MPC，因为会把章节重心从
     Artstein-HPC 拉到鲁棒优化上，工作量会明显膨胀。
 
 ## 3. 推荐方案
 
-推荐实现 **Artstein 预测状态上的 delay-free 4D linear MPC**：
+推荐实现 **Artstein/执行器预测补偿状态上的 delay-free 4D linear MPC**：
 
 ```text
 EKF + TF
@@ -192,6 +192,37 @@ vs
 这个对照不够干净。若想做更强的 MPC baseline，则应另开一个“delay-augmented MPC”版本，但那已经是
 另一个工作量较大的控制器，而不是当前建议的第一版对照组。
 
+### 3.2 理论成立条件与近似边界
+
+严格理论上，Artstein reduction 处理的是线性输入时延系统。当前 4D Artstein-HPC 的工程实现还额外加入了
+一阶电机滞后前向预测：
+
+```text
+measured x2
+  -> Artstein integral compensates Td
+  -> exp(A_a Td) back-mapping
+  -> forward prediction over tau
+  -> x2_h = [p_h, v_h]
+```
+
+因此，送入 MPC 的 `x2_h` 更准确地说是**延迟/执行器预测补偿后的等效 4D 双积分状态**，而不是纯粹的
+Artstein 状态 `z`。在论文中建议这样表述：
+
+```text
+本文先利用 Artstein 型输入时延补偿和一阶执行器前向预测，将实测 follower 状态映射为等效双积分预测状态；
+随后在该预测状态上构造无显式延迟的线性 MPC。
+```
+
+这个说法比“Artstein 直接把真实底盘完全变成无延迟双积分系统”更稳。真实底盘仍有模型误差、加速度限幅、
+轮速限幅和低层控制器非线性，所以本 MPC 对照组的理论定位应是：
+
+```text
+基于同一预测补偿层的约束优化对照器，而不是对真实延迟执行器的严格最优控制器。
+```
+
+若后续要写严格的 delayed MPC 理论，则需要把输入队列或执行器状态纳入 MPC 预测模型，并重新处理状态/输入约束；
+这超出当前 4D Artstein-MPC 对照组的范围。
+
 ## 4. 4D MPC 数学模型
 
 状态定义：
@@ -206,7 +237,7 @@ x = [p_x, p_y, v_x, v_y]^T .
 u = [u_x, u_y]^T .
 ```
 
-为了和现有 4D Artstein-HPC 保持一致，`u` 仍解释为等效力或等效控制输入：
+为了和现有 4D Artstein-HPC 保持一致，`u` 仍解释为 force-like 的等效控制输入：
 
 ```math
 \dot{p}_x = v_x,\quad
@@ -234,6 +265,11 @@ B =
 0 & 1/m
 \end{bmatrix}.
 ```
+
+这里的 `m` 与当前 4D Artstein-HPC 中的 `mass` 一致，是双积分模型的输入缩放参数；它不应在论文中强行解释为
+真实全向底盘的精确物理质量。若把 MPC 输入直接定义为加速度，则可改写为
+`B=[0,0;0,0;1,0;0,1]`，但那会和现有 4D Artstein-HPC 的
+`B=[0,0;0,0;1/m,0;0,1/m]` 不完全一致。为了公平比较，第一版建议保留 force-like 输入定义。
 
 推荐第一版 MPC 使用精确 ZOH 离散化：
 
@@ -314,14 +350,23 @@ x_{k+1} = A_d x_k + B_d u_k,\quad k=0,\ldots,N-1 .
 |u_{x,k}| \le u_{\max},\qquad |u_{y,k}| \le u_{\max}.
 ```
 
-如果 `u` 是等效力，则
+因为 `u` 是 force-like 等效输入，所以
 
 ```math
 u_{\max}=m\cdot a_{\max}.
 ```
 
 这里 `a_max` 对应 ROS 参数 `max_linear_accel`。这样 MPC 内部加速度约束和后处理中的
-`KinematicConstraint` 加速度限幅在量纲上统一。
+`KinematicConstraint` 加速度限幅在量纲上保持一致，但二者不是数学上完全相同的约束：
+
+```text
+MPC 内部约束: map 系预测模型中的 |u/m| <= a_max
+后处理约束:  发布前车体系 cmd_vel 的 slew rate / 轮速约束
+```
+
+因此 MPC 内部约束用于提前抑制激进预测，最终实际发布命令仍以后处理结果为准。若日志中
+`KinematicConstraint` 频繁触发，说明 MPC 内部约束、坐标变换和底盘真实约束仍未完全对齐，需要调低
+`max_linear_vel/max_linear_accel` 或增大 `R`。
 
 速度约束建议先用 box bound：
 
@@ -350,10 +395,13 @@ d_j =
 当前 follower 使用哪个 `d_j`，应尽量复用或复制 `LpcController` 的切换逻辑：
 
 ```text
-1. 初始化时选择距离最近的离散编队点；
+1. 初始化时选择 4D 误差范数 ||x2 - x1 - d_j|| 最近的离散编队点；
 2. 控制过程中只在新目标比旧目标至少好 tol 时切换；
 3. 切换后记录 target index，日志打印 target。
 ```
+
+这里的距离不是单纯位置距离，而是当前 `LpcController` 中使用的 4D 范数，速度误差也会参与目标选择。
+如果后续为了可解释性改成纯位置距离，应在 HPC 和 MPC 两边同时改，否则对照不公平。
 
 预测时域内的参考状态：
 
@@ -370,6 +418,11 @@ v_{1,h}(k) = v_{1,h}(0).
 
 因为 4D 状态全在 map 系，编队偏移也是 map 系固定偏移。这样 follower 轨迹会自然成为 leader
 圆轨迹的平移版本，便于和 4D Artstein-HPC 对比。
+
+需要注意：若 leader 实际做圆周运动，长时域内“匀速直线外推”会偏离真实圆轨迹。第一版仍推荐使用匀速外推，
+因为当前 4D Artstein-HPC 也只基于当前预测状态和当前速度做反馈，这样对照更公平。若后续使用
+`virtual_leader_circle.py` 的已知解析轨迹生成整段 MPC reference，MPC 可能会更强，但实验解释会变成
+“HPC 当前反馈 vs MPC 已知未来参考”，不再是最干净的控制律对照。
 
 ## 7. 工程实现建议
 
@@ -399,17 +452,22 @@ launch/formation_single_follower_4d_artstein.launch.py 中的 delay node 接线
 2. 维护当前离散编队 target；
 3. 构建线性 MPC QP；
 4. 调用 OSQP；
-5. 返回第一步预测速度 x_1.tail<2>()，或返回 u_0 后由节点积分。
+5. 返回第一步预测速度 x_{1|0}.tail<2>()。
 ```
 
-推荐第一版让 MPC 直接输出 `out_map = x_1.tail<2>()`，而不是输出加速度再由外层积分。
+推荐第一版让 MPC 直接输出 `out_map = x_{1|0}.tail<2>()`，而不是把优化输入 `u_0` 直接作为
+`cmd_vel` 发布，也不是在节点外再重复积分一次。
 理由是：
 
 - MPC 优化变量中已经包含速度状态；
 - 可以让速度约束直接作用在预测速度上；
 - 与 `cmd_integrator_base:=pred` 的 4D Artstein-HPC 行为更接近：上层直接给出预测状态下的下一步速度命令。
 
-但内部仍需记录 `u_0` 便于日志分析：
+这里 `u_0` 的物理意义是第一步 force-like 等效输入，对应加速度 `u_0/m`。它只用于预测和日志分析，
+不直接发布到底盘。实际写入 Artstein 历史缓冲的仍应是经过车体系旋转、速度限幅、最小速度补偿、
+yaw 叠加、轮速/加速度约束之后的最终发布速度，再旋回 map 系后的 `v_cmd_map`。
+
+内部仍需记录 `u_0` 便于日志分析：
 
 ```text
 MPC_DIAG target=... status=... iter=... solve_ms=...
