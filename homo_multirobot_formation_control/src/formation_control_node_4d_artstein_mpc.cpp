@@ -1,4 +1,4 @@
-/// @file 4D Artstein-HPC 编队控制节点实现。
+/// @file 4D Artstein-MPC 编队控制节点实现。
 ///
 /// 数据流:
 ///   EKF odometry/filtered ──→ 缓冲区（回调存储最新消息）
@@ -10,17 +10,19 @@
 ///        leader   x1 = [p, v_real]  (4D, EKF 测量)
 ///        follower x2 = [p, v_real]  (4D, EKF 测量)
 ///   3. follower Artstein 积分补偿输入死区: x2 → z2
-///   4. 前向预测 Td+tau 得到双积分 HPC 反馈状态 x_h=[p_pred,v_pred]
-///   5. 原始 4D 双积分 HPC 计算 v_cmd (map 系)
+///   4. 前向预测 Td+tau 得到双积分 MPC 反馈状态 x_h=[p_pred,v_pred]
+///   5. 4D linear MPC 计算下一步预测速度 v_cmd (map 系)
 ///   6. 旋转到车体系 → clamp → 加速度限幅 → 轮速约束 → 发布 cmd_vel
 ///   7. 发布值旋转回 map 系 → 回写 vx_cmd_map_ / vy_cmd_map_ → 存入缓冲
 
-#include "homo_multirobot_formation_control/formation_control_node_4d_artstein.hpp"
+#include "homo_multirobot_formation_control/formation_control_node_4d_artstein_mpc.hpp"
 
 #include <tf2_ros/transform_listener.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+#include "homo_multirobot_formation_control/formation_safety.hpp"
 
 using namespace formation_control;
 
@@ -86,8 +88,8 @@ static bool ekf_to_map(tf2_ros::Buffer& tf, const std::string& ns,
 // ============================================================================
 // 构造函数
 // ============================================================================
-FormationController4DArtstein::FormationController4DArtstein()
-: rclcpp::Node("formation_control_node_4d_artstein")
+FormationController4DArtsteinMpc::FormationController4DArtsteinMpc()
+: rclcpp::Node("formation_control_node_4d_artstein_mpc")
 {
   // ---- 通用参数 -------------------------------------------------------------
   leader_ns_   = declare_parameter("leader_ns",   "/robot1");
@@ -100,7 +102,6 @@ FormationController4DArtstein::FormationController4DArtstein()
   double tau_min = declare_parameter("tau_min", 0.25);
   double tau_max = declare_parameter("tau_max", 0.55);
   double v_tau_trans = declare_parameter("v_tau_trans", 0.10);
-  double omega_d = declare_parameter("omega_d", 0.7);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
   K_ff_         = declare_parameter("K_ff",    1.0);
   control_rate_ = declare_parameter("control_rate", 20.0);
@@ -115,24 +116,45 @@ FormationController4DArtstein::FormationController4DArtstein()
 
   max_linear_vel_  = declare_parameter("max_linear_vel",  1.0);
   max_angular_vel_ = declare_parameter("max_angular_vel", 0.5);
+  max_linear_accel_ = max_linear_accel;
+  formation_radius_ = radius;
+  tau_ = tau;
 
-  bool use_hpc = declare_parameter("use_hpc", true);
-  double hpc_c_min = declare_parameter("hpc_c_min", 0.1);
-  double initial_min_lambda = declare_parameter("initial_min_lambda", 1.0);
-  double switch_min_lambda = declare_parameter("switch_min_lambda", 4.0);
   leader_vel_lpf_tau_ = declare_parameter("leader_vel_lpf_tau", 0.0);
   min_cmd_vel_ = declare_parameter("min_cmd_vel", 0.03);
-  cmd_integrator_base_ = declare_parameter("cmd_integrator_base", std::string("pred"));
+  enable_radial_safety_ = declare_parameter("enable_radial_safety", true);
+
+  MpcController4DArtstein::Params mpc_params;
+  mpc_params.N = declare_parameter("mpc_horizon", 30);
+  mpc_params.dt = 1.0 / control_rate_;
+  mpc_params.mass = mass;
+  mpc_params.formation_radius = radius;
+  mpc_params.m_p = m_p;
+  mpc_params.tol = tol;
+  mpc_params.q_px = declare_parameter("q_px", 40.0);
+  mpc_params.q_py = declare_parameter("q_py", 40.0);
+  mpc_params.q_vx = declare_parameter("q_vx", 1.0);
+  mpc_params.q_vy = declare_parameter("q_vy", 1.0);
+  mpc_params.r_ux = declare_parameter("r_ux", 0.02);
+  mpc_params.r_uy = declare_parameter("r_uy", 0.02);
+  mpc_params.terminal_factor = declare_parameter("terminal_factor", 10.0);
+  mpc_params.max_linear_vel = max_linear_vel_;
+  mpc_params.max_linear_accel = max_linear_accel;
+  mpc_params.osqp_max_iter = declare_parameter("osqp_max_iter", 4000);
+  mpc_params.osqp_eps_abs = declare_parameter("osqp_eps_abs", 1e-3);
+  mpc_params.osqp_eps_rel = declare_parameter("osqp_eps_rel", 1e-3);
+  mpc_params.osqp_polish = declare_parameter("osqp_polish", true);
 
   // ---- 控制器 ---------------------------------------------------------------
-  ctrl_ = std::make_unique<LpcController4DArtstein>(m_p, radius, tol, mass, tau,
-                                                    omega_d, use_hpc,
-                                                    1.0 / control_rate_,
-                                                    hpc_c_min,
-                                                    tau_min, tau_max,
-                                                    v_tau_trans, Td_,
-                                                    initial_min_lambda,
-                                                    switch_min_lambda);
+  predictor_ = std::make_unique<LpcController4DArtstein>(m_p, radius, tol, mass, tau,
+                                                         0.7, false,
+                                                         1.0 / control_rate_,
+                                                         0.1,
+                                                         tau_min, tau_max,
+                                                         v_tau_trans, Td_,
+                                                         1.0,
+                                                         4.0);
+  mpc_ = std::make_unique<MpcController4DArtstein>(mpc_params);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius,
                                     wheel_max_omega,
@@ -164,8 +186,9 @@ FormationController4DArtstein::FormationController4DArtstein()
   int ms = static_cast<int>(1000.0 / control_rate_);
   timer_ = create_wall_timer(std::chrono::milliseconds(ms), [this]() { timer_cb(); });
 
-  RCLCPP_INFO(get_logger(), "4D Artstein-HPC node started (Td=%.3fs, tau=%.2fs, cmd_integrator_base=%s).",
-              Td_, tau, cmd_integrator_base_.c_str());
+  RCLCPP_INFO(get_logger(),
+              "4D Artstein-MPC node started (Td=%.3fs, tau=%.2fs, N=%d, Qp=%.1f, R=%.3f).",
+              Td_, tau, mpc_params.N, mpc_params.q_px, mpc_params.r_ux);
   RCLCPP_INFO(get_logger(), "  Leader: %s, Follower: %s",
               leader_ns_.c_str(), follower_ns_.c_str());
 }
@@ -173,7 +196,7 @@ FormationController4DArtstein::FormationController4DArtstein()
 // ============================================================================
 // 定时器回调 — 主控制循环 (~20 Hz)
 // ============================================================================
-void FormationController4DArtstein::timer_cb()
+void FormationController4DArtsteinMpc::timer_cb()
 {
   if (!leader_ok_ || !follower_ok_) return;
 
@@ -202,11 +225,11 @@ void FormationController4DArtstein::timer_cb()
   }
 
   // ---- 步骤 3: Leader 匀速外推到执行器预测时刻 ----------------------------
-  int buf_size = ctrl_->artstein_buffer_size();
+  int buf_size = predictor_->artstein_buffer_size();
 
   Eigen::Vector4d x1_meas;
   x1_meas << l_px, l_py, l_vx_f, l_vy_f;
-  Eigen::Vector4d x1_h = ctrl_->predict_leader_state(x1_meas);
+  Eigen::Vector4d x1_h = predictor_->predict_leader_state(x1_meas);
 
   // ---- 步骤 4: Follower Artstein 缓冲 + 积分 --------------------------------
   // 延迟初始化：收到第一帧完整数据后初始化控制器 + v^cmd 内部状态。
@@ -221,15 +244,15 @@ void FormationController4DArtstein::timer_cb()
 
     Eigen::Vector4d x2_meas;
     x2_meas << f_px, f_py, f_vx, f_vy;
-    Eigen::Vector4d I2_init = ctrl_->compute_artstein_integral(follower_vcmd_history_);
+    Eigen::Vector4d I2_init = predictor_->compute_artstein_integral(follower_vcmd_history_);
     Eigen::Vector4d z2_init = x2_meas + I2_init;
-    Eigen::Vector4d x2_h_init = ctrl_->predict_hpc_state(
+    Eigen::Vector4d x2_h_init = predictor_->predict_hpc_state(
         z2_init, Eigen::Vector2d(vx_cmd_map_, vy_cmd_map_));
 
     try {
-      ctrl_->controller_initial(x1_h, x2_h_init);
+      mpc_->init(x1_h, x2_h_init);
       controller_initialized_ = true;
-      RCLCPP_INFO(get_logger(), "4D Artstein-HPC 控制器初始化完成。");
+      RCLCPP_INFO(get_logger(), "4D Artstein-MPC 控制器初始化完成。");
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "初始化失败: %s", e.what());
       return;
@@ -239,9 +262,9 @@ void FormationController4DArtstein::timer_cb()
   // follower Artstein 积分（缓冲存实际发布的 v^cmd）
   Eigen::Vector4d x2_meas;
   x2_meas << f_px, f_py, f_vx, f_vy;
-  Eigen::Vector4d I2 = ctrl_->compute_artstein_integral(follower_vcmd_history_);
+  Eigen::Vector4d I2 = predictor_->compute_artstein_integral(follower_vcmd_history_);
   Eigen::Vector4d z2 = x2_meas + I2;
-  Eigen::Vector4d x2_h = ctrl_->predict_hpc_state(
+  Eigen::Vector4d x2_h = predictor_->predict_hpc_state(
       z2, Eigen::Vector2d(vx_cmd_map_, vy_cmd_map_));
 
   Eigen::Vector4d x1_real;
@@ -249,8 +272,8 @@ void FormationController4DArtstein::timer_cb()
   Eigen::Vector4d x2_real;
   x2_real << f_px, f_py, f_vx, f_vy;
 
-  double real_nearest_dist = ctrl_->calculate_distance(x1_real, x2_real);
-  double pred_nearest_dist = ctrl_->calculate_distance(x1_h, x2_h);
+  double real_nearest_dist = mpc_->calculate_distance(x1_real, x2_real);
+  double pred_nearest_dist = mpc_->calculate_distance(x1_h, x2_h);
   double v_real_mag = std::hypot(f_vx, f_vy);
   double v_cmd_mag = std::hypot(vx_cmd_map_, vy_cmd_map_);
   double v_pred_mag = std::hypot(x2_h(2), x2_h(3));
@@ -263,21 +286,42 @@ void FormationController4DArtstein::timer_cb()
     real_nearest_dist, pred_nearest_dist, pred_nearest_dist - real_nearest_dist,
     v_real_mag, v_cmd_mag, v_pred_mag, pred_pos_shift, pred_vel_shift);
 
-  // ---- 步骤 5: 原始 4D 双积分 HPC → map 系速度指令 -------------------------
-  Eigen::Vector2d out_map;
-  if (cmd_integrator_base_ == "cmd") {
-    Eigen::Vector2d accel_map = ctrl_->accel_calculate(x1_h, x2_h);
-    double dt = 1.0 / control_rate_;
-    out_map << vx_cmd_map_ + dt * accel_map(0),
-               vy_cmd_map_ + dt * accel_map(1);
+  // ---- 步骤 5: 4D linear MPC → 下一步 map 系预测速度 -----------------------
+  Eigen::Vector2d out_map = mpc_->compute_velocity_command(x1_h, x2_h);
+  const int mpc_status = mpc_->last_status();
+  if (mpc_status == OSQP_SOLVED) {
+    ++mpc_solved_count_;
+  } else if (mpc_status == OSQP_SOLVED_INACCURATE) {
+    ++mpc_inaccurate_count_;
+  } else if (mpc_status == OSQP_MAX_ITER_REACHED) {
+    ++mpc_max_iter_count_;
   } else {
-    auto out = ctrl_->lpc_calculate(x1_h, x2_h);
-    out_map << out[0], out[1];
+    ++mpc_fallback_count_;
   }
 
-  double current_dist = ctrl_->current_distance(x1_h, x2_h);
-  double best_dist = ctrl_->best_distance(x1_h, x2_h);
-  Eigen::Vector4d selected_err = ctrl_->selected_error(x1_h, x2_h);
+  if (enable_radial_safety_) {
+    const Eigen::Vector2d out_before = out_map;
+    out_map = formation_control::apply_radial_safety_limit(
+        out_map, x1_real.tail<2>(), x1_real.head<2>(), x2_real.head<2>(),
+        formation_radius_, max_linear_accel_, Td_ + tau_, max_linear_vel_);
+
+    const Eigen::Vector2d rel = x2_real.head<2>() - x1_real.head<2>();
+    const double dist = rel.norm();
+    if ((out_map - out_before).norm() > 1e-6 && dist > 1e-9) {
+      const Eigen::Vector2d radial = rel / dist;
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+        "RADIAL_SAFE dist=%.3f radius=%.3f vrel_rad %.3f→%.3f Td_eff=%.3f",
+        dist, formation_radius_,
+        (out_before - x1_real.tail<2>()).dot(radial),
+        (out_map - x1_real.tail<2>()).dot(radial),
+        Td_ + tau_);
+    }
+  }
+
+  double current_dist = mpc_->current_distance(x1_h, x2_h);
+  double best_dist = mpc_->best_distance(x1_h, x2_h);
+  Eigen::Vector4d selected_err = mpc_->selected_error(x1_h, x2_h);
+  Eigen::Vector4d ref0_err = mpc_->last_ref0_error();
 
   // ---- Step 6: rotate map-frame command into body frame --------------------
   double vx_body =  out_map(0) * std::cos(follower_yaw) + out_map(1) * std::sin(follower_yaw);
@@ -315,13 +359,17 @@ void FormationController4DArtstein::timer_cb()
   // ---- 步骤 11: 调试输出 ----------------------------------------------------
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
     "TRACE target=%d best=%.3f current=%.3f sel=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) "
-    "raw=(%+6.3f,%+6.3f) final=(%+6.3f,%+6.3f) scale=%.2f "
-    "I=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) xh=(%+6.3f,%+6.3f,%+6.3f,%+6.3f)",
-    ctrl_->target_index(), best_dist, current_dist,
+    "ref0=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) raw=(%+6.3f,%+6.3f) final=(%+6.3f,%+6.3f) scale=%.2f "
+    "I=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) xh=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) "
+    "status=%d solve=%.2fms u0=(%+.3f,%+.3f)",
+    mpc_->target_index(), best_dist, current_dist,
     selected_err(0), selected_err(1), selected_err(2), selected_err(3),
+    ref0_err(0), ref0_err(1), ref0_err(2), ref0_err(3),
     vx_body, vy_body, cmd.linear.x, cmd.linear.y, wheel_scale,
     I2(0), I2(1), I2(2), I2(3),
-    x2_h(0), x2_h(1), x2_h(2), x2_h(3));
+    x2_h(0), x2_h(1), x2_h(2), x2_h(3),
+    mpc_status, mpc_->last_solve_time_ms(),
+    mpc_->last_u0()(0), mpc_->last_u0()(1));
 
   // ---- 诊断：实际控制频率 + 数据新鲜度（每 5 秒）----------------------------
   ++diag_tick_;
@@ -335,12 +383,32 @@ void FormationController4DArtstein::timer_cb()
     double avg_ekf_age_ms    = sum_ekf_age_    / diag_tick_ * 1000.0;
     RCLCPP_INFO(get_logger(),
       "DIAG: freq=%.1fHz avg_leader_age=%.0fms avg_ekf_age=%.0fms "
-      "vcmd=(%+.3f,%+.3f) vreal=(%+.3f,%+.3f)",
+      "vcmd=(%+.3f,%+.3f) vreal=(%+.3f,%+.3f) mpc_status=%d solve=%.2fms "
+      "status_count{ok=%d inaccurate=%d max_iter=%d fallback=%d}",
       real_freq, avg_leader_age_ms, avg_ekf_age_ms,
-      vx_cmd_map_, vy_cmd_map_, f_vx, f_vy);
+      vx_cmd_map_, vy_cmd_map_, f_vx, f_vy,
+      mpc_status, mpc_->last_solve_time_ms(),
+      mpc_solved_count_, mpc_inaccurate_count_, mpc_max_iter_count_,
+      mpc_fallback_count_);
+    RCLCPP_INFO(get_logger(),
+      "MPC_TRACE x1_real=(%+.3f,%+.3f,%+.3f,%+.3f) "
+      "x2_real=(%+.3f,%+.3f,%+.3f,%+.3f) "
+      "x1_pred=(%+.3f,%+.3f,%+.3f,%+.3f) "
+      "x2_pred=(%+.3f,%+.3f,%+.3f,%+.3f) "
+      "raw_map=(%+.3f,%+.3f) final_body=(%+.3f,%+.3f) status=%d(%s)",
+      x1_real(0), x1_real(1), x1_real(2), x1_real(3),
+      x2_real(0), x2_real(1), x2_real(2), x2_real(3),
+      x1_h(0), x1_h(1), x1_h(2), x1_h(3),
+      x2_h(0), x2_h(1), x2_h(2), x2_h(3),
+      out_map(0), out_map(1), cmd.linear.x, cmd.linear.y,
+      mpc_status, mpc_->last_status_string());
     diag_tick_ = 0;
     sum_leader_age_ = 0.0;
     sum_ekf_age_ = 0.0;
+    mpc_solved_count_ = 0;
+    mpc_inaccurate_count_ = 0;
+    mpc_max_iter_count_ = 0;
+    mpc_fallback_count_ = 0;
     last_diag_time_ = now;
   }
 

@@ -113,6 +113,29 @@ public:
     return hpc_.calculate_distance(leader_hpc_state, follower_hpc_state);
   }
 
+  int target_index() const
+  {
+    return hpc_.target_index();
+  }
+
+  double current_distance(const Eigen::Vector4d& leader_hpc_state,
+                          const Eigen::Vector4d& follower_hpc_state) const
+  {
+    return hpc_.current_distance(leader_hpc_state, follower_hpc_state);
+  }
+
+  double best_distance(const Eigen::Vector4d& leader_hpc_state,
+                       const Eigen::Vector4d& follower_hpc_state) const
+  {
+    return hpc_.best_distance(leader_hpc_state, follower_hpc_state);
+  }
+
+  Eigen::Vector4d selected_error(const Eigen::Vector4d& leader_hpc_state,
+                                 const Eigen::Vector4d& follower_hpc_state) const
+  {
+    return hpc_.selected_error(leader_hpc_state, follower_hpc_state);
+  }
+
 private:
   void build_actuator_kernels()
   {

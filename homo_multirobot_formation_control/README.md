@@ -10,7 +10,7 @@
 **6D Bearing 方位角约束编队**（6D 模型 + 固定方位角，无切换平滑弧线）、
 **6D Motor 电机感知模型**（执行器一阶滞后显式增广，面向实物大延迟场景）、
 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）、
-以及 **MPC 6D 运动学模型预测控制**（顺序线性化 + OSQP 求解，作为 HPC 的对照组）。
+以及 **4D Artstein-MPC / MPC 6D 模型预测控制**（OSQP 求解，作为 HPC 的对照组）。
 
 ## 目录
 
@@ -33,6 +33,7 @@
 |------|------------|-----------|---------|---------|---------|
 | **4D (原版)** | `formation_single_follower.launch.py` | `formation_control_node` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **4D Artstein (预测补偿)** | `formation_single_follower_4d_artstein.launch.py` | `formation_control_node_4d_artstein` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换 | 独立 P+前馈 |
+| **4D Artstein-MPC (对照组)** | `formation_single_follower_4d_artstein_mpc.launch.py` | `formation_control_node_4d_artstein_mpc` | 同 4D Artstein，预测补偿后进入 4D linear MPC | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
 | **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
@@ -45,6 +46,12 @@
 **MPC 6D** 是基于顺序线性化 + OSQP 求解的模型预测编队控制器，作为 HPC 齐次控制的对照组。
 采用单点局部线性化（整个预测时域用同一组 $A_d, B_d, C_d$），QP 规模 366 变量，求解时间 ~1-5ms。
 当前默认使用 Leader 车体系固定偏移编队（位置/速度参考一致），边界投影模式需多轮 SQP 迭代，待后续完善。
+
+**4D Artstein-MPC** 复用 4D Artstein 的 TF/EKF 状态获取、Artstein 输入延迟补偿、
+一阶执行器前向预测和 cmd_vel 后处理链路，只把上层 4D HPC 替换为 4D 双积分 linear MPC。
+MPC 使用 ZOH 离散化和 OSQP 非紧凑 QP，输出 `x_{1|0}.tail(2)` 作为下一步 map 系速度命令，
+不直接发布 force-like `u0`。详见 `doc/4d_artstein_mpc_design.md` 和
+`doc/4d_artstein_mpc_simulation.md`。
 
 6D+OA 在 6D 基础上新增基于单线激光雷达的避障功能：通过 `/scan` 话题感知障碍物，
 将障碍物距离约束以软约束形式融入 QP 优化框架，求解最优速度指令平衡编队跟踪与避障。
@@ -335,6 +342,39 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   use_motor_delay:=false \
   cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0
 ```
+
+### 启动（4D Artstein-MPC 对照组）
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_mpc.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  mass:=2.0 radius:=2.0 max_linear_vel:=0.5 max_linear_accel:=0.4 min_cmd_vel:=0.0 \
+  mpc_horizon:=30 q_px:=40.0 q_py:=40.0 q_vx:=1.0 q_vy:=1.0 r_ux:=0.02 r_uy:=0.02
+```
+
+延迟仿真对照建议显式开启 delay node，并保持 `min_cmd_vel:=0.0`，避免把 MPC 平衡点附近的微小数值残差放大成持续速度：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_mpc.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  mass:=2.0 radius:=2.0 max_linear_vel:=0.5 max_linear_accel:=0.4 min_cmd_vel:=0.0 \
+  mpc_horizon:=30 q_px:=40.0 q_py:=40.0 q_vx:=1.0 q_vy:=1.0 r_ux:=0.02 r_uy:=0.02 \
+  use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=2.0
+```
+
+延迟仿真下默认开启 `enable_radial_safety:=true`。该层不改 QP，而是在 MPC 输出的
+map 系速度上限制朝向 Leader 的径向内切速度，使 `radius` 余量足以覆盖
+`Td + tau` 延迟期间的滑行和 `max_linear_accel` 下的刹停距离。需要裸 MPC 对照时可显式设为
+`enable_radial_safety:=false`。该限幅使用 Follower 相对 Leader 的径向速度；Leader 绕圈时不能使用
+Follower 绝对 map 速度判定内切，否则会把合理的随动速度误判为撞向 Leader。
+
+注意：验证 Artstein-MPC 理论补偿时，`sim_motor_delay.py` 应尽量只模拟 `motor_tau + transport_delay`。
+如果把 `delay_max_accel` 设得太低（例如 `0.4`），延迟节点会额外引入速度斜率饱和；这不在当前
+Artstein 一阶预测模型内，绕圈时会造成明显相位滞后。经验上先设 `delay_max_accel:=2.0`，确认补偿链路正常后，
+再单独研究低加速度饱和场景。
+
 ### 启动（4D Cont 连续边界投影）
 
 ```bash

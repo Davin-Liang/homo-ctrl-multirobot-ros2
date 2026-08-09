@@ -2,7 +2,11 @@
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
+#if __has_include(<osqp/osqp.h>)
+#include <osqp/osqp.h>
+#else
 #include <osqp.h>
+#endif
 #include <memory>
 #include <vector>
 
@@ -35,14 +39,18 @@ public:
              const Eigen::VectorXd& l,
              const Eigen::VectorXd& u);
 
+  void configure(int max_iter, double eps_abs, double eps_rel, bool polish);
+
   /// Solve the QP. Returns true iff OSQP_SOLVED.
   bool solve();
+  bool has_usable_solution() const;
 
   /// Primal solution (size n).
   Eigen::VectorXd solution() const;
 
   /// OSQP status code (1 = solved, -2 = primal infeasible, etc.).
   int status() const;
+  const char* status_string() const;
 
 private:
   /// Convert Eigen::SparseMatrix<double> to OSQP csc struct (caller frees with csc_spfree).
@@ -116,11 +124,31 @@ inline void OsqpSolver::setup(const Eigen::SparseMatrix<double>& P,
   osqp_setup(&work_, data_, settings_);
 }
 
+inline void OsqpSolver::configure(int max_iter, double eps_abs, double eps_rel, bool polish)
+{
+  if (!settings_) return;
+  settings_->max_iter = max_iter;
+  settings_->eps_abs = eps_abs;
+  settings_->eps_rel = eps_rel;
+  settings_->polish = polish ? 1 : 0;
+}
+
 inline bool OsqpSolver::solve()
 {
   if (!work_) return false;
   osqp_solve(work_);
   return work_->info->status_val == OSQP_SOLVED;
+}
+
+inline bool OsqpSolver::has_usable_solution() const
+{
+  if (!work_ || !work_->solution || !work_->solution->x || !work_->info) {
+    return false;
+  }
+  const int status = work_->info->status_val;
+  return status == OSQP_SOLVED ||
+         status == OSQP_SOLVED_INACCURATE ||
+         status == OSQP_MAX_ITER_REACHED;
 }
 
 inline Eigen::VectorXd OsqpSolver::solution() const
@@ -138,6 +166,11 @@ inline Eigen::VectorXd OsqpSolver::solution() const
 inline int OsqpSolver::status() const
 {
   return work_ ? work_->info->status_val : -1;
+}
+
+inline const char* OsqpSolver::status_string() const
+{
+  return work_ && work_->info ? work_->info->status : "unavailable";
 }
 
 // ---- Private helpers -------------------------------------------------------

@@ -170,6 +170,43 @@ public:
     return min_dist;
   }
 
+  int target_index() const
+  {
+    for (int i = 0; i < m_p_; ++i) {
+      if ((d_ - dl_.col(i)).norm() < 1e-12) {
+        return i;
+      }
+    }
+    return 0;
+  }
+
+  Vec4d target_offset() const
+  {
+    return d_;
+  }
+
+  double current_distance(const Vec4d& x1, const Vec4d& x2) const
+  {
+    return (x2 - x1 - d_).norm();
+  }
+
+  double best_distance(const Vec4d& x1, const Vec4d& x2) const
+  {
+    double best_dist = std::numeric_limits<double>::max();
+    for (int i = 0; i < m_p_; ++i) {
+      double dist = (x2 - x1 - dl_.col(i)).norm();
+      if (dist < best_dist) {
+        best_dist = dist;
+      }
+    }
+    return best_dist;
+  }
+
+  Vec4d selected_error(const Vec4d& x1, const Vec4d& x2) const
+  {
+    return x2 - x1 - d_;
+  }
+
 private:
   // --------------------------------------------------------------------------
   // 编队点切换（带 tol_ 滞后避免频繁跳动）

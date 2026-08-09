@@ -59,6 +59,8 @@ class SimMotorDelay(Node):
         self.omega_f = 0.0
         # 最新收到的目标速度
         self.latest_twist = Twist()
+        self._tick = 0
+        self._sum_queue = 0
 
         self.dt = 1.0 / self.rate
         self.timer = self.create_timer(self.dt, self.timer_cb)
@@ -98,6 +100,16 @@ class SimMotorDelay(Node):
         self.vx_f = vx
         self.vy_f = vy
         self.omega_f = omega
+        self._tick += 1
+        self._sum_queue += len(self.delay_queue)
+        if self._tick % int(self.rate) == 0:
+            avg_queue = self._sum_queue / max(self._tick, 1)
+            self.get_logger().info(
+                f'DELAY_TRACE q={len(self.delay_queue)} avg_q={avg_queue:.1f} '
+                f'target=({target_vx:+.3f},{target_vy:+.3f}) '
+                f'out=({vx:+.3f},{vy:+.3f}) tau={self.motor_tau:.2f} Td={self.transport_delay:.2f} '
+                f'max_accel={self.max_accel:.2f}'
+            )
 
         msg = Twist()
         msg.linear.x = vx

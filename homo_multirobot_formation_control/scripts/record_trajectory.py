@@ -226,6 +226,23 @@ class TrajectoryRecorder(Node):
         return (tf_x + ekf_x * math.cos(tf_yaw) - ekf_y * math.sin(tf_yaw),
                 tf_y + ekf_x * math.sin(tf_yaw) + ekf_y * math.cos(tf_yaw))
 
+    def _nearest_formation_error(self, leader_x, leader_y, follower_x, follower_y):
+        radius = self.ctrl_params.get('radius', self.ideal_radius)
+        m_p = int(round(self.ctrl_params.get('m_p', 4)))
+        if radius <= 0.0 or m_p < 1:
+            return float('nan')
+        dx = follower_x - leader_x
+        dy = follower_y - leader_y
+        best = float('inf')
+        for i in range(m_p):
+            angle = 2.0 * math.pi * i / m_p
+            off_x = -radius * math.cos(angle)
+            off_y = -radius * math.sin(angle)
+            err = math.hypot(dx - off_x, dy - off_y)
+            if err < best:
+                best = err
+        return best
+
     def _record(self, msg, ns, xl, yl, tl, vxl, vyl, vl):
         if self.done:
             return
@@ -277,7 +294,7 @@ class TrajectoryRecorder(Node):
                         'leader_vx_ms', 'leader_vy_ms', 'leader_v_ms',
                         'follower_x_m', 'follower_y_m',
                         'follower_vx_ms', 'follower_vy_ms', 'follower_v_ms',
-                        'distance_m'])
+                        'distance_m', 'nearest_formation_error_m'])
             n2 = len(self.t2_t)
             n1 = len(self.t1_t)
             for i2 in range(n2):
@@ -293,11 +310,12 @@ class TrajectoryRecorder(Node):
                 lvx = self.t1_vx[i1]
                 lvy = self.t1_vy[i1]
                 dist = math.hypot(lx - fx, ly - fy)
+                err = self._nearest_formation_error(lx, ly, fx, fy)
                 w.writerow([f'{t:.4f}', f'{lx:.4f}', f'{ly:.4f}',
                             f'{lvx:.4f}', f'{lvy:.4f}', f'{math.hypot(lvx,lvy):.4f}',
                             f'{fx:.4f}', f'{fy:.4f}',
                             f'{fvx:.4f}', f'{fvy:.4f}', f'{math.hypot(fvx,fvy):.4f}',
-                            f'{dist:.4f}'])
+                            f'{dist:.4f}', f'{err:.4f}'])
         self.get_logger().info(f'CSV 已保存: {csv_path}')
 
     def _plot_xy_vel(self, ax, tl, vl, name, c):
@@ -332,14 +350,23 @@ class TrajectoryRecorder(Node):
             dist_t = self.t2_t[:n]
             dist = [math.hypot(self.t1_x[i] - self.t2_x[i], self.t1_y[i] - self.t2_y[i])
                     for i in range(n)]
+            err = [self._nearest_formation_error(self.t1_x[i], self.t1_y[i],
+                                                 self.t2_x[i], self.t2_y[i])
+                   for i in range(n)]
+            dist_mean = sum(dist) / n
+            dist_std = math.sqrt(max(0.0, sum((d - dist_mean) ** 2 for d in dist) / n))
+            err_mean = sum(err) / n if n > 0 else float('nan')
+            err_std = math.sqrt(max(0.0, sum((e - err_mean) ** 2 for e in err) / n)) if n > 0 else float('nan')
             ax.plot(dist_t, dist, linewidth=1.0, color='tab:red',
-                    label=f'Actual (mean={sum(dist)/n:.2f}m, '
-                          f'std={math.sqrt(max(0,sum((d-sum(dist)/n)**2 for d in dist)/n)):.2f}m)')
+                    label=f'Leader-follower (mean={dist_mean:.2f}m, std={dist_std:.2f}m)')
+            if not math.isnan(err_mean):
+                ax.plot(dist_t, err, linewidth=1.0, color='tab:green', linestyle='--',
+                        label=f'Nearest formation error (mean={err_mean:.2f}m, std={err_std:.2f}m)')
         if self.ideal_radius > 0:
             ax.axhline(y=self.ideal_radius, color='gray', linestyle='--', linewidth=1.2,
                        label=f'Ideal radius = {self.ideal_radius:.1f}m')
         ax.set_xlabel('Time (s)'); ax.set_ylabel('Distance (m)')
-        ax.set_title('Formation distance')
+        ax.set_title('Distance / nearest formation error')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
         # ---- 子图 3: Vx + Vy (body frame) ----

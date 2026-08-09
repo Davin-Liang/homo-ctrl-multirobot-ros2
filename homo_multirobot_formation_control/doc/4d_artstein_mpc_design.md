@@ -647,7 +647,118 @@ MPC 的优势在于约束表达直接、调参直观；
 5. 日志能看出 target、solve_ms、u0、速度限幅/轮速限幅触发情况。
 ```
 
-## 12. 参考文献
+## 12. 数值仿真预验证记录
+
+2026-08-08 已完成 Python 数值仿真预验证，并已落地 ROS C++ 对照节点。新增脚本：
+
+```text
+homo_multirobot_formation_control/scripts/sim_4d_artstein_mpc_compare.py
+```
+
+对应说明文档：
+
+```text
+homo_multirobot_formation_control/doc/4d_artstein_mpc_simulation.md
+```
+
+ROS C++ 实现文件：
+
+```text
+include/homo_multirobot_formation_control/mpc_controller_4d_artstein.hpp
+include/homo_multirobot_formation_control/formation_control_node_4d_artstein_mpc.hpp
+src/formation_control_node_4d_artstein_mpc.cpp
+src/main_4d_artstein_mpc.cpp
+launch/formation_single_follower_4d_artstein_mpc.launch.py
+```
+
+仿真保持以下公平对照原则：
+
+```text
+4D Artstein-HPC = 同一 Artstein/执行器预测补偿层 + 4D HPC 上层控制律
+4D Artstein-MPC = 同一 Artstein/执行器预测补偿层 + 4D linear MPC 上层控制律
+```
+
+MPC 使用 4D 双积分 ZOH 离散化，输出 `x_{1|0}.tail(2)` 作为下一步 map 系速度命令，
+不直接输出 `u0`，也不在 MPC 外层重复积分。
+
+默认 20Hz、`tau=0.43`、`Td=0.22`、`radius=2.0`、`mass=2.0`、
+`max_linear_vel=0.5`、`max_linear_accel=0.4`、`Q=diag(40,40,1,1)`、
+`R=diag(0.02,0.02)`、`mpc_horizon=30` 下的结果目录：
+
+```text
+homo_multirobot_formation_control/analysis/results/4d_artstein_mpc/
+```
+
+关键指标：
+
+```text
+case                   tail_mean_distance  final_distance  mean_cmd_delta  mean_solve_ms  solver_failures
+artstein_hpc_no_delay  0.0141              0.0129          0.0197          0.000          0
+artstein_mpc_no_delay  0.0100              0.0100          0.0020          0.998          0
+original_4d_delay      0.0711              0.0788          0.0119          0.000          0
+artstein_hpc_delay     0.0115              0.0119          0.0193          0.000          0
+artstein_mpc_delay     0.0159              0.0159          0.0020          3.052          0
+```
+
+调参记录：初始 `Q=diag(10,10,1,1), R=diag(0.05,0.05)` 时，delay 场景
+`artstein_mpc_delay` 的尾段误差约为 `0.0259`。将位置权重提高到 `q_px=q_py=40`，
+并将输入惩罚降到 `r_ux=r_uy=0.02` 后，尾段误差降至约 `0.0159`，且
+`solver_failures=0`。继续提高 `Q` 或降低 `R` 还能略微压低误差，但当前 Python ADMM
+原型会出现更多未收敛周期或求解时间上升，因此暂不作为默认参数。
+
+预验证结论：
+
+- no-delay 下 4D Artstein-MPC 能稳定收敛到离散编队目标，尾段误差与 4D Artstein-HPC 同量级。
+- delay 下 4D Artstein-MPC 使用同一 Artstein/执行器预测补偿层后未发散，尾段误差明显小于
+  original 4D + delay。
+- 调参后 MPC 命令仍明显更平滑，但 delay 场景稳态误差仍略大于 Artstein-HPC；这符合“第一版对照组，
+  非最优调参”的定位。
+- ROS C++ 节点已使用仓库已有 `osqp_interface.hpp` 和 `ros-humble-osqp-vendor`，QP 形式与第 5 节一致。
+
+ROS 延迟仿真联调补充：
+
+- 静止 Leader + `use_motor_delay:=true` 时，若只依赖 4D linear MPC 的速度/加速度盒约束，
+  Follower 在接近编队半径时仍可能因 `Td + tau` 执行器滞后继续内切，出现穿过 Leader 的风险。
+- C++ 节点因此增加了默认启用的 `enable_radial_safety` 后处理层。该层不改变 QP 形式，只对 MPC 输出的
+  map 系速度做径向限幅：当速度朝向 Leader 时，要求当前半径余量能覆盖 `Td + tau` 延迟滑行距离和
+  `max_linear_accel` 下的刹停距离。
+- Leader 运动时，径向限幅必须使用 Follower 相对 Leader 的径向速度；使用 Follower 绝对 map 速度会在
+  绕圈轨迹中误判随动速度，导致控制命令间歇性被压到接近零。
+- 该层用于 ROS/Gazebo 延迟注入下的碰撞安全保护；若需要严格比较裸 4D Artstein-MPC 上层控制律，可在
+  launch 中设 `enable_radial_safety:=false`。
+- `sim_motor_delay.py` 的 `delay_max_accel` 若设得过低，会额外引入速度斜率饱和。当前 Artstein 预测层建模的是
+  `motor_tau + transport_delay`，不包含该饱和非线性；因此理论补偿验证阶段应先使用较大的
+  `delay_max_accel`（如 `2.0`），避免把执行器限幅误当成纯一阶滞后。
+
+验证记录：
+
+```bash
+source /opt/ros/humble/setup.bash
+cd /home/l1anggmgo/ros-projects/homo_multirobot_ws
+colcon build --packages-select homo_multirobot_formation_control --symlink-install --cmake-args -DBUILD_TESTING=ON
+colcon test --packages-select homo_multirobot_formation_control --event-handlers console_direct+
+colcon build --packages-select homo_multirobot_formation_control --symlink-install --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_mpc.launch.py --show-args
+```
+
+其中 C++ 单元测试 `test_mpc_controller_4d_artstein` 验证：
+
+```text
+1. 4D 双积分 ZOH 离散化矩阵正确；
+2. MPC 输出等于 x_{1|0}.tail(2)，不是 u0；
+3. 输出速度满足 max_linear_vel 约束。
+```
+
+2026-08-08 ROS delay 调试补充：
+
+- 静止 leader + delay 仿真时，如果 `min_cmd_vel:=0.03`，MPC 平衡点附近的 OSQP 微小速度残差会被最小速度补偿放大；
+  no-delay 下该残差能快速纠偏，但 delay 链路会引入相位滞后，可能导致 follower 向 leader 内冲。
+- 4D Artstein-MPC 仿真默认已改为 `min_cmd_vel:=0.0`；实物若需要死区补偿，应先在低速、小半径外侧场景验证。
+- OSQP 默认保持 `eps_abs=eps_rel=1e-3`，但开启 `osqp_polish:=true`。该组合能在平衡点把残差压到近零，
+  同时避免 `eps=1e-5` 在部分非平衡状态下达到最大迭代。
+
+## 13. 参考文献
 
 后续写毕业论文或小论文时，可从下面条目中选择引用。第 1-4 条用于支撑
 Artstein/predictor 延迟补偿，第 5-8 条用于支撑 constrained MPC / QP 求解，第 9-12
