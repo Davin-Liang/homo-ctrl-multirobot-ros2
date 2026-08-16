@@ -10,7 +10,7 @@
 **6D Bearing 方位角约束编队**（6D 模型 + 固定方位角，无切换平滑弧线）、
 **6D Motor 电机感知模型**（执行器一阶滞后显式增广，面向实物大延迟场景）、
 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）、
-以及 **4D Artstein-MPC / MPC 6D 模型预测控制**（OSQP 求解，作为 HPC 的对照组）。
+以及 **4D Artstein-LQR / 4D Artstein-MPC / MPC 6D** 对照控制器。
 
 ## 目录
 
@@ -33,6 +33,7 @@
 |------|------------|-----------|---------|---------|---------|
 | **4D (原版)** | `formation_single_follower.launch.py` | `formation_control_node` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **4D Artstein (预测补偿)** | `formation_single_follower_4d_artstein.launch.py` | `formation_control_node_4d_artstein` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换 | 独立 P+前馈 |
+| **4D Artstein-LQR (对照组)** | `formation_single_follower_4d_artstein_lqr.launch.py` | `formation_control_node_4d_artstein_lqr` | 同 4D Artstein，预测补偿后进入 4D DARE-LQR | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **4D Artstein-MPC (对照组)** | `formation_single_follower_4d_artstein_mpc.launch.py` | `formation_control_node_4d_artstein_mpc` | 同 4D Artstein，预测补偿后进入 4D linear MPC | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
 | **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
@@ -52,6 +53,9 @@
 MPC 使用 ZOH 离散化和 OSQP 非紧凑 QP，输出 `x_{1|0}.tail(2)` 作为下一步 map 系速度命令，
 不直接发布 force-like `u0`。详见 `doc/4d_artstein_mpc_design.md` 和
 `doc/4d_artstein_mpc_simulation.md`。
+
+**4D Artstein-LQR 对照** 复用同一预测补偿层，只把上层控制律替换为基于 DARE 的离散 LQR；
+可用于 ROS/Gazebo 对照实验，数值仿真说明见 `doc/4d_artstein_lqr_simulation.md`。
 
 6D+OA 在 6D 基础上新增基于单线激光雷达的避障功能：通过 `/scan` 话题感知障碍物，
 将障碍物距离约束以软约束形式融入 QP 优化框架，求解最优速度指令平衡编队跟踪与避障。
@@ -374,6 +378,31 @@ Follower 绝对 map 速度判定内切，否则会把合理的随动速度误判
 如果把 `delay_max_accel` 设得太低（例如 `0.4`），延迟节点会额外引入速度斜率饱和；这不在当前
 Artstein 一阶预测模型内，绕圈时会造成明显相位滞后。经验上先设 `delay_max_accel:=2.0`，确认补偿链路正常后，
 再单独研究低加速度饱和场景。
+
+### 启动（4D Artstein-LQR 对照组）
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_lqr.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  mass:=2.0 radius:=2.0 max_linear_vel:=0.5 max_linear_accel:=0.4 min_cmd_vel:=0.0 \
+  q_px:=40.0 q_py:=40.0 q_vx:=1.0 q_vy:=1.0 r_ux:=0.02 r_uy:=0.02
+```
+
+延迟仿真对照:
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_lqr.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  mass:=2.0 radius:=2.0 max_linear_vel:=0.5 max_linear_accel:=0.4 min_cmd_vel:=0.0 \
+  q_px:=40.0 q_py:=40.0 q_vx:=1.0 q_vy:=1.0 r_ux:=0.02 r_uy:=0.02 \
+  use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=2.0
+```
+
+`use_motor_delay:=true` 时，LQR 节点会发布 `cmd_vel_raw`，由 `sim_motor_delay.py`
+注入 `motor_tau + transport_delay` 后转发到 `cmd_vel`。验证 LQR/Artstein 预测补偿时，
+建议先保持 `delay_max_accel:=2.0`，避免把额外速度斜率饱和混入 DARE-LQR 对照。
 
 ### 启动（4D Cont 连续边界投影）
 

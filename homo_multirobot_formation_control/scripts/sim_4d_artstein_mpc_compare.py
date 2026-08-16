@@ -23,6 +23,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.linalg import solve_discrete_are
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -268,13 +269,83 @@ class Mpc4D:
             self.d = self.dl[:, best_idx].copy()
 
 
+class Lqr4D:
+    """Discrete infinite-horizon LQR for the predicted 4D double integrator."""
+
+    def __init__(
+        self,
+        mass: float = 2.0,
+        dt: float = 0.05,
+        radius: float = 2.0,
+        m_p: int = 4,
+        tol: float = 0.1,
+        q: tuple[float, float, float, float] = (40.0, 40.0, 1.0, 1.0),
+        r: tuple[float, float] = (0.02, 0.02),
+    ):
+        self.mass = mass
+        self.dt = dt
+        self.radius = radius
+        self.m_p = m_p
+        self.tol = tol
+        self.Ad, self.Bd = double_integrator_zoh(mass, dt)
+        self.Q = np.diag(q)
+        self.R = np.diag(r)
+        self.P = solve_discrete_are(self.Ad, self.Bd, self.Q, self.R)
+        self.K = np.linalg.solve(
+            self.R + self.Bd.T @ self.P @ self.Bd,
+            self.Bd.T @ self.P @ self.Ad,
+        )
+        self.dl = np.column_stack(
+            [
+                np.array(
+                    [
+                        -radius * np.cos(2.0 * np.pi * i / m_p),
+                        -radius * np.sin(2.0 * np.pi * i / m_p),
+                        0.0,
+                        0.0,
+                    ]
+                )
+                for i in range(m_p)
+            ]
+        )
+        self.target_idx = 0
+        self.d = self.dl[:, 0].copy()
+
+    def init(self, x1: np.ndarray, x2: np.ndarray):
+        self.target_idx = self._best_target_idx(x1, x2)
+        self.d = self.dl[:, self.target_idx].copy()
+
+    def command(self, x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
+        self._switch_if_needed(x1, x2)
+        force_like_u = -self.K @ self.selected_error(x1, x2)
+        return x2[2:4] + self.dt * (force_like_u / self.mass)
+
+    def distance(self, x1: np.ndarray, x2: np.ndarray) -> float:
+        return float(min(np.linalg.norm(x2 - x1 - self.dl[:, i]) for i in range(self.m_p)))
+
+    def selected_error(self, x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
+        return x2 - x1 - self.d
+
+    def _best_target_idx(self, x1: np.ndarray, x2: np.ndarray) -> int:
+        distances = [np.linalg.norm(x2 - x1 - self.dl[:, i]) for i in range(self.m_p)]
+        return int(np.argmin(distances))
+
+    def _switch_if_needed(self, x1: np.ndarray, x2: np.ndarray):
+        best_idx = self._best_target_idx(x1, x2)
+        current_dist = np.linalg.norm(x2 - x1 - self.d)
+        best_dist = np.linalg.norm(x2 - x1 - self.dl[:, best_idx])
+        if best_dist + self.tol < current_dist:
+            self.target_idx = best_idx
+            self.d = self.dl[:, best_idx].copy()
+
+
 def target_idx_from_hpc(ctrl: Hpc4D) -> int:
     distances = [np.linalg.norm(ctrl.d - ctrl.dl[:, i]) for i in range(ctrl.m_p)]
     return int(np.argmin(distances))
 
 
-def selected_error(ctrl: Hpc4D | Mpc4D, x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
-    if isinstance(ctrl, Mpc4D):
+def selected_error(ctrl: Hpc4D | Mpc4D | Lqr4D, x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
+    if isinstance(ctrl, (Mpc4D, Lqr4D)):
         return ctrl.selected_error(x1, x2)
     return x2 - x1 - ctrl.d
 
@@ -300,7 +371,7 @@ def constrain_velocity_command(
     return cmd, speed_clipped_1 or speed_clipped_2, accel_clipped
 
 
-def make_controller(controller_kind: str, dt: float, args) -> Hpc4D | Mpc4D:
+def make_controller(controller_kind: str, dt: float, args) -> Hpc4D | Mpc4D | Lqr4D:
     if controller_kind == "hpc":
         return Hpc4D(
             mass=args.mass,
@@ -329,11 +400,27 @@ def make_controller(controller_kind: str, dt: float, args) -> Hpc4D | Mpc4D:
             eps_rel=args.mpc_eps_rel,
             rho=args.mpc_rho,
         )
+    if controller_kind == "lqr":
+        return Lqr4D(
+            mass=args.mass,
+            dt=dt,
+            radius=args.radius,
+            m_p=args.m_p,
+            tol=args.tol,
+            q=(args.lqr_q_px, args.lqr_q_py, args.lqr_q_vx, args.lqr_q_vy),
+            r=(args.lqr_r_ux, args.lqr_r_uy),
+        )
     raise ValueError(f"unknown controller kind: {controller_kind}")
 
 
-def raw_velocity_command(ctrl: Hpc4D | Mpc4D, x1_ctrl: np.ndarray, x2_ctrl: np.ndarray, dt: float, mass: float):
-    if isinstance(ctrl, Mpc4D):
+def raw_velocity_command(
+    ctrl: Hpc4D | Mpc4D | Lqr4D,
+    x1_ctrl: np.ndarray,
+    x2_ctrl: np.ndarray,
+    dt: float,
+    mass: float,
+):
+    if isinstance(ctrl, (Mpc4D, Lqr4D)):
         return ctrl.command(x1_ctrl, x2_ctrl)
     accel = ctrl.accel(x1_ctrl, x2_ctrl)
     return x2_ctrl[2:4] + dt * (accel / mass)
@@ -376,6 +463,12 @@ def simulate_circle_case(
             mpc_eps_abs=1e-4,
             mpc_eps_rel=1e-3,
             mpc_rho=1.0,
+            lqr_q_px=40.0,
+            lqr_q_py=40.0,
+            lqr_q_vx=1.0,
+            lqr_q_vy=1.0,
+            lqr_r_ux=0.02,
+            lqr_r_uy=0.02,
             leader_radius=2.0,
             leader_omega=0.1,
         )
@@ -440,7 +533,7 @@ def simulate_circle_case(
         cmd_history.appendleft(cmd.copy())
         t += dt
 
-        target_idx = ctrl.target_idx if isinstance(ctrl, Mpc4D) else target_idx_from_hpc(ctrl)
+        target_idx = ctrl.target_idx if isinstance(ctrl, (Mpc4D, Lqr4D)) else target_idx_from_hpc(ctrl)
         solution = ctrl.last_solution if isinstance(ctrl, Mpc4D) else None
         rows.append(
             SimRow(
@@ -601,7 +694,9 @@ def plot_group(title: str, rows_by_name: dict[str, list[SimRow]], out_path: Path
 
     for ax in axs.ravel():
         ax.grid(True)
-        ax.legend(frameon=False, fontsize=8)
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend(handles, labels, frameon=False, fontsize=8)
     fig.suptitle(title)
     fig.savefig(out_path, dpi=180)
     plt.close(fig)

@@ -9,6 +9,9 @@
 
 | # | 问题 | 分类 | 处理 |
 |---|------|------|------|
+| 42 | 4D Artstein-LQR 文档中 MPC 段落被插入内容打断 | 文档 | 调整 README 段落顺序 |
+| 41 | 非 MPC 图没有求解时间曲线却调用 legend | Python | 仅在存在 handles 时调用 legend |
+| 40 | colcon 构建单一 CMake target 参数写错 | 构建 | 使用 `--cmake-target` |
 | 28 | `ParameterValue` 对象无 `name` 属性 → record_trajectory 崩溃 | Python | zip 参数名与返回值 |
 | 1 | Gazebo odom ↔ slam_toolbox 定位数据不一致 → 振荡 | 架构 | EKF odom + TF 变换通道 |
 | 2 | 话题相对路径导致命名空间双重解析 | ROS 2 | 统一使用绝对路径 |
@@ -931,3 +934,77 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 
 修复后同组 Gazebo 参数下，6D Artstein Disc 的跟踪效果明显改善，说明原先差异中存在
 实现公平性因素，不应直接归因于 6D 理论模型本身。
+
+---
+
+## 40) colcon 构建单一 CMake target 参数写错
+
+**现象**: 为新增 `test_lqr_controller_4d_artstein` 做 TDD 红灯验证时，使用了：
+
+```bash
+colcon build --packages-select homo_multirobot_formation_control \
+  --symlink-install --cmake-args -DBUILD_TESTING=ON --target test_lqr_controller_4d_artstein
+```
+
+构建失败：
+
+```text
+CMake Error: Unknown argument --target
+```
+
+**原因**: `--target` 是 CMake/build tool 目标参数，但在 `colcon build` 中应通过
+`--cmake-target` 传递；不能直接放进 `--cmake-args`。
+
+**处理**:
+
+```bash
+cd /home/l1anggmgo/ros-projects/homo_multirobot_ws
+source /opt/ros/humble/setup.bash
+colcon build --packages-select homo_multirobot_formation_control \
+  --symlink-install --cmake-target test_lqr_controller_4d_artstein \
+  --cmake-args -DBUILD_TESTING=ON
+```
+
+该命令正确触发预期红灯：`lqr_controller_4d_artstein.hpp` 尚不存在。
+
+---
+
+## 41) 非 MPC 图没有求解时间曲线却调用 legend
+
+**现象**: 运行 4D Artstein-LQR 数值仿真时，图像和 CSV 正常生成，但 Matplotlib 输出：
+
+```text
+No artists with labels found to put in legend.
+```
+
+**原因**: `plot_group()` 的右下角子图用于显示 MPC solve time。LQR/HPC 没有优化求解时间，
+该子图没有任何曲线，但函数仍对所有子图无条件调用 `legend()`。
+
+**处理**: 在 `scripts/sim_4d_artstein_mpc_compare.py` 中改为只有存在 handles 时才调用：
+
+```python
+handles, labels = ax.get_legend_handles_labels()
+if handles:
+    ax.legend(handles, labels, frameon=False, fontsize=8)
+```
+
+这样保留 MPC 图的图例，同时避免 LQR/HPC 纯解析控制图输出 warning。
+
+---
+
+## 42) 4D Artstein-LQR 文档中 MPC 段落被插入内容打断
+
+**现象**: 向 README 增加 4D Artstein-LQR 启动说明时，曾把 LQR 小节插入到
+4D Artstein-MPC 注意事项中间，导致“经验上先设 `delay_max_accel:=2.0`，确认补偿链路正常后，”
+和“再单独研究低加速度饱和场景。”分离。
+
+**原因**: README 的 MPC 段落较长，包含普通启动、延迟启动、径向安全和 delay node 参数解释；
+新增 LQR 小节时插入点选在段落未结束处。
+
+**处理**: 将“再单独研究低加速度饱和场景。”接回 MPC 注意事项末尾，再单独开启
+`### 启动（4D Artstein-LQR 对照组）` 小节。后续更新 README 时应先检查小节边界：
+
+```bash
+rg -n "启动（4D Artstein-MPC|启动（4D Artstein-LQR|启动（4D Cont" \
+  homo_multirobot_formation_control/README.md
+```
