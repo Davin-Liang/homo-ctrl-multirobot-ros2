@@ -1,0 +1,6 @@
+case,max_pos_error,tail_mean_pos_error,tail_std_pos_error,final_pos_error,tail_mean_yaw_error,final_yaw_error,hpc_fallback_count
+ideal_6d_disc,1.255279,0.046346,0.000000,0.046346,0.011250,0.011250,0
+6d_disc_original_delay_clean,1.536812,0.394852,0.112529,0.530069,0.011228,0.011274,0
+6d_artstein_disc_clean,1.382890,0.053390,0.000000,0.053390,0.012639,0.012639,0
+6d_disc_original_delay_noise,1.535457,0.325199,0.101440,0.323621,0.011662,0.006521,0
+6d_artstein_disc_noise,1.379936,0.054154,0.009482,0.053704,0.010600,0.025039,0
