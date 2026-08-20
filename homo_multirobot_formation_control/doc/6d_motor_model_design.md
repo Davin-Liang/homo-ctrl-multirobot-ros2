@@ -263,7 +263,7 @@ HPC 核心（hnorm, expm, lpc2hpc, 自适应增益 calculate_klin）直接工作
 | `measure_motor_latency.py` | 阶跃响应法测电机延迟，双源 (raw/EKF) 对比，支持 `--target-fraction` |
 | `measure_cross_machine_delay.py` | 跨机器 ROS 2 话题延迟统计，CSV 导出 |
 | `sim_motor_delay.py` | 仿真电机延迟节点 (LP+传输延迟+加速度限幅)，launch 集成 |
-| `record_trajectory.py` | 轨迹记录，四子图+CSV 导出，自动读控制器参数生成标签 |
+| `record_trajectory.py` | 轨迹记录，六子图+CSV 导出，自动读控制器参数生成标签 |
 
 ### 5.2 控制器在线输出
 

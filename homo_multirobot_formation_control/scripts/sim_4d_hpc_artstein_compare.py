@@ -209,7 +209,7 @@ class Hpc4D:
         return self.K @ e
 
     def distance(self, x1: np.ndarray, x2: np.ndarray) -> float:
-        return min(np.linalg.norm(x2 - x1 - self.dl[:, i]) for i in range(self.m_p))
+        return float(np.linalg.norm(x2 - x1 - self.d))
 
     def _switch_if_needed(self, x1: np.ndarray, x2: np.ndarray):
         distances = [np.linalg.norm(x2 - x1 - self.dl[:, i]) for i in range(self.m_p)]
@@ -480,7 +480,7 @@ def plot_paper(rows, out_dir: Path):
     axs[2, 0].plot(t, err[1], "b", label="$e_y$")
     axs[2, 0].set(xlabel="t (s)", ylabel="formation error")
     axs[2, 1].plot(t, dist, "k", label="$||e||$")
-    axs[2, 1].set(xlabel="t (s)", ylabel="nearest formation distance", ylim=(0, 3.5))
+    axs[2, 1].set(xlabel="t (s)", ylabel="selected target error norm", ylim=(0, 3.5))
     for ax in axs.ravel():
         ax.grid(True)
         ax.legend(frameon=False)
@@ -504,7 +504,7 @@ def plot_delay_compare(ideal_rows, original_rows, compensated_rows, out_dir: Pat
     axs[0, 1].plot(ti, dist_i, "0.6", label="ideal 4D HPC")
     axs[0, 1].plot(to, dist_o, "tab:red", label="original + delay")
     axs[0, 1].plot(tc, dist_c, "tab:blue", label="Artstein + prediction")
-    axs[0, 1].set(xlabel="t (s)", ylabel="nearest formation distance", title="distance error")
+    axs[0, 1].set(xlabel="t (s)", ylabel="selected target error norm", title="formation error")
     axs[1, 0].plot(to, err_o[0], "tab:red", label="orig $e_x$")
     axs[1, 0].plot(to, err_o[1], "tab:orange", label="orig $e_y$")
     axs[1, 0].plot(tc, err_c[0], "tab:blue", label="comp $e_x$")
@@ -535,7 +535,7 @@ def plot_circle_compare(noise_label: str, original_rows, compensated_rows, out_d
     axs[0, 0].set(xlabel="x", ylabel="y", title=f"circle trajectory ({noise_label})")
     axs[0, 1].plot(to, dist_o, "tab:red", label="original 4D + delay")
     axs[0, 1].plot(tc, dist_c, "tab:blue", label="Artstein + prediction")
-    axs[0, 1].set(xlabel="t (s)", ylabel="nearest formation distance", title="distance error")
+    axs[0, 1].set(xlabel="t (s)", ylabel="selected target error norm", title="formation error")
     axs[1, 0].plot(to, err_o[0], "tab:red", label="orig $e_x$")
     axs[1, 0].plot(to, err_o[1], "tab:orange", label="orig $e_y$")
     axs[1, 0].plot(tc, err_c[0], "tab:blue", label="comp $e_x$")

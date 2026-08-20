@@ -195,7 +195,7 @@ class Mpc4D:
         return x_pred[1, 2:4].copy()
 
     def distance(self, x1: np.ndarray, x2: np.ndarray) -> float:
-        return float(min(np.linalg.norm(x2 - x1 - self.dl[:, i]) for i in range(self.m_p)))
+        return float(np.linalg.norm(x2 - x1 - self.d))
 
     def selected_error(self, x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
         return x2 - x1 - self.d
@@ -321,7 +321,7 @@ class Lqr4D:
         return x2[2:4] + self.dt * (force_like_u / self.mass)
 
     def distance(self, x1: np.ndarray, x2: np.ndarray) -> float:
-        return float(min(np.linalg.norm(x2 - x1 - self.dl[:, i]) for i in range(self.m_p)))
+        return float(np.linalg.norm(x2 - x1 - self.d))
 
     def selected_error(self, x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
         return x2 - x1 - self.d
@@ -671,7 +671,7 @@ def plot_group(title: str, rows_by_name: dict[str, list[SimRow]], out_path: Path
 
     for name, arr in arrays.items():
         axs[0, 1].plot(arr["t"], arr["distance"], label=name)
-    axs[0, 1].set(xlabel="t (s)", ylabel="nearest 4D error", title="formation distance")
+    axs[0, 1].set(xlabel="t (s)", ylabel="selected target error norm", title="formation error")
 
     for name, arr in arrays.items():
         axs[0, 2].plot(arr["t"], arr["err"][0], label=f"{name} ex")

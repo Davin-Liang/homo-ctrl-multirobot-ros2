@@ -22,6 +22,8 @@
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
+#include "homo_multirobot_formation_control/formation_safety.hpp"
+
 using namespace formation_control;
 
 // ============================================================================
@@ -115,6 +117,12 @@ FormationController4DArtstein::FormationController4DArtstein()
 
   max_linear_vel_  = declare_parameter("max_linear_vel",  1.0);
   max_angular_vel_ = declare_parameter("max_angular_vel", 0.5);
+  max_linear_accel_ = max_linear_accel;
+  formation_radius_ = radius;
+  tau_ = tau;
+  radial_safety_max_decel_ = declare_parameter("radial_safety_max_decel", 0.0);
+  radial_safety_effective_delay_ =
+      declare_parameter("radial_safety_effective_delay", -1.0);
 
   bool use_hpc = declare_parameter("use_hpc", true);
   double hpc_c_min = declare_parameter("hpc_c_min", 0.1);
@@ -123,6 +131,7 @@ FormationController4DArtstein::FormationController4DArtstein()
   leader_vel_lpf_tau_ = declare_parameter("leader_vel_lpf_tau", 0.0);
   min_cmd_vel_ = declare_parameter("min_cmd_vel", 0.03);
   cmd_integrator_base_ = declare_parameter("cmd_integrator_base", std::string("pred"));
+  enable_radial_safety_ = declare_parameter("enable_radial_safety", true);
 
   // ---- 控制器 ---------------------------------------------------------------
   ctrl_ = std::make_unique<LpcController4DArtstein>(m_p, radius, tol, mass, tau,
@@ -275,6 +284,21 @@ void FormationController4DArtstein::timer_cb()
     out_map << out[0], out[1];
   }
 
+  const double safety_max_decel =
+      radial_safety_max_decel_ > 0.0
+          ? std::min(max_linear_accel_, radial_safety_max_decel_)
+          : max_linear_accel_;
+  const double safety_effective_delay =
+      radial_safety_effective_delay_ >= 0.0
+          ? radial_safety_effective_delay_
+          : Td_ + tau_;
+  if (enable_radial_safety_) {
+    out_map = formation_control::apply_radial_safety_limit(
+        out_map, x2_real.tail<2>(), x1_real.tail<2>(),
+        x1_real.head<2>(), x2_real.head<2>(), formation_radius_,
+        safety_max_decel, safety_effective_delay, max_linear_vel_);
+  }
+
   double current_dist = ctrl_->current_distance(x1_h, x2_h);
   double best_dist = ctrl_->best_distance(x1_h, x2_h);
   Eigen::Vector4d selected_err = ctrl_->selected_error(x1_h, x2_h);
@@ -311,6 +335,40 @@ void FormationController4DArtstein::timer_cb()
   // ---- 步骤 10: 轮速约束 + 加速度限幅 ---------------------------------------
   double dt = 1.0 / control_rate_;
   double wheel_scale = constraint_.apply(cmd.linear.x, cmd.linear.y, cmd.angular.z, dt);
+
+  // The kinematic constraints can retain a previous inward command due to
+  // slew limiting. Enforce the braking envelope on the final map-frame
+  // command and synchronize that safety-arbitrated command for the next tick.
+  if (enable_radial_safety_) {
+    const Eigen::Vector2d final_map_before(
+        cmd.linear.x * std::cos(follower_yaw) - cmd.linear.y * std::sin(follower_yaw),
+        cmd.linear.x * std::sin(follower_yaw) + cmd.linear.y * std::cos(follower_yaw));
+    const Eigen::Vector2d final_map = formation_control::apply_radial_safety_limit(
+        final_map_before, x2_real.tail<2>(), x1_real.tail<2>(),
+        x1_real.head<2>(), x2_real.head<2>(), formation_radius_,
+        safety_max_decel, safety_effective_delay, max_linear_vel_);
+
+    if ((final_map - final_map_before).norm() > 1e-6) {
+      cmd.linear.x =
+          final_map(0) * std::cos(follower_yaw) + final_map(1) * std::sin(follower_yaw);
+      cmd.linear.y =
+          -final_map(0) * std::sin(follower_yaw) + final_map(1) * std::cos(follower_yaw);
+      constraint_.set_last_command(cmd.linear.x, cmd.linear.y, cmd.angular.z);
+
+      const Eigen::Vector2d rel = x2_real.head<2>() - x1_real.head<2>();
+      const double dist = rel.norm();
+      if (dist > 1e-9) {
+        const Eigen::Vector2d radial = rel / dist;
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+          "RADIAL_SAFE dist=%.3f radius=%.3f cmd_rel_rad %.3f->%.3f "
+          "a_brake=%.3f Td_eff=%.3f",
+          dist, formation_radius_,
+          (final_map_before - x1_real.tail<2>()).dot(radial),
+          (final_map - x1_real.tail<2>()).dot(radial),
+          safety_max_decel, safety_effective_delay);
+      }
+    }
+  }
 
   // ---- 步骤 11: 调试输出 ----------------------------------------------------
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,

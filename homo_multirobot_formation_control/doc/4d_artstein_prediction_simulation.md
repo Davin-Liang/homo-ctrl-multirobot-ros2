@@ -105,7 +105,7 @@ summary_metrics.csv
 图和指标的读取方式：
 
 - `Trajectory`：Leader/Follower 轨迹。用于判断是否能形成圆轨迹、8 字轨迹或 MATLAB 原始轨迹下的编队形状。
-- `Formation distance`：Leader-Follower 距离或最近编队点误差。用于判断是否稳定在期望编队半径附近。
+- `Formation error`：当前选中编队点的位置误差范数。用于判断编队跟踪是否稳定。
 - `Component error`：x/y 方向误差。用于判断是否存在周期性振荡，以及补偿后误差是否更接近 0。
 - `Velocity command`：控制器速度指令。用于判断是否频繁撞限幅、速度指令是否变宽、是否出现高频抖动。
 - `Speed magnitude`：全程总速度绝对值 `|v|`。用于判断圆轨迹中速度是否保持在目标值附近，以及速度是否被延迟和限幅拉宽。

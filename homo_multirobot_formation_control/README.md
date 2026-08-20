@@ -68,7 +68,7 @@ MPC 使用 ZOH 离散化和 OSQP 非紧凑 QP，输出 `x_{1|0}.tail(2)` 作为�
 （离散多边形 + tol），可直接与 4D baseline 对比。关键参数 `tau`（默认 0.5，
 实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。自适应 τ（tau_min/tau_max/v_tau_trans）匹配实物变加速度特性；Smith 预估器（smith_Td=0.22）补偿 ~220ms 死区。后续 8D Pade 全链路模型见 `doc/pade_deadtime_full.md`。
 
-**4D Artstein** 是原始 4D 双积分 HPC 的输入延迟与电机响应预测补偿版本。上层 HPC 核心仍保持原始 4D 双积分器结构和 `A_h^2=0` 幂零性质；`Td` 只表示纯输入/传输延迟补偿参数，由 Artstein 输入时延补偿处理；`tau` 表示一阶电机响应预测参数，用于把测得的 Follower 状态向前预测到等效双积分状态。详见 `doc/4d_artstein_prediction_theory.md`；数值仿真说明见 `doc/4d_artstein_prediction_simulation.md`；早期 Artstein 约简草稿见 `doc/artstein_reduction.md`。
+**4D Artstein** 是原始 4D 双积分 HPC 的输入延迟与电机响应预测补偿版本。上层 HPC 核心仍保持原始 4D 双积分器结构和 `A_h^2=0` 幂零性质；`Td` 只表示纯输入/传输延迟补偿参数，由 Artstein 输入时延补偿处理；`tau` 表示一阶电机响应预测参数，用于把测得的 Follower 状态向前预测到等效双积分状态。该版本默认还启用径向制动安全层：当 Follower 接近编队圆、其相对 Leader 的向内速度已超过在 `Td + tau` 延迟与可用制动能力下的安全值时，禁止继续发布朝向 Leader 的径向内切速度，给底盘留出刹停距离。该层不修改 4D HPC 控制律或 Artstein 变换，只在 map 系速度命令生成后、旋转到 body 系和最终限幅前生效。详见 `doc/4d_artstein_prediction_theory.md`；数值仿真说明见 `doc/4d_artstein_prediction_simulation.md`；早期 Artstein 约简草稿见 `doc/artstein_reduction.md`。
 
 **6D Artstein Disc** 是方向 A 的 6D 延迟补偿实现。它不把 `R(theta)` 引入一个全局常值 6x3 Artstein kernel，
 而是在进入 6D Disc HPC 前分别做：
@@ -313,11 +313,28 @@ Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考�
 
 | 参数 | 类型 | 默认值 | 作用 | 调大效果 | 调小效果 |
 |------|------|--------|------|----------|----------|
-| `mass` | double | 8.0 | 双重积分器模型的等效质量 | 增益增大，响应更快 | 增益减小，响应更慢 |
-| `omega_d` | double | 1.5 | 期望阻尼带宽，决定最小收敛速度 | 响应更快但可能震荡 | 更平滑但跟踪滞后 |
+| `mass` | double | 2.0 | 双重积分器模型的等效质量 | 增益增大，响应更快 | 增益减小，响应更慢 |
+| `omega_d` | double | 0.7 | 期望阻尼带宽，决定最小收敛速度 | 响应更快但可能震荡 | 更平滑但跟踪滞后 |
 | `m_p` | int | 4 | 安全编队点数量 | 更多编队位置可选 | 编队选择少 |
 | `radius` | double | 2.0 | 编队圆半径 (m) | 跟随距离增大 | 跟随更近 |
 | `tol` | double | 0.1 | 编队点切换容差 (m) | 不易频繁切换 | 切换更灵敏 |
+| `hpc_c_min` | double | 0.1 | HPC 齐次范数下界 | 减弱近目标区域的 warp 放大 | 增强齐次变形，可能放大噪声 |
+| `initial_min_lambda` | double | 1.0 | 初始反馈极点尺度下界 | 初始响应更快 | 初始响应更平缓 |
+| `switch_min_lambda` | double | 4.0 | 编队点切换后反馈极点尺度下界 | 切换后恢复更快 | 切换后响应更平缓 |
+| `enable_radial_safety` | bool | true | 4D Artstein 径向制动安全层 | 开启基于实际相对速度的提前制动 | 关闭后可用于裸控制器对照，但延迟底盘可能跨过编队圆 |
+
+原始 4D 节点的三个参数也可以通过 launch 命令配置。进行原始 4D HPC 与
+Artstein-HPC 的公平对比时，应在两条命令中显式指定相同的值：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  mass:=2.0 omega_d:=0.7 control_rate:=20.0 \
+  hpc_c_min:=0.1 initial_min_lambda:=1.0 switch_min_lambda:=4.0
+```
+
+当前两个 4D launch 文件的共有参数默认值保持一致；如需历史实验参数，
+应在两条 launch 命令中显式传入相同值。
 
 ### 启动（4D Artstein 预测补偿）
 
@@ -329,10 +346,27 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   tau:=0.43 Td:=0.22 control_rate:=20.0 \
   mass:=2.0 hpc_c_min:=0.1 \
   initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
-  min_cmd_vel:=0.0 max_linear_accel:=0.5 \
-  use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.5 \
-  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0
+  min_cmd_vel:=0.0 max_linear_accel:=0.4 \
+  use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.4 \
+  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0 \
+  enable_radial_safety:=true
 ```
+
+#### 径向制动安全层
+
+静止 Leader 下，即使 HPC 已经降低或反向 `cmd_vel`，延迟节点和一阶执行器仍可能在一段时间内保留朝向 Leader 的实际速度；原始 4D Artstein 预测层只补偿模型内的时延和一阶滞后，并没有“剩余距离必须足以刹停”的约束。因此 Follower 会越过 `radius` 后再回到编队点。以 `Td:=0.22`、`tau:=0.43`、`delay_max_accel:=0.4` 为例，延迟时间约 `0.65 s`，在接近圆周时仍有约 `0.3-0.5 m/s` 的相对向内速度，就可能形成约 `0.15 m` 量级的径向过冲。
+
+安全层在 map 系中定义 `r=(p_f-p_l)/||p_f-p_l||`，只限制相对 Leader 的径向内切分量；它不会把 Leader 绕圈时必需的切向随动速度误判为靠近 Leader。令 `d=||p_f-p_l||-radius` 为圆外余量、`a_brake` 为保守制动能力、`T_eff` 为有效延迟，允许的最大向内相对速度为：
+
+```math
+v_{\mathrm{in,safe}}=
+\max\left(0,\ -a_{\mathrm{brake}}T_{\mathrm{eff}}+
+\sqrt{(a_{\mathrm{brake}}T_{\mathrm{eff}})^2+2a_{\mathrm{brake}}d}\right).
+```
+
+该式来自“延迟期间滑行距离 + 匀减速刹停距离不超过 `d`”。安全层同时使用 EKF 测得的实际相对速度：如果实际速度已经超过安全包络，即使当前 HPC 命令尚未越界，也会移除剩余的径向内切命令，让底盘尽早制动。最小速度补偿、轮速约束和加速度约束处理完成后，还会对最终 map 系命令复核一次；若约束器因上一帧命令而保留了向内速度，安全层会再次移除该分量并同步约束器状态。日志中的 `RADIAL_SAFE` 表示该层正在介入。
+
+`use_motor_delay:=true` 时，`a_brake` 自动取 `min(max_linear_accel, delay_max_accel)`，以控制器和延迟注入节点中较慢的一侧为准；`T_eff` 自动取实际延迟节点参数 `transport_delay + motor_tau`，因此即使它们与控制器预测参数 `Td + tau` 不一致，安全层仍按注入链路保守计算。本例两者均为 `0.65 s`，`a_brake=0.4 m/s^2`。`use_motor_delay:=false`（实物或外部执行器）时，安全层使用 `Td + tau` 与 `max_linear_accel`，必须把它们设为实测可稳定实现的保守延迟和制动能力，而不是理论或瞬时峰值。`enable_radial_safety:=false` 仅建议用于对照实验；关闭后，实物同样可能出现过冲，大小取决于真实死区、制动能力、速度限幅、摩擦和状态估计延迟。
 
 只启动 Follower，Leader 使用 `/virtual_leader`，实物或外部延迟由底盘自身体现时关闭仿真注入：
 
@@ -700,6 +734,8 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 # 实物 + 自定义标签
 ros2 run homo_multirobot_formation_control record_trajectory.py \
   --ros-args -p mode:=real -p tag:=hpc_mass8_r2 \
+  -p experiment_id:=chapter3_delay_compare -p trial_id:=trial_01 \
+  -p platform:=real -p controller:=artstein_hpc \
   -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
   -p radius:=2.0 -p duration:=30.0
 ```
@@ -713,22 +749,37 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 | `tag` | 自动生成 | 文件名标签，留空则从控制器参数自动生成 |
 | `radius` | 0.0 | 编队理想半径，>0 时在距离图上画参考虚线 |
 | `out_dir` | 包内 robot_traj/ | 输出根目录 |
+| `experiment_id` | 自动使用 `tag` | 实验组编号 |
+| `trial_id` | `trial_01` | 重复实验编号 |
+| `platform` | 使用 `mode` | 实验平台，如 `numerical`、`gazebo`、`real` |
+| `controller` | 控制器节点名 | 控制器标签，如 `original_4d_hpc`、`artstein_hpc` |
 
 **输出**：
-- `{out_dir}/{mode}/{mode}_{tag}_{timestamp}.png` — 四子图（轨迹、X时序、Y时序、编队距离）
-- `{out_dir}/{mode}/{mode}_{tag}_{timestamp}.csv` — MATLAB 可直接 readtable 的原始数据
+每次运行创建一个独立目录 `{out_dir}/{mode}/{tag}_{timestamp}/`，其中包括：
+- `check.png` — 六子图（XY轨迹、Leader-Follower距离、Vx/Vy、速度模长、X-t、Y-t）
+- `raw.csv` — MATLAB 可直接 `readtable` 的原始数据
+- `metadata.yaml` — 与本次数据对应的实验元数据
 
-**自动参数读取**：如果不指定 `tag`，脚本从 follower 命名空间下的 `formation_control_node`
-自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, tol` 并：
-- 生成文件名标签（如 `sim_m8_r2_od1.5_f35_20260710_153000.png`）
+**自动参数读取**：如果不指定 `tag`，脚本从 follower 命名空间下的控制器节点
+自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, tol`，
+以及适用时的 `hpc_c_min, initial_min_lambda, switch_min_lambda`，并：
+- 生成实验目录标签（如 `m8_r2_od1.5_f35_20260818_143000/`）
 - 在图上方黄框中显示完整参数组合
 
-CSV 格式（`time_s, leader_x_m, leader_y_m, follower_x_m, follower_y_m, distance_m`），
-以 follower 时间为基准对齐 leader 数据点。
+CSV 包含时间、Leader/Follower 的 map 系位置、实际速度分量、实际速度模长和
+Leader-Follower 距离字段，以 follower 时间为基准对齐 leader 数据点，可直接使用
+MATLAB 的 `readtable` 读取。
 
-### record_velocity_diagnostics — 速度诊断记录
+YAML 元数据包含实验编号、重复试验编号、平台、控制器、记录话题、控制器参数、
+Gazebo 延迟参数以及对应的 CSV/PNG 文件名。`target_index` 和期望 Follower 位置
+当前写为 `null`，因为记录器不读取控制器内部的编队点切换状态；使用 `m_p:=1` 时，
+可在 MATLAB 后处理中根据固定编队偏置计算期望位置。
 
-记录控制器原始速度指令、最终速度指令和 Leader/Follower EKF 速度，用于分析预测补偿前后的限幅、延迟和实际速度响应。
+### record_velocity_diagnostics — 可选速度诊断工具
+
+该工具不属于第 3 章主实验流程。只有在需要分析控制器原始速度指令、最终速度指令、
+延迟链路或命令速度与实际速度差异时才启用；第 3 章的轨迹、位置跟踪和实际速度记录
+统一使用 `record_trajectory.py`。
 
 ```bash
 ros2 run homo_multirobot_formation_control record_velocity_diagnostics.py \

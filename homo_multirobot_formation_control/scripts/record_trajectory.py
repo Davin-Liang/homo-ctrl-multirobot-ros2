@@ -14,8 +14,9 @@
     -p radius:=2.0 -p duration:=30.0
 
 输出:
-  {out_dir}/{mode}/trajectory_{mode}_{tag}_{timestamp}.png   ← 四子图
-  {out_dir}/{mode}/trajectory_{mode}_{tag}_{timestamp}.csv   ← MATLAB 可用
+  {out_dir}/{mode}/{tag}_{timestamp}/check.png     ← 六子图
+  {out_dir}/{mode}/{tag}_{timestamp}/raw.csv       ← MATLAB 可用
+  {out_dir}/{mode}/{tag}_{timestamp}/metadata.yaml ← 实验元数据
 """
 
 import rclpy
@@ -28,6 +29,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import os
 import csv
+import json
 import time
 import math
 from datetime import datetime
@@ -35,7 +37,9 @@ from datetime import datetime
 # 需要自动读取的控制器参数
 CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
                     'm_p', 'Kp_yaw', 'K_ff', 'tol',
-                    'tau', 'hpc_c_min', 'leader_vel_lpf_tau', 'Td']
+                    'tau', 'hpc_c_min', 'initial_min_lambda',
+                    'switch_min_lambda', 'leader_vel_lpf_tau', 'Td',
+                    'max_linear_accel']
 
 
 class TrajectoryRecorder(Node):
@@ -50,6 +54,10 @@ class TrajectoryRecorder(Node):
         self.declare_parameter('mode', 'sim')
         self.declare_parameter('tag', '')
         self.declare_parameter('controller_node_name', 'formation_control_node')
+        self.declare_parameter('experiment_id', '')
+        self.declare_parameter('trial_id', 'trial_01')
+        self.declare_parameter('platform', '')
+        self.declare_parameter('controller', '')
         self.leader_ns = self.get_parameter('leader_ns').value
         self.follower_ns = self.get_parameter('follower_ns').value
         self.duration = self.get_parameter('duration').value
@@ -61,6 +69,10 @@ class TrajectoryRecorder(Node):
         self.mode = self.get_parameter('mode').value
         self.tag = self.get_parameter('tag').value
         self.ctrl_node_name = self.get_parameter('controller_node_name').value
+        self.experiment_id = self.get_parameter('experiment_id').value
+        self.trial_id = self.get_parameter('trial_id').value
+        self.platform = self.get_parameter('platform').value or self.mode
+        self.controller = self.get_parameter('controller').value
 
         # 查询控制器参数 + 延迟节点参数（自动生成 tag 和图上标题）
         self.ctrl_params = self._query_controller_params()
@@ -168,6 +180,10 @@ class TrajectoryRecorder(Node):
             parts.append(f"tau{self._v(p, 'tau')}")
         if 'hpc_c_min' in p:
             parts.append(f"cmin{self._v(p, 'hpc_c_min')}")
+        if 'initial_min_lambda' in p:
+            parts.append(f"ilam{self._v(p, 'initial_min_lambda')}")
+        if 'switch_min_lambda' in p:
+            parts.append(f"slam{self._v(p, 'switch_min_lambda')}")
         if 'Td' in p:
             parts.append(f"Td{self._v(p, 'Td')}")
         # 仿真延迟参数 (存在才加)
@@ -195,7 +211,8 @@ class TrajectoryRecorder(Node):
         if not p:
             return ''
         names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'tol',
-                 'tau', 'hpc_c_min', 'leader_vel_lpf_tau', 'Td']
+                 'tau', 'hpc_c_min', 'initial_min_lambda', 'switch_min_lambda',
+                 'leader_vel_lpf_tau', 'Td']
         parts = []
         for n in names:
             if n in p:
@@ -225,23 +242,6 @@ class TrajectoryRecorder(Node):
         ekf_y = msg.pose.pose.position.y
         return (tf_x + ekf_x * math.cos(tf_yaw) - ekf_y * math.sin(tf_yaw),
                 tf_y + ekf_x * math.sin(tf_yaw) + ekf_y * math.cos(tf_yaw))
-
-    def _nearest_formation_error(self, leader_x, leader_y, follower_x, follower_y):
-        radius = self.ctrl_params.get('radius', self.ideal_radius)
-        m_p = int(round(self.ctrl_params.get('m_p', 4)))
-        if radius <= 0.0 or m_p < 1:
-            return float('nan')
-        dx = follower_x - leader_x
-        dy = follower_y - leader_y
-        best = float('inf')
-        for i in range(m_p):
-            angle = 2.0 * math.pi * i / m_p
-            off_x = -radius * math.cos(angle)
-            off_y = -radius * math.sin(angle)
-            err = math.hypot(dx - off_x, dy - off_y)
-            if err < best:
-                best = err
-        return best
 
     def _record(self, msg, ns, xl, yl, tl, vxl, vyl, vl):
         if self.done:
@@ -274,19 +274,23 @@ class TrajectoryRecorder(Node):
             self.done = True
             self._save_and_plot()
 
-    def _build_filename(self, ext):
-        """生成带 mode/tag/时间戳 的文件名"""
+    def _build_experiment_dir(self):
+        """创建本次运行的独立实验目录。"""
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-        parts = [self.mode]
-        if self.tag:
-            parts.append(self.tag)
-        parts.append(ts)
-        return '_'.join(parts) + '.' + ext
+        dirname = f'{self.tag}_{ts}' if self.tag else ts
+        base_dir = os.path.join(self.out_dir, self.mode, dirname)
+        experiment_dir = base_dir
+        suffix = 1
+        while os.path.exists(experiment_dir):
+            experiment_dir = f'{base_dir}_{suffix:02d}'
+            suffix += 1
+        os.makedirs(experiment_dir)
+        return experiment_dir
 
-    def _save_csv(self, out_subdir, basename):
+    def _save_csv(self, experiment_dir):
         """保存对齐后的 CSV 数据（MATLAB 可直接 readtable）"""
         # 用 follower 的时间为基准，找最接近的 leader 数据点
-        csv_path = os.path.join(out_subdir, basename.replace('.png', '.csv'))
+        csv_path = os.path.join(experiment_dir, 'raw.csv')
 
         with open(csv_path, 'w', newline='') as f:
             w = csv.writer(f)
@@ -294,7 +298,7 @@ class TrajectoryRecorder(Node):
                         'leader_vx_ms', 'leader_vy_ms', 'leader_v_ms',
                         'follower_x_m', 'follower_y_m',
                         'follower_vx_ms', 'follower_vy_ms', 'follower_v_ms',
-                        'distance_m', 'nearest_formation_error_m'])
+                        'distance_m'])
             n2 = len(self.t2_t)
             n1 = len(self.t1_t)
             for i2 in range(n2):
@@ -310,13 +314,69 @@ class TrajectoryRecorder(Node):
                 lvx = self.t1_vx[i1]
                 lvy = self.t1_vy[i1]
                 dist = math.hypot(lx - fx, ly - fy)
-                err = self._nearest_formation_error(lx, ly, fx, fy)
                 w.writerow([f'{t:.4f}', f'{lx:.4f}', f'{ly:.4f}',
                             f'{lvx:.4f}', f'{lvy:.4f}', f'{math.hypot(lvx,lvy):.4f}',
                             f'{fx:.4f}', f'{fy:.4f}',
                             f'{fvx:.4f}', f'{fvy:.4f}', f'{math.hypot(fvx,fvy):.4f}',
-                            f'{dist:.4f}', f'{err:.4f}'])
+                            f'{dist:.4f}'])
         self.get_logger().info(f'CSV 已保存: {csv_path}')
+
+    @staticmethod
+    def _yaml_scalar(value):
+        """生成安全的 YAML 标量。"""
+        if value is None:
+            return 'null'
+        if isinstance(value, bool):
+            return 'true' if value else 'false'
+        if isinstance(value, (int, float)):
+            if isinstance(value, float) and not math.isfinite(value):
+                return 'null'
+            return str(value)
+        return json.dumps(str(value), ensure_ascii=False)
+
+    def _write_yaml_mapping(self, stream, mapping, indent=0):
+        """写入本脚本所需的有限层级 YAML 映射。"""
+        prefix = ' ' * indent
+        for key, value in mapping.items():
+            if isinstance(value, dict):
+                stream.write(f'{prefix}{key}:\n')
+                self._write_yaml_mapping(stream, value, indent + 2)
+            else:
+                stream.write(f'{prefix}{key}: {self._yaml_scalar(value)}\n')
+
+    def _save_metadata(self, experiment_dir):
+        """保存本次实验的元数据。"""
+        yaml_path = os.path.join(experiment_dir, 'metadata.yaml')
+        metadata = {
+            'schema_version': 1,
+            'experiment_id': self.experiment_id or self.tag,
+            'trial_id': self.trial_id,
+            'platform': self.platform,
+            'mode': self.mode,
+            'controller': self.controller or self.ctrl_node_name,
+            'recording': {
+                'duration_s': self.duration,
+                'leader_ns': self.leader_ns,
+                'follower_ns': self.follower_ns,
+                'leader_topic': self.leader_ns + '/odometry/filtered',
+                'follower_topic': self.follower_ns + '/odometry/filtered',
+                'coordinate_frame': 'map',
+                'ideal_radius_m': self.ideal_radius,
+            },
+            'controller_parameters': dict(self.ctrl_params),
+            'delay_parameters': dict(self.delay_params),
+            # 当前记录器不读取控制器内部目标点状态，避免写入错误值。
+            'target_index': None,
+            'desired_follower_x': None,
+            'desired_follower_y': None,
+            'files': {
+                'csv': 'raw.csv',
+                'check_plot': 'check.png',
+            },
+        }
+        with open(yaml_path, 'w', encoding='utf-8') as f:
+            self._write_yaml_mapping(f, metadata)
+        self.get_logger().info(f'元数据已保存: {yaml_path}')
 
     def _plot_xy_vel(self, ax, tl, vl, name, c):
         """画速度曲线"""
@@ -324,7 +384,7 @@ class TrajectoryRecorder(Node):
             return
         ax.plot(tl, vl, linewidth=0.8, label=name, color=c)
 
-    def _plot_and_save(self, out_subdir, basename):
+    def _plot_and_save(self, experiment_dir):
         elapsed = time.time() - self.t0 if self.t0 else 0
         fig, axes = plt.subplots(3, 2, figsize=(16, 14))
 
@@ -350,23 +410,15 @@ class TrajectoryRecorder(Node):
             dist_t = self.t2_t[:n]
             dist = [math.hypot(self.t1_x[i] - self.t2_x[i], self.t1_y[i] - self.t2_y[i])
                     for i in range(n)]
-            err = [self._nearest_formation_error(self.t1_x[i], self.t1_y[i],
-                                                 self.t2_x[i], self.t2_y[i])
-                   for i in range(n)]
             dist_mean = sum(dist) / n
             dist_std = math.sqrt(max(0.0, sum((d - dist_mean) ** 2 for d in dist) / n))
-            err_mean = sum(err) / n if n > 0 else float('nan')
-            err_std = math.sqrt(max(0.0, sum((e - err_mean) ** 2 for e in err) / n)) if n > 0 else float('nan')
             ax.plot(dist_t, dist, linewidth=1.0, color='tab:red',
                     label=f'Leader-follower (mean={dist_mean:.2f}m, std={dist_std:.2f}m)')
-            if not math.isnan(err_mean):
-                ax.plot(dist_t, err, linewidth=1.0, color='tab:green', linestyle='--',
-                        label=f'Nearest formation error (mean={err_mean:.2f}m, std={err_std:.2f}m)')
         if self.ideal_radius > 0:
             ax.axhline(y=self.ideal_radius, color='gray', linestyle='--', linewidth=1.2,
                        label=f'Ideal radius = {self.ideal_radius:.1f}m')
         ax.set_xlabel('Time (s)'); ax.set_ylabel('Distance (m)')
-        ax.set_title('Distance / nearest formation error')
+        ax.set_title('Leader-follower distance')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
         # ---- 子图 3: Vx + Vy (body frame) ----
@@ -425,7 +477,7 @@ class TrajectoryRecorder(Node):
                          y=0.99, bbox=dict(boxstyle='round,pad=0.3',
                                           facecolor='lightyellow', alpha=0.9))
 
-        png_path = os.path.join(out_subdir, basename)
+        png_path = os.path.join(experiment_dir, 'check.png')
         plt.tight_layout(); plt.savefig(png_path, dpi=150); plt.close()
 
         n1, n2 = len(self.t1_x), len(self.t2_x)
@@ -433,11 +485,10 @@ class TrajectoryRecorder(Node):
             f'PNG 已保存: {png_path}  ({self.leader_label}={n1}, {self.follower_label}={n2})')
 
     def _save_and_plot(self):
-        out_subdir = os.path.join(self.out_dir, self.mode)
-        os.makedirs(out_subdir, exist_ok=True)
-        basename = self._build_filename('png')
-        self._save_csv(out_subdir, basename)
-        self._plot_and_save(out_subdir, basename)
+        experiment_dir = self._build_experiment_dir()
+        self._save_csv(experiment_dir)
+        self._plot_and_save(experiment_dir)
+        self._save_metadata(experiment_dir)
         rclpy.shutdown()
 
 

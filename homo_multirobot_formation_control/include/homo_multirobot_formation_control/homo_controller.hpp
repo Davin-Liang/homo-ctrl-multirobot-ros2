@@ -207,6 +207,21 @@ public:
     return x2 - x1 - d_;
   }
 
+  double hpc_c_min() const
+  {
+    return hpc_c_min_;
+  }
+
+  double initial_min_lambda() const
+  {
+    return initial_min_lambda_;
+  }
+
+  double switch_min_lambda() const
+  {
+    return switch_min_lambda_;
+  }
+
 private:
   // --------------------------------------------------------------------------
   // 编队点切换（带 tol_ 滞后避免频繁跳动）

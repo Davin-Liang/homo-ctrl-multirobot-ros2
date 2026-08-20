@@ -45,11 +45,6 @@ def generate_launch_description():
     # Delay node params (separate from controller's max_linear_accel)
     delay_max_accel = LaunchConfiguration("delay_max_accel")
 
-    # Smith predictor
-    use_smith_predictor = LaunchConfiguration("use_smith_predictor")
-    smith_tau = LaunchConfiguration("smith_tau")
-    smith_Td = LaunchConfiguration("smith_Td")
-
     # Delay on → controller outputs to cmd_vel_raw, delay node relays to cmd_vel
     cmd_output_topic = PythonExpression([
         "'cmd_vel_raw' if '", use_motor_delay, "' == 'true' else 'cmd_vel'"])
@@ -81,9 +76,9 @@ def generate_launch_description():
             "max_angular_accel": max_angular_accel,
             "control_rate": control_rate,
             "use_hpc": LaunchConfiguration("use_hpc"),
-            "use_smith_predictor": use_smith_predictor,
-            "smith_tau": smith_tau,
-            "smith_Td": smith_Td,
+            "hpc_c_min": LaunchConfiguration("hpc_c_min"),
+            "initial_min_lambda": LaunchConfiguration("initial_min_lambda"),
+            "switch_min_lambda": LaunchConfiguration("switch_min_lambda"),
         }],
     )
 
@@ -117,9 +112,9 @@ def generate_launch_description():
                               description="Formation circle radius (m)"),
         DeclareLaunchArgument("tol", default_value="0.1",
                               description="Switching tolerance between formation points"),
-        DeclareLaunchArgument("mass", default_value="8.0",
+        DeclareLaunchArgument("mass", default_value="2.0",
                               description="Controller model mass (tuning, not physical)"),
-        DeclareLaunchArgument("omega_d", default_value="1.5",
+        DeclareLaunchArgument("omega_d", default_value="0.7",
                               description="Desired damping bandwidth"),
         DeclareLaunchArgument("Kp_yaw", default_value="4.0",
                               description="Proportional yaw gain"),
@@ -129,6 +124,12 @@ def generate_launch_description():
                               description="Control loop frequency (Hz)"),
         DeclareLaunchArgument("use_hpc", default_value="true",
                               description="Enable homogeneous upgrade (false = pure LPC)"),
+        DeclareLaunchArgument("hpc_c_min", default_value="0.1",
+                              description="HPC warp clamp lower bound."),
+        DeclareLaunchArgument("initial_min_lambda", default_value="1.0",
+                              description="Initial LPC pole lower bound."),
+        DeclareLaunchArgument("switch_min_lambda", default_value="4.0",
+                              description="Post-switch LPC pole lower bound."),
         DeclareLaunchArgument("wheel_radius", default_value="0.03",
                               description="Wheel rolling radius (m)"),
         DeclareLaunchArgument("base_radius", default_value="0.11",
@@ -145,19 +146,13 @@ def generate_launch_description():
                               description="Max body angular velocity (rad/s)"),
         DeclareLaunchArgument("use_motor_delay", default_value="false",
                               description="Simulate real motor response delay"),
-        DeclareLaunchArgument("motor_tau", default_value="0.12",
+        DeclareLaunchArgument("motor_tau", default_value="0.43",
                               description="Motor LP filter time constant (s)"),
-        DeclareLaunchArgument("transport_delay", default_value="0.05",
+        DeclareLaunchArgument("transport_delay", default_value="0.0",
                               description="Transport delay (s, e.g. serial)"),
-        DeclareLaunchArgument("delay_max_accel", default_value="2.0",
+        DeclareLaunchArgument("delay_max_accel", default_value="0.25",
                               description="Delay node linear accel limit (m/s^2). "
-                                          "1.0 = 300ms to 0.3 m/s"),
-        DeclareLaunchArgument("use_smith_predictor", default_value="false",
-                              description="Enable Smith predictor for motor delay compensation"),
-        DeclareLaunchArgument("smith_tau", default_value="0.12",
-                              description="Smith predictor motor LP time constant (s)"),
-        DeclareLaunchArgument("smith_Td", default_value="0.05",
-                              description="Smith predictor transport delay (s)"),
+                                          "Matches the Artstein launch default."),
         formation_node,
         delay_node,
     ])

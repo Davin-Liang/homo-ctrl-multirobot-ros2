@@ -34,6 +34,13 @@ public:
 
   void set_wheel_max_omega(double val) { omega_max_ = val; }
   void set_accel_limits(double lin, double ang) { max_lin_accel_ = lin; max_ang_accel_ = ang; }
+  void set_last_command(double vx, double vy, double omega)
+  {
+    prev_vx_ = vx;
+    prev_vy_ = vy;
+    prev_omega_ = omega;
+    first_call_ = false;
+  }
 
 private:
   // ---- 轮速约束 ---------------------------------------------------------------

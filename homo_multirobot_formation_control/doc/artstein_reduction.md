@@ -1,4 +1,4 @@
-# 4D 双积分 HPC + Artstein 执行器预测层
+# 4D 双积分 HPC + Artstein 等效速度执行器预测层
 
 ## 最终架构
 
@@ -11,7 +11,7 @@ Artstein input-delay compensation (Td)
     ↓
 e^{A_a Td} back-mapping
     ↓
-first-order motor forward prediction (tau)
+first-order equivalent velocity-actuator forward prediction (tau)
     ↓
 x_h=[p_pred, v_pred]
     ↓
@@ -30,9 +30,9 @@ A_h^2 = 0
 
 `-1/tau` 不进入 HPC 的 `A_h`，只留在预测层，因此不会破坏齐次权重 `[2, 1]` 和幂零结构。
 
-## 执行器模型
+## 名义等效速度执行器模型
 
-Follower 平移执行器建模为：
+Follower 平移执行器在控制器工作速度区间内近似为：
 
 ```text
 p_dot(t)      = v_real(t)
@@ -60,6 +60,14 @@ B_a = [0      0
        0      1/tau]
 ```
 
+这里的 `tau` 是**等效速度响应时间常数**，而非电机本体的机电时间常数。该低阶输入输出模型将
+STM32 速度闭环、电机驱动、减速机构、轮地接触和底盘运动等综合效应近似为“纯输入死区 + 一阶
+速度响应”，用于构造预测补偿层。
+
+当供电、摩擦、负载或速度工作点变化时，等效响应可能变化；当加速度/电流/速度约束主导时，系统
+更接近速率饱和而非纯指数响应。因此 `tau` 应按主要工作区间由阶跃响应辨识或调参，预测模型不应
+被解释为真实电机的完整物理模型。
+
 ## Artstein + 预测映射
 
 Artstein 变换：
@@ -80,7 +88,7 @@ z(t) = exp(-A_a Td) x_a(t + Td)
 x_bar = exp(A_a Td) z
 ```
 
-再按当前命令 `u` 向前预测一个电机时间常数 `tau`：
+再按当前命令 `u` 向前预测一个等效响应时间常数 `tau`：
 
 ```text
 v_pred = u + exp(-1) (v_bar - u)
@@ -141,5 +149,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
   leader_ns:=/virtual_leader follower_ns:=/robot2 \
+  hpc_c_min:=0.5 initial_min_lambda:=12.0 switch_min_lambda:=12.0 \
   use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.25
 ```

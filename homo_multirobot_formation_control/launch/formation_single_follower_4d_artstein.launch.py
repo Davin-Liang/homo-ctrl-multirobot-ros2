@@ -28,6 +28,7 @@ def generate_launch_description():
     # Velocity limits
     max_linear_vel = LaunchConfiguration("max_linear_vel")
     max_angular_vel = LaunchConfiguration("max_angular_vel")
+    enable_radial_safety = LaunchConfiguration("enable_radial_safety")
 
     # Kinematic constraints
     wheel_radius = LaunchConfiguration("wheel_radius")
@@ -44,6 +45,12 @@ def generate_launch_description():
     motor_tau = LaunchConfiguration("motor_tau")
     transport_delay = LaunchConfiguration("transport_delay")
     delay_max_accel = LaunchConfiguration("delay_max_accel")
+    radial_safety_max_decel = PythonExpression([
+        "float('", delay_max_accel, "') if '", use_motor_delay,
+        "' == 'true' else 0.0"])
+    radial_safety_effective_delay = PythonExpression([
+        "(float('", transport_delay, "') + float('", motor_tau,
+        "')) if '", use_motor_delay, "' == 'true' else -1.0"])
 
     # Delay on → controller outputs to cmd_vel_raw, delay node relays to cmd_vel
     cmd_output_topic = PythonExpression([
@@ -76,6 +83,9 @@ def generate_launch_description():
             "base_radius": base_radius,
             "max_linear_vel": max_linear_vel,
             "max_angular_vel": max_angular_vel,
+            "enable_radial_safety": enable_radial_safety,
+            "radial_safety_max_decel": radial_safety_max_decel,
+            "radial_safety_effective_delay": radial_safety_effective_delay,
             "wheel_max_omega": wheel_max_omega,
             "max_linear_accel": max_linear_accel,
             "max_angular_accel": max_angular_accel,
@@ -174,6 +184,9 @@ def generate_launch_description():
                               description="Max body linear velocity (m/s)"),
         DeclareLaunchArgument("max_angular_vel", default_value="0.5",
                               description="Max body angular velocity (rad/s)"),
+        DeclareLaunchArgument("enable_radial_safety", default_value="true",
+                              description="Limit inward radial velocity near the formation radius "
+                                          "to account for actuator delay and braking distance."),
         DeclareLaunchArgument("use_motor_delay", default_value="false",
                               description="Simulate real motor response delay"),
         DeclareLaunchArgument("motor_tau", default_value="0.43",

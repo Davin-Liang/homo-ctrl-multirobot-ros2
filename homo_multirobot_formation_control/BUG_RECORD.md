@@ -9,6 +9,7 @@
 
 | # | 问题 | 分类 | 处理 |
 |---|------|------|------|
+| 43 | 4D Artstein 静止 Leader 接近编队圆时约 0.15m 径向过冲 | 控制/执行器延迟 | 增加基于实际相对速度的径向制动安全层 |
 | 42 | 4D Artstein-LQR 文档中 MPC 段落被插入内容打断 | 文档 | 调整 README 段落顺序 |
 | 41 | 非 MPC 图没有求解时间曲线却调用 legend | Python | 仅在存在 handles 时调用 legend |
 | 40 | colcon 构建单一 CMake target 参数写错 | 构建 | 使用 `--cmake-target` |
@@ -40,6 +41,71 @@
 | 25 | omega_d·mass 下限过高 → 边界极限环震荡 | 控制 | 调低 mass 或 omega_d |
 | 26 | 连续边界投影切线方向无恢复力 → 单轴漂移 | 控制 | 结构特性，非 bug |
 | 27 | 8 字轨迹 Y 通道频率 2ω > ω_d → Y 轴跟踪差 | 控制 | 提高 omega_d 或放慢 8 字 |
+
+---
+
+## 43) 4D Artstein 静止 Leader 接近编队圆时约 0.15m 径向过冲
+
+**现象**: 使用下列延迟仿真参数时，Leader 静止后 Follower 接近其离散编队点，通常会短暂穿过期望编队圆约 `0.15 m`，随后再回到编队点：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 \
+  delay_max_accel:=0.4 tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  mass:=2.0 hpc_c_min:=0.1 cmd_integrator_base:=pred min_cmd_vel:=0.0
+```
+
+单独尝试提高 `delay_max_accel`、切换 `cmd_integrator_base:=cmd`、设 `Td:=0` 或
+`tau:=0.01` 都不能消除该现象，说明它不是单个预测参数或积分基准的简单失配。
+
+**诊断**: EKF 数据新鲜度正常；靠近圆周时，控制器已经开始降低甚至反向最终命令，但延迟节点输出仍保持朝向 Leader 的速度。例如一段日志中：
+
+```text
+t≈1345.53  dist=0.645 m, |v_real|=0.553 m/s, final cmd=-0.353
+t≈1346.53  dist=0.349 m, |v_real|=0.342 m/s, final cmd=-0.153
+t≈1347.53  dist=0.331 m, |v_real|=0.096 m/s, final cmd=+0.035
+```
+
+同一时段延迟执行器输出仍依次约为 `-0.549`、`-0.326`、`-0.121 m/s`，之后才变为
+`+0.050 m/s`。这表明底盘在上层命令开始制动后仍残留向内实际速度。
+
+**原因**: 4D Artstein 层能够补偿模型内的纯延迟 `Td` 和名义一阶滞后 `tau`，但原始
+4D HPC 没有显式的停止距离约束。`delay_max_accel:=0.4` 还会使延迟节点进入速度斜率饱和，
+这不属于纯一阶预测模型。因而在 `Td+tau≈0.65 s` 的有效延迟和有限制动能力下，剩余圆外距离
+不足以消除实际相对向内速度，轨迹会跨过 `radius` 后再恢复。
+
+**处理**: 在 `formation_control_node_4d_artstein` 的 map 系速度命令后加入默认开启的
+`enable_radial_safety` 后处理层。以相对 Leader 的径向余量 `d`、实际相对向内速度
+`v_in`、有效延迟 `T_eff` 和保守制动能力 `a_brake` 为输入，强制满足：
+
+```math
+v_{\mathrm{in}}T_{\mathrm{eff}}+
+\frac{v_{\mathrm{in}}^2}{2a_{\mathrm{brake}}}\le d.
+```
+
+若实际速度已超过安全包络，则移除命令中剩余的径向内切分量；切向分量保留，避免影响
+Leader 绕圈时的正常随动。最终运动学约束后的发布命令也会再次检查，并同步约束器的上一帧命令，
+避免加速度限幅继续保留旧的向内速度。延迟仿真中制动能力采用
+`min(max_linear_accel, delay_max_accel)`，有效延迟采用实际注入的
+`transport_delay + motor_tau`；实物中使用 `Td + tau` 和 `max_linear_accel`，应配置为实测的保守值。
+
+**验证**:
+
+```bash
+cd /home/l1anggmgo/ros-projects/homo_multirobot_ws
+source /opt/ros/humble/setup.bash
+colcon build --paths src/homo-ctrl-multirobot-ros2/homo_multirobot_formation_control \
+  --packages-select homo_multirobot_formation_control \
+  --symlink-install --cmake-args -DBUILD_TESTING=ON
+ctest --test-dir build/homo_multirobot_formation_control \
+  -R 'test_(formation_radial_safety|homo_controller_4d_artstein)' \
+  --output-on-failure
+```
+
+单元测试已覆盖“命令本身尚未越界、但测得实际向内速度已超安全包络”的情形。还应在完整
+Gazebo 与实物闭环中，以 `enable_radial_safety:=false/true` 对照记录最大径向侵入量；
+当前没有在修改后重新跑完整闭环轨迹，不能把单元测试视为实车效果证明。
 
 ---
 

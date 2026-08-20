@@ -570,7 +570,7 @@ delay_max_accel:=与 max_linear_accel 一致
 
 ```text
 1. follower 轨迹是否为 leader 轨迹的平移版本；
-2. formation distance error 的均值、最大值、RMS；
+2. 当前选中编队点误差范数的均值、最大值、RMS；
 3. cmd_vel map/body 速度曲线是否更平滑；
 4. 加速度/轮速限幅触发比例；
 5. OSQP solve time 和失败次数；

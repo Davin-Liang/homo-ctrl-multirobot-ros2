@@ -34,10 +34,16 @@ private:
   std::string leader_ns_, follower_ns_;
   double Kp_yaw_, K_ff_;
   double max_linear_vel_, max_angular_vel_;
+  double max_linear_accel_ = 2.0;
+  double radial_safety_max_decel_ = 0.0;
+  double radial_safety_effective_delay_ = -1.0;
+  double formation_radius_ = 2.0;
+  double tau_ = 0.43;
   double min_cmd_vel_ = 0.03;
   std::string cmd_integrator_base_ = "pred";
   double Td_;       // 死区时延 (s)
   double control_rate_;
+  bool enable_radial_safety_ = true;
 
   // ---- 控制器 + 约束 -------------------------------------------------------
   std::unique_ptr<formation_control::LpcController4DArtstein> ctrl_;

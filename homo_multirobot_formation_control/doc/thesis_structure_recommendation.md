@@ -59,7 +59,7 @@ Artstein 和 QP 避障为主，第一种题目更稳。
 主要内容：
 
 - 4D 双积分 leader-follower 编队误差模型；
-- 输入延迟和一阶执行器滞后问题描述；
+- 输入延迟和低阶等效速度执行器响应问题描述；
 - Artstein 预测变换；
 - 预测状态下的齐次比例控制；
 - 原始延迟控制、LPC、HPC、Artstein-HPC 对比；
@@ -69,7 +69,7 @@ Artstein 和 QP 避障为主，第一种题目更稳。
 
 ```text
 在原始 4D 齐次编队控制框架中引入 Artstein 预测补偿，
-将输入延迟和一阶执行器滞后转化为预测状态下的无延迟控制问题，
+将输入延迟和低阶等效速度执行器响应映射为预测状态下的无显式延迟控制问题，
 从而改善延迟条件下的编队跟踪性能。
 ```
 
@@ -79,7 +79,7 @@ Artstein 和 QP 避障为主，第一种题目更稳。
 - 原始控制 + 延迟；
 - Artstein 预测补偿 + 延迟；
 - HPC 与 LPC 消融对比；
-- `tau`、`Td`、`hpc_c_min`、`initial_min_lambda` 对性能的影响；
+- `tau`、`Td`、`hpc_c_min`、`initial_min_lambda`、`switch_min_lambda` 对性能的影响；
 - 实物中执行器加速度上限对效果的限制。
 
 ### 第 4 章 面向全向车体运动学的 6D Artstein Disc 齐次编队控制
@@ -165,7 +165,7 @@ x = [p_x, p_y, theta, v_x^b, v_y^b, omega]^T
 - 定位链路：rf2o、EKF、TF；
 - 延迟测量与执行器响应标定；
 - 4D Artstein、6D Artstein、QP 避障的统一对比；
-- 误差、速度、加速度、控制输入、轮速缩放等指标统计。
+- 误差、速度和控制输入等指标统计。
 
 ### 第 7 章 总结与展望
 
@@ -269,7 +269,7 @@ leader-follower 安全编队点
 
 ```text
 原论文: 无延迟 4D 质点误差系统 + 非超调齐次安全编队
-本文第 3 章: 加入输入延迟和一阶执行器滞后，构造 4D Artstein-HPC 预测补偿
+本文第 3 章: 加入输入延迟和低阶等效速度执行器响应，构造 4D Artstein-HPC 预测补偿
 本文第 4 章: 推广到 map 位置 + yaw + body 速度的 6D 全向车体运动学状态
 本文第 5 章: 引入 QP 安全修正，处理真实障碍物约束
 实验部分: 通过数值仿真、Gazebo 和实物平台验证延迟、约束和定位链路影响
@@ -332,11 +332,20 @@ Yuan 等 2024 是本课题最直接的基础工作；Polyakov & Krstic 2023 可�
 | M. Krstic, "Input Delay Compensation for Forward Complete and Strict-Feedforward Nonlinear Systems," IEEE Transactions on Automatic Control, 2010. DOI: [10.1109/TAC.2009.2034923](https://doi.org/10.1109/TAC.2009.2034923) | 非线性系统输入延迟补偿和预测反馈 | 支撑“预测补偿不局限于线性系统”的研究背景 |
 | M. Krstic, *Delay Compensation for Nonlinear, Adaptive, and PDE Systems*, Birkhauser, 2009. Springer page: [Delay Compensation for Nonlinear, Adaptive, and PDE Systems](https://link.springer.com/book/10.1007/978-0-8176-4877-0) | 预测反馈和延迟补偿的系统性专著 | 可作为第 3 章延迟补偿综述的经典参考 |
 | I. Karafyllis and M. Krstic, *Predictor Feedback for Delay Systems: Implementations and Approximations*, Birkhauser, 2017. Springer preview: [Predictor Feedback for Delay Systems](https://flyingv.ucsd.edu/krstic/B11-preface%2Bcontents.pdf) | 预测反馈的实现、近似、采样、噪声和建模误差问题 | 支撑本文 ROS/Gazebo/实物中预测补偿实现和误差来源分析 |
+| J. Ni, L. Liu, C. Liu and J. Liu, "Fixed-Time Leader-Following Consensus for Second-Order Multiagent Systems With Input Delay," IEEE Transactions on Industrial Electronics, 2017, 64(11): 8635-8646. DOI: [10.1109/TIE.2017.2701775](https://doi.org/10.1109/TIE.2017.2701775) | 对二阶 Leader-Follower 多智能体输入延迟误差使用扩展 Artstein reduction，结合固定时间观测器和非奇异终端滑模控制 | 与本文同属“二阶多智能体 + Artstein + 固定时间”理论路线；可作为 Zhang 与 Zhou（2025）之前的重要直接基线，但未考虑全向底盘的低阶等效速度执行器响应、速度接口和安全约束 |
+| A. Zhang, D. Zhou, M. Yang and P. Yang, "Finite-Time Formation Control for Unmanned Aerial Vehicle Swarm System With Time-Delay and Input Saturation," IEEE Access, 2019, 7: 5853-5864. DOI: [10.1109/ACCESS.2018.2889858](https://doi.org/10.1109/ACCESS.2018.2889858) | 采用 Artstein 变换处理 UAV 群的输入延迟，并同时研究有限时间编队和输入饱和 | 可支撑“Artstein + 编队 + 执行器约束”的相关工作；本文进一步面向全向地面机器人，采用低阶等效速度执行器响应模型并在 ROS 2 平台验证 |
 | C. Wang, I. H. P. Tnunay, Z. Zuo, B. Lennox and Z. Ding, "Fixed-Time Formation Control of Multi-Robot Systems: Design and Experiments," IEEE Transactions on Industrial Electronics, 2018. DOI: [10.1109/TIE.2018.2870409](https://doi.org/10.1109/TIE.2018.2870409) | 多机器人固定时间编队、输入延迟、预测状态变换和实验验证 | 说明“延迟 + 有限/固定时间编队”已有相关研究，本文可强调与齐次安全编队和全向机器人平台结合 |
+| W. Jiang, C. Wang and Y. Meng, "Fully Distributed Time-Varying Formation Tracking Control of Linear Multi-Agent Systems With Input Delay and Disturbances," Systems & Control Letters, 2020, 146: 104814. DOI: [10.1016/j.sysconle.2020.104814](https://doi.org/10.1016/j.sysconle.2020.104814) | 基于 Artstein model reduction 构造状态预测器，研究输入延迟、扰动和时变编队下的全分布式跟踪 | 支撑本文对 ROS 测量噪声、Leader 信息新鲜度和动态编队的误差来源讨论；其对象为一般线性系统，未涉及全向底盘执行器模型 |
+| X. Ai and L. Wang, "Distributed Fixed-Time Event-Triggered Consensus of Linear Multi-Agent Systems With Input Delay," International Journal of Robust and Nonlinear Control, 2021, 31(7): 2526-2545. DOI: [10.1002/rnc.5404](https://doi.org/10.1002/rnc.5404) | 使用 Artstein-Kwon-Pearson reduction，将输入延迟线性多智能体系统转化为无延迟系统，并设计固定时间事件触发一致性协议 | 支撑“Artstein + 固定时间 + 降低控制/通信更新频率”的扩展方向；可作为未来 ROS 2 事件触发实现的理论参考 |
+| X. Ai, Y.-Y. Chen and H. Yu, "Adaptive Fault-Tolerant Formation Tracking Control of Networked Mobile Robots With Input Delays," Journal of the Franklin Institute, 2024, 361: 248-264. DOI: [10.1016/j.jfranklin.2023.11.020](https://doi.org/10.1016/j.jfranklin.2023.11.020) | 网络移动机器人在输入延迟、参数不确定和执行器故障下的自适应容错编队跟踪 | 与本文移动机器人和网络化输入延迟场景高度相关；适合说明本文对电机动态、饱和与实物延迟的工程问题关注，但其控制框架不同于本文的 Artstein-HPC |
+| H. Zhang and D. Zhou, "Event-Triggered Finite-Time Consensus Scheme for Time-Delay Multi-Agent Systems with Settling Time Estimation and its Application," Journal of Aerospace Technology and Management, 2025, 17: e0925. DOI: [10.1590/jatm.v17.1369](https://doi.org/10.1590/jatm.v17.1369) | 对带常值输入延迟的二阶多智能体 Leader-Follower 误差构造 Artstein 变换，得到无显式延迟的双积分误差系统，并设计事件触发有限时间一致性/编队控制 | 与本文使用同一 Artstein reduction 理论。该文属于“相对误差侧、纯双积分器”形式；本文属于“执行器状态侧、含低阶等效速度响应”形式，且额外采用前向预测并接入齐次安全编队控制 |
 
 写作建议：第 3 章不要只说“本文提出 Artstein 预测”，应明确说明经典 Artstein reduction
-已存在，本文贡献是将其嵌入原始齐次安全编队控制，并进一步考虑执行器一阶滞后、ROS 2
-离散实现和实物约束。
+已存在，本文贡献是将其嵌入原始齐次安全编队控制，并进一步考虑低阶等效速度执行器响应、ROS 2
+离散实现和实物约束。Zhang 与 Zhou（2025）可作为近期直接相关工作：两者共享 Artstein
+变换的理论核心，但不要表述为“本文复现其算法”。应说明该文在相对误差上处理纯输入延迟，
+而本文在全向底盘执行器状态上处理输入死区，并结合低阶等效速度响应、前向预测、速度/加速度
+饱和和齐次安全编队控制。
 
 ### 6.3 全向移动机器人建模与轨迹跟踪
 
@@ -559,7 +568,6 @@ mean position error
 tail mean error
 max distance error
 velocity command norm
-wheel scale
 yaw error
 settling time
 ```

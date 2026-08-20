@@ -452,6 +452,32 @@ if(BUILD_TESTING)
   )
   add_test(NAME test_formation_radial_safety
     COMMAND test_formation_radial_safety)
+
+  add_executable(test_lpc_controller_params
+    test/test_lpc_controller_params.cpp
+  )
+  target_include_directories(test_lpc_controller_params PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+  target_link_libraries(test_lpc_controller_params
+    Eigen3::Eigen
+  )
+  add_test(NAME test_lpc_controller_params
+    COMMAND test_lpc_controller_params)
+
+  add_executable(test_homo_controller_4d_artstein
+    test/test_homo_controller_4d_artstein.cpp
+  )
+  target_include_directories(test_homo_controller_4d_artstein PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+  target_link_libraries(test_homo_controller_4d_artstein
+    Eigen3::Eigen
+  )
+  add_test(NAME test_homo_controller_4d_artstein
+    COMMAND test_homo_controller_4d_artstein)
 endif()
 
 install(DIRECTORY config launch

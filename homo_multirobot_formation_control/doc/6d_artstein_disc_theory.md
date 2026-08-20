@@ -15,8 +15,8 @@ measured state
   -> cmd_vel
 ```
 
-该架构的关键原则是：执行器死区和一阶滞后只作为 HPC 外层的状态预测补偿，
-不把电机状态直接增广进 6D HPC 核心。HPC 层仍使用 6D Disc 的离散编队点、
+该架构的关键原则是：执行器死区和低阶等效速度响应只作为 HPC 外层的状态预测补偿，
+不把执行器动态直接增广进 6D HPC 核心。HPC 层仍使用 6D Disc 的离散编队点、
 leader 车体系误差和 `lpc2hpc_nd` 齐次升级。
 
 对应数值仿真脚本：
@@ -93,7 +93,7 @@ x_p=[p_x,p_y,v_x^m,v_y^m]^T.
 u_p=[v_{x,cmd}^m,v_{y,cmd}^m]^T.
 ```
 
-带输入死区和一阶速度滞后的执行器模型为
+在主要工作区间内，采用带输入死区和一阶等效速度响应的名义执行器模型：
 
 ```math
 \dot x_p(t)=A_p x_p(t)+B_p u_p(t-T_d),
@@ -151,7 +151,7 @@ e^{A_p(t-s-T_d)}B_pu_p(s)\,ds.
 
 因此 Artstein 状态满足无显式输入时延的 LTI 系统。
 
-对无死区的一阶速度响应
+对无死区的一阶等效速度响应
 
 ```math
 \dot v=-\frac{1}{\tau_v}v+\frac{1}{\tau_v}u
@@ -190,7 +190,7 @@ x_\theta=[\theta,\omega]^T.
 u_\theta=\omega_{cmd}.
 ```
 
-带输入死区和一阶角速度滞后的模型为
+在主要工作区间内，采用带输入死区和一阶等效角速度响应的名义模型：
 
 ```math
 \dot x_\theta(t)=A_\theta x_\theta(t)+B_\theta u_\theta(t-T_d),
@@ -226,7 +226,7 @@ e^{A_\theta(t-s-T_d)}B_\theta u_\theta(s)\,ds.
 \dot z_\theta(t)=A_\theta z_\theta(t)+B_\theta u_\theta(t).
 ```
 
-再通过一阶角速度模型进行前向预测，得到
+再通过一阶等效角速度模型进行前向预测，得到
 
 ```math
 \hat x_\theta=[\hat\theta,\hat\omega]^T.
@@ -257,8 +257,10 @@ e^{A_\theta(t-s-T_d)}B_\theta u_\theta(s)\,ds.
 ```
 
 此时补偿层的作用是让 HPC 看到近似无输入死区、相位滞后更小的等效反馈状态。
-在 `T_d`、`tau_v`、`tau_\omega` 与真实执行器匹配，命令历史完整，采样周期足够小，
-且命令在预测窗口内近似常值时，该状态预测与执行器模型一致。
+在 `T_d`、`tau_v`、`tau_\omega` 与主要工作区间内的等效执行器响应匹配，命令历史完整，
+采样周期足够小且命令在预测窗口内近似常值时，该状态预测与名义执行器模型一致。`tau_v`
+和 `tau_\omega` 是局部等效响应参数，而非真实电机物理时间常数；当速率饱和或轮地接触非线性
+主导时，该低阶近似的误差会增大。
 
 ## 5. 6D Disc 误差系统与齐次升级条件
 
