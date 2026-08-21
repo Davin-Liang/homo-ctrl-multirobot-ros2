@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 SCRIPT_PATH = (
@@ -93,6 +94,69 @@ def test_nominal_mimo_ilf_synthesis_satisfies_theorem_10_matrix_identity():
     assert np.linalg.eigvals(A_tilde + B_tilde @ design.K).real.max() < 0.0
 
 
+def test_robust_mimo_ilf_design_satisfies_theorem_15_matrix_inequality():
+    feasibility = load_module()
+    design = feasibility.synthesize_robust_nominal_mimo_ilf(0.5, 1e-3)
+    A_tilde, B_tilde = feasibility.build_nominal_canonical_model()
+    lmi_left = (
+        A_tilde @ design.X
+        + design.X @ A_tilde.T
+        + B_tilde @ design.Y
+        + design.Y.T @ B_tilde.T
+        + design.H @ design.X
+        + design.X @ design.H
+        + design.R
+    )
+
+    assert design.R.shape == (6, 6)
+    assert np.linalg.eigvalsh(lmi_left).max() <= 1e-7
+    assert np.linalg.eigvalsh(design.X).min() > 1e-6
+
+
+def test_matched_disturbance_ratio_is_zero_without_disturbance():
+    feasibility = load_module()
+    design = feasibility.synthesize_robust_nominal_mimo_ilf(0.5, 1e-3)
+
+    ratio = feasibility.matched_disturbance_ratio(
+        np.array([1.0, -0.7, 0.3, 0.0, 0.0, 0.0]),
+        np.zeros(3),
+        design,
+    )
+
+    assert ratio == 0.0
+
+
+def test_delayed_ilf_zero_delay_has_zero_history_disturbance():
+    feasibility = load_module()
+    design = feasibility.synthesize_robust_nominal_mimo_ilf(0.5, 1e-3)
+    result = feasibility.simulate_delayed_ilf(
+        x0=np.array([0.2, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        design=design,
+        tau=np.array([0.43, 0.43, 0.43]),
+        delay=0.0,
+        duration=0.1,
+        dt=0.001,
+    )
+
+    np.testing.assert_allclose(result["w_d"], 0.0, atol=1e-12)
+    np.testing.assert_allclose(result["ratio"], 0.0, atol=1e-12)
+
+
+def test_delayed_ilf_rejects_delay_not_on_simulation_grid():
+    feasibility = load_module()
+    design = feasibility.synthesize_robust_nominal_mimo_ilf(0.5, 1e-3)
+
+    with pytest.raises(ValueError, match="integer multiple"):
+        feasibility.simulate_delayed_ilf(
+            np.zeros(6),
+            design,
+            np.array([0.43, 0.43, 0.43]),
+            delay=0.0005,
+            duration=0.1,
+            dt=0.001,
+        )
+
+
 def test_implicit_lyapunov_root_and_controller_satisfy_the_nominal_identity():
     feasibility = load_module()
     design = feasibility.synthesize_nominal_mimo_ilf(mu=0.5)
@@ -152,6 +216,31 @@ def test_write_nominal_ilf_csv_has_expected_header_and_lf_endings(tmp_path):
 
     assert output.read_text(encoding="utf-8").splitlines()[0] == (
         "time,e_x,e_y,e_theta,e_vx,e_vy,e_omega,V,nu_x,nu_y,nu_omega"
+    )
+    assert b"\r\n" not in output.read_bytes()
+
+
+def test_write_delayed_ilf_audit_csv_has_expected_header_and_lf_endings(tmp_path):
+    feasibility = load_module()
+    output = tmp_path / "audit.csv"
+
+    feasibility.write_delayed_ilf_audit_csv(
+        [
+            {
+                "delay": 0.0,
+                "final_state_norm": 0.0,
+                "final_V": 0.0,
+                "max_state_norm": 1.0,
+                "max_ratio": 0.0,
+                "ratio_samples_below_one": True,
+            }
+        ],
+        output,
+    )
+
+    assert output.read_text(encoding="utf-8").splitlines()[0] == (
+        "delay,final_state_norm,final_V,max_state_norm,max_ratio,"
+        "ratio_samples_below_one"
     )
     assert b"\r\n" not in output.read_bytes()
 

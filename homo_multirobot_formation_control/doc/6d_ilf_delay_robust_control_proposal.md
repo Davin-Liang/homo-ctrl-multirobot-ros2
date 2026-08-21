@@ -373,6 +373,58 @@ e_v=[e_{v_x},e_{v_y},e_\omega]^\mathsf{T},\qquad
 隐式方程和数值实现；它不提供时延裕度，也不能写成对式 (1) 的 ILKF/ISS 证明。时滞
 项必须在后续单独纳入泛函或 Razumikhin 导数估计，并通过 DDE 仿真检验。
 
+#### 输入时滞的精确“匹配历史扰动”分解，以及它能证明什么
+
+仍取上述 `rho=0`、固定目标和 `r=0` 的局部模型，但现在允许 `d>0`。控制器在
+每个时刻按照无时滞名义律生成
+
+```math
+\delta u(t)=e_v(t)+\Lambda^{-1}\nu(\xi(t)). \tag{9}
+```
+
+将真正进入执行器的延迟命令 `\delta u(t-d)` 代回物理模型，并在式 (7) 的名义输入
+`\nu(\xi(t))` 两侧加减，得到恒等式
+
+```math
+\dot\xi(t)=\widetilde A\xi(t)+\widetilde B\nu(\xi(t))+
+\widetilde d(t),
+\qquad
+\widetilde d(t)=\begin{bmatrix}0_3\\w_d(t)\end{bmatrix}, \tag{10}
+```
+
+```math
+w_d(t)=-\Lambda\left[e_v(t)-e_v(t-d)\right]
+       +\nu(\xi(t-d))-\nu(\xi(t)). \tag{11}
+```
+
+这里的第一项不能省略：它来自电机一阶动态的当前速度与延迟速度之差。式 (10) 表明
+输入时滞可以被准确地表示为作用在最后一个块上的**匹配历史扰动**，但 `w_d` 仍由闭环
+历史决定，并不是独立有界外扰。
+
+对 MIMO ILF 文献的 Theorem 15，若能找到 `R=R^\mathsf T>0`，使其鲁棒矩阵不等式成立，
+并且沿连续 DDE 解始终存在 `0<beta<1` 使
+
+```math
+\widetilde d^\mathsf TD(V^{-1})R^{-1}D(V^{-1})\widetilde d
+\le \beta V^{-2\mu}z^\mathsf T(HP+PH)z,
+\qquad z=D(V^{-1})\xi, \tag{12}
+```
+
+则可把 `\widetilde d` 作为该定理的匹配扰动，并得到相应的有限时间导数估计。为审计
+这个**充分条件**，定义
+
+```math
+\mathcal R_d(t)=
+\frac{\widetilde d^\mathsf TD(V^{-1})R^{-1}D(V^{-1})\widetilde d}
+{V^{-2\mu}z^\mathsf T(HP+PH)z}. \tag{13}
+```
+
+只有在连续时间上 `\sup_t\mathcal R_d(t)<1` 时，式 (12) 才闭合；离散仿真中采样到
+`\mathcal R_d<1` 仅是支持性证据，绝不是证明。反之，某条仿真轨迹出现
+`\mathcal R_d\ge1` 只说明这条 Theorem-15 充分条件未通过，不能单凭此判定闭环不稳定。
+因此，以下 DDE 审计不会报告所谓的 `d_bar^*`；真正的时延上界仍需 ILKF/Razumikhin
+泛函、全历史界或明确覆盖 MIMO 时滞系统的定理来给出。
+
 ### 5.2 候选 B：6D 广义齐次名义反馈 + ILKF 鲁棒性分析（保底路线）
 
 保留现有 `lpc2hpc_nd` 的局部 6D 广义齐次反馈思想，针对含延迟和执行器动态的
@@ -485,6 +537,25 @@ Polyakov、Efimov、Perruquetti (2016) Theorem 10 的 `k=2`、块维数 `(3,3)` 
 该结果通过的只是“名义 MIMO ILF 构造可以在本 6D 零时滞冻结点数值实现”的小门。
 它不构成 ILKF、时延裕度、参数调度、采样或约束闭环证明；特别是式 (8) 的
 `-Lambda[e_v(t)-e_v(t-d)]` 仍必须进入下一步的时滞泛函/不等式和 DDE 仿真。
+
+#### T3 匹配历史扰动审计结果（2026-08-21）
+
+为使式 (12) 的条件可计算，按 MIMO ILF 文献 Theorem 15 的鲁棒矩阵不等式取
+`R=10^-3 I_6`、`mu=0.5` 与 `trace(X)=1`。得到 `lambda_min(X)=0.0175196`、
+`lambda_min(XH+HX)=0.0417341`，鲁棒 LMI 左端最大特征值为 `-2.40e-11`；这证明的是
+所选**匹配外扰预算**的矩阵条件可行，不是输入时滞已经满足该预算。
+
+随后对物理执行器 DDE 使用常值初始历史、`tau_i=0.43 s`、`dt=1 ms`、`8 s` 进行方法步进
+审计，结果记录在 `analysis/results/6d_ilf_feasibility/delayed_ilf_audit.csv`。`d=0` 时
+`max \mathcal R_d=0`。但 `d=0.05,0.10,0.15,0.22,0.30 s` 的采样最大比值分别为
+`861.026, 772.016, 699.726, 623.801, 547.776`，均大于一；其中实物标称死区附近的
+`d=0.22 s` 在 `8 s` 时有 `||xi||=0.0326040`、`V=0.191940`。
+
+因此当前路线的严谨结论是：该 DDE 轨迹**没有通过**所选 `R` 下的 Theorem-15 匹配扰动
+充分条件，故不能由该定理写出时滞有限时间/ISS 结论。这并不证明系统发散；同样地，
+8 秒 Euler 轨迹未超初始范数也不证明稳定。不能把这组扫描中的任意数值写成
+`d_bar^*`。下一理论门槛是构造能直接控制历史项的 ILKF/Razumikhin 泛函，或如实将
+候选 A 降格为名义 ILF 的数值比较路线。
 
 ### T4：扰动、饱和和切换的闭环界
 

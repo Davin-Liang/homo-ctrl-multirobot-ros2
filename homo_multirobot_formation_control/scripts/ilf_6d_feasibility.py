@@ -20,6 +20,7 @@ class IlfDesign:
     Y: np.ndarray
     K: np.ndarray
     H: np.ndarray
+    R: np.ndarray | None = None
 
 
 def build_local_model(rho: np.ndarray, tau: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -137,6 +138,116 @@ def synthesize_nominal_mimo_ilf(
     )
 
 
+def synthesize_robust_nominal_mimo_ilf(
+    mu: float,
+    disturbance_weight: float,
+    solver: str = "CLARABEL",
+) -> IlfDesign:
+    """Solve Theorem 15's nominal MIMO ILF inequality for R=weight*I."""
+    if not 0.0 < mu < 1.0:
+        raise ValueError("mu must be strictly between 0 and 1")
+    if disturbance_weight <= 0.0:
+        raise ValueError("disturbance_weight must be positive")
+
+    try:
+        import cvxpy as cp
+    except ImportError as exc:
+        raise RuntimeError("robust MIMO ILF synthesis requires cvxpy") from exc
+
+    A_tilde, B_tilde = build_nominal_canonical_model()
+    H = np.diag([1.0 + mu] * 3 + [1.0] * 3)
+    R = disturbance_weight * np.eye(6)
+    X = cp.Variable((6, 6), symmetric=True)
+    Y = cp.Variable((3, 6))
+    epsilon = 1e-5
+    lmi_left = (
+        A_tilde @ X
+        + X @ A_tilde.T
+        + B_tilde @ Y
+        + Y.T @ B_tilde.T
+        + H @ X
+        + X @ H
+        + R
+    )
+    problem = cp.Problem(
+        cp.Minimize(cp.sum_squares(Y)),
+        [
+            lmi_left << 0.0,
+            X >> epsilon * np.eye(6),
+            X @ H + H @ X >> epsilon * np.eye(6),
+            cp.trace(X) == 1.0,
+        ],
+    )
+    try:
+        problem.solve(solver=solver)
+    except cp.error.SolverError as exc:
+        raise RuntimeError(f"robust MIMO ILF solver {solver} failed") from exc
+    if problem.status not in {cp.OPTIMAL, cp.OPTIMAL_INACCURATE}:
+        raise RuntimeError(f"robust MIMO ILF synthesis status: {problem.status}")
+
+    x_value = 0.5 * (np.asarray(X.value) + np.asarray(X.value).T)
+    y_value = np.asarray(Y.value)
+    p_value = np.linalg.inv(x_value)
+    k_value = y_value @ p_value
+    lmi_value = (
+        A_tilde @ x_value
+        + x_value @ A_tilde.T
+        + B_tilde @ y_value
+        + y_value.T @ B_tilde.T
+        + H @ x_value
+        + x_value @ H
+        + R
+    )
+    if np.linalg.eigvalsh(lmi_value).max() > 1e-7:
+        raise RuntimeError("robust MIMO ILF matrix inequality residual is too large")
+    if np.linalg.eigvalsh(x_value).min() <= 0.0:
+        raise RuntimeError("robust MIMO ILF synthesis returned nonpositive X")
+    if np.linalg.eigvalsh(x_value @ H + H @ x_value).min() <= 0.0:
+        raise RuntimeError("robust MIMO ILF synthesis returned nonpositive dilation metric")
+
+    return IlfDesign(
+        mu=mu,
+        X=x_value,
+        P=p_value,
+        Y=y_value,
+        K=k_value,
+        H=H,
+        R=R,
+    )
+
+
+def matched_disturbance_ratio(
+    xi: np.ndarray,
+    w_d: np.ndarray,
+    design: IlfDesign,
+) -> float:
+    """Evaluate the Theorem-15 matched-disturbance sufficient-condition ratio."""
+    xi = np.asarray(xi, dtype=float)
+    w_d = np.asarray(w_d, dtype=float)
+    if xi.shape != (6,) or w_d.shape != (3,):
+        raise ValueError("xi must have 6 entries and w_d must have 3")
+    if design.R is None:
+        raise ValueError("matched disturbance ratio requires a robust ILF design")
+    if np.array_equal(w_d, np.zeros(3)):
+        return 0.0
+
+    value = implicit_lyapunov_value(xi, design)
+    if value == 0.0:
+        raise ValueError("nonzero disturbance has no finite ratio at xi=0")
+    weights = np.array([1.0 + design.mu] * 3 + [1.0] * 3)
+    z = xi * value**(-weights)
+    d_tilde = np.concatenate((np.zeros(3), w_d))
+    d_scaled = d_tilde * value**(-weights)
+    numerator = float(d_scaled @ np.linalg.solve(design.R, d_scaled))
+    denominator = float(
+        value ** (-2.0 * design.mu)
+        * (z @ (design.H @ design.P + design.P @ design.H) @ z)
+    )
+    if denominator <= 0.0:
+        raise RuntimeError("matched-disturbance denominator must be positive")
+    return numerator / denominator
+
+
 def implicit_lyapunov_value(xi: np.ndarray, design: IlfDesign) -> float:
     """Find the unique positive root of the nominal implicit Lyapunov equation."""
     from scipy.optimize import brentq
@@ -212,6 +323,74 @@ def simulate_nominal_ilf(
         "state": states,
         "lyapunov": lyapunov,
         "control": control,
+    }
+
+
+def simulate_delayed_ilf(
+    x0: np.ndarray,
+    design: IlfDesign,
+    tau: np.ndarray,
+    delay: float,
+    duration: float,
+    dt: float,
+) -> dict[str, np.ndarray]:
+    """Run a grid-aligned Euler method-of-steps audit of the delayed actuator."""
+    x0 = np.asarray(x0, dtype=float)
+    tau = np.asarray(tau, dtype=float)
+    if x0.shape != (6,) or tau.shape != (3,) or np.any(tau <= 0.0):
+        raise ValueError("x0 must have 6 entries and tau must be a positive length-3 array")
+    if design.R is None:
+        raise ValueError("delayed ILF audit requires a robust ILF design")
+    if delay < 0.0 or duration <= 0.0 or dt <= 0.0:
+        raise ValueError("delay must be nonnegative; duration and dt must be positive")
+
+    delay_steps = round(delay / dt)
+    if not np.isclose(delay_steps * dt, delay, rtol=0.0, atol=1e-12):
+        raise ValueError("delay must be an integer multiple of dt")
+    duration_steps = round(duration / dt)
+    if not np.isclose(duration_steps * dt, duration, rtol=0.0, atol=1e-12):
+        raise ValueError("duration must be an integer multiple of dt")
+
+    xi = x0.copy()
+    history = [x0.copy() for _ in range(delay_steps + 1)]
+    times: list[float] = []
+    states: list[np.ndarray] = []
+    lyapunov: list[float] = []
+    nu_values: list[np.ndarray] = []
+    delayed_commands: list[np.ndarray] = []
+    disturbances: list[np.ndarray] = []
+    ratios: list[float] = []
+
+    for step in range(duration_steps + 1):
+        xi_delayed = history[0]
+        nu_now = nominal_ilf_control(xi, design)
+        nu_delayed = nominal_ilf_control(xi_delayed, design)
+        delta_u_delayed = canonical_to_deviation_input(xi_delayed, nu_delayed, tau)
+        w_d = -(xi[3:] - xi_delayed[3:]) / tau + nu_delayed - nu_now
+
+        times.append(step * dt)
+        states.append(xi.copy())
+        lyapunov.append(implicit_lyapunov_value(xi, design))
+        nu_values.append(nu_now)
+        delayed_commands.append(delta_u_delayed)
+        disturbances.append(w_d)
+        ratios.append(matched_disturbance_ratio(xi, w_d, design))
+
+        if step == duration_steps:
+            break
+        derivative = np.concatenate((xi[3:], (-xi[3:] + delta_u_delayed) / tau))
+        xi = xi + dt * derivative
+        history.append(xi.copy())
+        history.pop(0)
+
+    return {
+        "time": np.asarray(times),
+        "state": np.asarray(states),
+        "lyapunov": np.asarray(lyapunov),
+        "nu": np.asarray(nu_values),
+        "delta_u_delayed": np.asarray(delayed_commands),
+        "w_d": np.asarray(disturbances),
+        "ratio": np.asarray(ratios),
     }
 
 
@@ -330,6 +509,59 @@ def write_nominal_ilf_csv(result: dict[str, np.ndarray], csv_path: Path) -> None
             writer.writerow([time, *state, value, *control])
 
 
+def delayed_ilf_audit_rows(
+    delay_values: list[float],
+    design: IlfDesign,
+    x0: np.ndarray,
+    tau: np.ndarray,
+    duration: float,
+    dt: float,
+) -> list[dict[str, float | bool]]:
+    """Summarize delayed-plant DDE traces and their sampled sufficient-condition ratios."""
+    rows: list[dict[str, float | bool]] = []
+    for delay in delay_values:
+        result = simulate_delayed_ilf(x0, design, tau, delay, duration, dt)
+        ratios = result["ratio"]
+        finite_ratios = ratios[np.isfinite(ratios)]
+        final_state_norm = float(np.linalg.norm(result["state"][-1]))
+        max_state_norm = float(np.linalg.norm(result["state"], axis=1).max())
+        rows.append(
+            {
+                "delay": float(delay),
+                "final_state_norm": final_state_norm,
+                "final_V": float(result["lyapunov"][-1]),
+                "max_state_norm": max_state_norm,
+                "max_ratio": (
+                    float(finite_ratios.max()) if finite_ratios.size else 0.0
+                ),
+                "ratio_samples_below_one": bool(
+                    finite_ratios.size == 0 or np.all(finite_ratios < 1.0)
+                ),
+            }
+        )
+    return rows
+
+
+def write_delayed_ilf_audit_csv(
+    rows: list[dict[str, float | bool]],
+    csv_path: Path,
+) -> None:
+    """Write delayed ILF audit summaries with a deterministic column order."""
+    fieldnames = [
+        "delay",
+        "final_state_norm",
+        "final_V",
+        "max_state_norm",
+        "max_ratio",
+        "ratio_samples_below_one",
+    ]
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Offline controllability and nominal MIMO-ILF checks for the 6D model."
@@ -351,11 +583,39 @@ def parse_args() -> argparse.Namespace:
         default=Path("analysis/results/6d_ilf_feasibility/nominal_ilf_run.csv"),
         help="CSV output path for --run-nominal-ilf.",
     )
+    parser.add_argument(
+        "--run-delayed-ilf-audit",
+        action="store_true",
+        help="Run the frozen delayed-actuator MIMO-ILF sufficient-condition audit.",
+    )
+    parser.add_argument(
+        "--delayed-audit-csv",
+        type=Path,
+        default=Path("analysis/results/6d_ilf_feasibility/delayed_ilf_audit.csv"),
+        help="CSV output path for --run-delayed-ilf-audit.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if args.run_delayed_ilf_audit:
+        design = synthesize_robust_nominal_mimo_ilf(
+            mu=0.5,
+            disturbance_weight=1e-3,
+        )
+        rows = delayed_ilf_audit_rows(
+            delay_values=[0.0, 0.05, 0.10, 0.15, 0.22, 0.30],
+            design=design,
+            x0=np.array([1.0, -0.7, 0.3, 0.0, 0.0, 0.0]),
+            tau=np.array([0.43, 0.43, 0.43]),
+            duration=8.0,
+            dt=0.001,
+        )
+        write_delayed_ilf_audit_csv(rows, args.delayed_audit_csv)
+        print(f"wrote {len(rows)} rows to {args.delayed_audit_csv}")
+        return
+
     if args.run_nominal_ilf:
         design = synthesize_nominal_mimo_ilf(mu=0.5)
         result = simulate_nominal_ilf(
