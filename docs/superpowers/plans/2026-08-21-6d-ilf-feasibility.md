@@ -26,12 +26,15 @@
 - Create: `homo_multirobot_formation_control/scripts/ilf_6d_feasibility.py`
 
 **Interfaces:**
-- Produces `build_local_model(rho, tau) -> tuple[np.ndarray, np.ndarray]`.
+- Produces `build_local_model(rho, tau) -> tuple[np.ndarray, np.ndarray]` for the
+  **deviation-input** model `delta_u = u_cmd - u_star`.
 - `rho` is a length-3 vector `[vx_leader, vy_leader, omega_leader]` in leader body coordinates.
 - `tau` is a length-3 positive vector `[tau_x, tau_y, tau_omega]` in seconds.
 - Returns `A` with shape `(6, 6)` and `B` with shape `(6, 3)` implementing equation (2) in the proposal.
+- The absolute equilibrium command is `u_star = rho`; it is restored only when a
+  later controller is converted to actual `cmd_vel`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 import numpy as np
@@ -54,7 +57,7 @@ def test_build_local_model_includes_leader_coupling_and_actuator_poles():
     np.testing.assert_allclose(B[:3, :], np.zeros((3, 3)))
 ```
 
-- [ ] **Step 2: Run the test to verify it fails because the module is absent**
+- [x] **Step 2: Run the test to verify it fails because the module is absent**
 
 Run:
 
@@ -65,7 +68,7 @@ python3 -m pytest homo_multirobot_formation_control/test/test_6d_ilf_feasibility
 
 Expected: `ModuleNotFoundError: No module named 'ilf_6d_feasibility'`.
 
-- [ ] **Step 3: Write the minimal model implementation**
+- [x] **Step 3: Write the minimal model implementation**
 
 ```python
 def build_local_model(rho: np.ndarray, tau: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -85,7 +88,7 @@ def build_local_model(rho: np.ndarray, tau: np.ndarray) -> tuple[np.ndarray, np.
     return A, B
 ```
 
-- [ ] **Step 4: Run the focused test and package tests**
+- [x] **Step 4: Run the focused test and package tests**
 
 Run:
 
@@ -108,7 +111,7 @@ Expected: all tests pass.
 - Returned keys are exactly `rank`, `sigma_min`, `sigma_max`, `condition_number`.
 - `condition_number` is `inf` when `sigma_min <= rank_tol`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 from ilf_6d_feasibility import build_local_model, controllability_diagnostics
@@ -123,7 +126,7 @@ def test_nominal_actuator_aware_6d_model_is_full_rank_controllable():
     assert np.isfinite(result["condition_number"])
 ```
 
-- [ ] **Step 2: Run the test to verify it fails because the diagnostic is absent**
+- [x] **Step 2: Run the test to verify it fails because the diagnostic is absent**
 
 Run:
 
@@ -134,7 +137,7 @@ python3 -m pytest homo_multirobot_formation_control/test/test_6d_ilf_feasibility
 
 Expected: import failure for `controllability_diagnostics`.
 
-- [ ] **Step 3: Implement the diagnostic**
+- [x] **Step 3: Implement the diagnostic**
 
 ```python
 def controllability_diagnostics(A: np.ndarray, B: np.ndarray, rank_tol: float = 1e-9) -> dict:
@@ -157,7 +160,7 @@ def controllability_diagnostics(A: np.ndarray, B: np.ndarray, rank_tol: float = 
     }
 ```
 
-- [ ] **Step 4: Run the focused and package tests**
+- [x] **Step 4: Run the focused and package tests**
 
 Run:
 
@@ -174,14 +177,14 @@ Expected: all tests pass.
 **Files:**
 - Modify: `homo_multirobot_formation_control/scripts/ilf_6d_feasibility.py`
 - Modify: `homo_multirobot_formation_control/test/test_6d_ilf_feasibility.py`
-- Create: `homo_multirobot_formation_control/analysis/results/6d_ilf_feasibility/.gitkeep`
+- Create: `homo_multirobot_formation_control/analysis/results/6d_ilf_feasibility/controllability_scan.csv`
 
 **Interfaces:**
 - Produces `scan_envelope(vx_values, vy_values, omega_values, tau_values) -> list[dict]`.
 - Every row contains `vx_leader`, `vy_leader`, `omega_leader`, `tau_x`, `tau_y`, `tau_omega`, and the Task 2 diagnostic keys.
 - CLI writes a CSV selected by `--csv`; its default must be under `analysis/results/6d_ilf_feasibility/`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 from ilf_6d_feasibility import scan_envelope
@@ -198,7 +201,7 @@ def test_scan_envelope_returns_one_full_rank_row_for_single_operating_point():
     assert rows[0]["tau_x"] == 0.43
 ```
 
-- [ ] **Step 2: Run the test to verify it fails because the scanner is absent**
+- [x] **Step 2: Run the test to verify it fails because the scanner is absent**
 
 Run:
 
@@ -209,7 +212,7 @@ python3 -m pytest homo_multirobot_formation_control/test/test_6d_ilf_feasibility
 
 Expected: import failure for `scan_envelope`.
 
-- [ ] **Step 3: Implement the scanner and CSV CLI**
+- [x] **Step 3: Implement the scanner and CSV CLI**
 
 ```python
 def scan_envelope(vx_values, vy_values, omega_values, tau_values):
@@ -228,7 +231,7 @@ def scan_envelope(vx_values, vy_values, omega_values, tau_values):
 
 Use `argparse`, `csv.DictWriter`, and explicit `Path.parent.mkdir(parents=True, exist_ok=True)` for the CSV output. Default grid: `vx, vy in {-0.5, 0.0, 0.5}`, `omega in {-0.5, 0.0, 0.5}`, and `tau in {(0.25,0.25,0.25), (0.43,0.43,0.43), (0.55,0.55,0.55)}`.
 
-- [ ] **Step 4: Run tests and a scanner smoke test**
+- [x] **Step 4: Run tests and a scanner smoke test**
 
 Run:
 
@@ -251,14 +254,14 @@ Expected: tests pass; CSV contains 81 data rows plus header and every row has `r
 - Consumes `controllability_scan.csv` from Task 3.
 - Produces a dated result table with exact grid, rank range, singular-value/condition-number range, Python command, and decision.
 
-- [ ] **Step 1: Add the result-table schema before running the scan**
+- [x] **Step 1: Add the result-table schema before running the scan**
 
 ```markdown
 | run date | rho grid | tau grid | rank range | sigma_min range | condition range | decision |
 |----------|----------|----------|------------|-----------------|-----------------|----------|
 ```
 
-- [ ] **Step 2: Run the scan and compute summary statistics from its CSV**
+- [x] **Step 2: Run the scan and compute summary statistics from its CSV**
 
 Run:
 
@@ -269,7 +272,7 @@ python3 homo_multirobot_formation_control/scripts/ilf_6d_feasibility.py \
 
 Expected: a non-empty CSV with the exact grid recorded in Task 3.
 
-- [ ] **Step 3: Fill the result table with observed values only**
+- [x] **Step 3: Fill the result table with observed values only**
 
 Decision rule:
 
@@ -280,7 +283,7 @@ otherwise
     -> shrink the stated operating domain or stop the direct 6D route.
 ```
 
-- [ ] **Step 4: Verify documentation and tests**
+- [x] **Step 4: Verify documentation and tests**
 
 Run:
 

@@ -147,10 +147,26 @@ twist `rho=[v_{x,l}^b,v_{y,l}^b,omega_l]` 附近，记
 \xi=[e_x,e_y,e_\theta,e_{v_x},e_{v_y},e_\omega]^\mathsf{T}.
 ```
 
-忽略二阶余项后的候选模型写为：
+在冻结工况中，零误差对应的绝对命令不是零，而是维持 Leader twist 的平衡命令
 
 ```math
-\dot\xi(t)=A_{\rho,\Lambda}\xi(t)+B_\Lambda u(t-d(t))+r(t), \tag{1}
+u_\star=[v_{x,l}^b,v_{y,l}^b,\omega_l]^\mathsf{T}.
+```
+
+因此定义控制器的局部输出为相对平衡命令
+
+```math
+\delta u(t)=u_f(t)-u_\star,
+```
+
+并在发布前还原为 $u_f=u_\star+\delta u$。仅在 Leader 速度/角速度冻结、
+目标偏航误差为零时，上式是常值平衡命令；Leader 加速度、参考偏航变化和编队切换
+引起的偏差应归入 $r_{\mathrm{leader}}$ 或 $r_{\mathrm{switch}}$。
+
+忽略二阶余项后的候选误差模型才可写为：
+
+```math
+\dot\xi(t)=A_{\rho,\Lambda}\xi(t)+B_\Lambda\delta u(t-d(t))+r(t). \tag{1}
 ```
 
 其中可从当前 `6D Disc` 的 `A_L` 得到
@@ -180,13 +196,16 @@ r=r_{\mathrm{nl}}+r_{\mathrm{leader}}+r_{\mathrm{switch}}
 ```
 
 - `r_nl`：姿态旋转、局部线性化截断和车体系变换余项；
-- `r_leader`：Leader 加速度和冻结 `rho` 后的慢变项；
+- `r_leader`：Leader 加速度、平衡命令变化和冻结 `rho` 后的慢变项；
 - `r_switch`：Disc 目标切换所造成的误差坐标跳变；
 - `r_sat`：速度、加速度、轮速投影使实际 `cmd_vel` 偏离控制律输出的项；
 - `r_obs`：EKF 速度误差、时间戳老化和数值差分误差。
 
 式 (1) 的价值是：电机一阶速度滞后不是“控制器外部神秘扰动”，而是显式进入
-`A_{rho,Lambda},B_Lambda`；纯死区仍保留为待鲁棒处理的输入时延。
+`A_{rho,Lambda},B_Lambda`；纯死区仍保留为待鲁棒处理的输入时延。若省略
+$u_\star$ 而将绝对 `cmd_vel` 直接代入式 (1)，则存在未消去的仿射项
+$-\Lambda[v_{x,l}^b,v_{y,l}^b,\omega_l]^\mathsf{T}$，零误差并非平衡点，
+该模型不可用于稳定性分析。
 
 ### 3.3 与现有实现的关系
 
@@ -364,6 +383,23 @@ A_{\rho,\Lambda}^{5}B_\Lambda]=6,
 
 并构造有统一稳定裕度的 `K_rho`。若存在不可控点、条件数极坏点或无法获得所需
 稳定裕度的点，应缩小工作域，不得在论文中声称全工作域可用。
+
+#### T2 初步数值结果（2026-08-21）
+
+使用脚本 `scripts/ilf_6d_feasibility.py` 对冻结模型作第一次代数筛选。网格为
+
+```text
+vx_l, vy_l, omega_l in {-0.5, 0, 0.5}
+tau_x=tau_y=tau_omega in {0.25, 0.43, 0.55} s
+```
+
+| 样本数 | 可控性秩范围 | sigma_min 范围 | 条件数范围 | 结论 |
+|---:|---:|---:|---:|---|
+| 81 | 6--6 | 0.817913--0.970142 | 56.329--4633.233 | 通过初步可控性筛选；最大条件数须在后续 LMI 与数值仿真中重点监测 |
+
+结果文件为 `analysis/results/6d_ilf_feasibility/controllability_scan.csv`。这一步仅表明
+`(A_{rho,Lambda},B_Lambda)` 在该离散网格上可控；它**不**证明存在 MIMO ILF/ILKF
+控制律，也不提供时延裕度或统一稳定裕度。
 
 ### T3：MIMO ILF/ILKF 可行性
 
