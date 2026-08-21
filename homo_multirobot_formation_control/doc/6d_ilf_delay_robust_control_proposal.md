@@ -322,6 +322,57 @@ Q(V,\xi;P,G)=\xi^\mathsf{T}D(V^{-1})P D(V^{-1})\xi-1=0,
 风险：必须补上 MIMO、局部参数调度和时滞的联合证明；若没有共同泛函，只能得到
 冻结模型的结论。
 
+#### 候选 A 的第一道名义基线：零时滞时的精确分块可控规范形
+
+这一小节只为后续的**无时滞名义数值基线**服务，不能替代输入时滞分析。取最简单
+冻结点 `rho=0`、固定编队目标、`r=0` 和 `d=0`，再将
+
+```math
+e_p=[e_x,e_y,e_\theta]^\mathsf{T},\qquad
+e_v=[e_{v_x},e_{v_y},e_\omega]^\mathsf{T},\qquad
+\xi=[e_p^\mathsf{T},e_v^\mathsf{T}]^\mathsf{T},
+```
+
+代入式 (1)，得到
+
+```math
+\dot\xi=
+\begin{bmatrix}0&I_3\\0&-\Lambda\end{bmatrix}\xi+
+\begin{bmatrix}0\\\Lambda\end{bmatrix}\delta u. \tag{5}
+```
+
+在**没有输入时滞**时，作静态输入变换
+
+```math
+\delta u=e_v+\Lambda^{-1}\nu, \tag{6}
+```
+
+则 `s=xi` 满足三组并行二阶积分链
+
+```math
+\dot s=\widetilde A s+\widetilde B\nu,
+\qquad
+\widetilde A=\begin{bmatrix}0&I_3\\0&0\end{bmatrix},
+\qquad
+\widetilde B=\begin{bmatrix}0\\I_3\end{bmatrix}. \tag{7}
+```
+
+式 (7) 正是 MIMO ILF 文献中块长度 `k=2`、两个块维数均为 `3` 的分块可控规范形。
+因此可先复现 Polyakov、Efimov、Perruquetti 的 MIMO ILF 矩阵条件与隐式根；求得的
+`nu` 必须按式 (6) 还原为偏离平衡命令，最终仍发布
+`u_f=u_star+delta_u`。在本小节的 `rho=0` 基线中 `u_star=0`。
+
+这项变换**不能移植为有时滞系统的等价变换**。若把式 (6) 的控制律放进真实输入
+通道 `delta u(t-d(t))`，速度子系统实际变为
+
+```math
+\dot e_v(t)=-\Lambda\left[e_v(t)-e_v(t-d(t))\right]+\nu(t-d(t)), \tag{8}
+```
+
+而不是式 (7) 的无时滞积分链。因此，基于式 (7) 的有限时间定理只验证名义控制律、
+隐式方程和数值实现；它不提供时延裕度，也不能写成对式 (1) 的 ILKF/ISS 证明。时滞
+项必须在后续单独纳入泛函或 Razumikhin 导数估计，并通过 DDE 仿真检验。
+
 ### 5.2 候选 B：6D 广义齐次名义反馈 + ILKF 鲁棒性分析（保底路线）
 
 保留现有 `lpc2hpc_nd` 的局部 6D 广义齐次反馈思想，针对含延迟和执行器动态的
@@ -418,6 +469,22 @@ tau_x=tau_y=tau_omega in {0.25, 0.43, 0.55} s
 - 计算可允许时延上界 `d_bar^*`，而非只报告控制器在一个仿真时延下“看起来稳定”；
 - 若参数调度，寻找共同 `P,G`/共同泛函；若找不到，给出 `dot rho` 上界或目标切换
   驻留时间条件。
+
+#### T3 名义零时滞基线结果（2026-08-21）
+
+先只在式 (5)--(7) 的 `rho=0`、`d=0`、`r=0` 连续系统上复现 MIMO ILF 构造。采用
+Polyakov、Efimov、Perruquetti (2016) Theorem 10 的 `k=2`、块维数 `(3,3)` 条件，取
+`mu=0.5`，以 `trace(X)=1` 消除齐次矩阵条件的数值尺度不定性。Clarabel 解给出
+`lambda_min(X)=0.0177779`、`lambda_min(XH+HX)=0.0424297`，矩阵等式残差的无穷范数为
+`5.52e-15`，且 `max Re eig(A_tilde+B_tilde K)=-1.25`。
+
+对 `xi(0)=[1,-0.7,0.3,0,0,0]^T` 的连续数值积分，`V` 在 `4 s` 内由 `4.14026` 降到
+`0.00120842`，末端状态范数为 `5.67928e-4`。完整可复现命令和逐点记录见
+`analysis/results/6d_ilf_feasibility/README.md` 与 `nominal_ilf_run.csv`。
+
+该结果通过的只是“名义 MIMO ILF 构造可以在本 6D 零时滞冻结点数值实现”的小门。
+它不构成 ILKF、时延裕度、参数调度、采样或约束闭环证明；特别是式 (8) 的
+`-Lambda[e_v(t)-e_v(t-d)]` 仍必须进入下一步的时滞泛函/不等式和 DDE 仿真。
 
 ### T4：扰动、饱和和切换的闭环界
 

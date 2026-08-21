@@ -33,3 +33,41 @@ tau_x=tau_y=tau_omega in {0.25, 0.43, 0.55} s
 闭环仿真必须报告它们对参数的敏感性。
 
 该结果不是稳定性、时延裕度或控制器性能证明。
+
+## T3 的第一步：冻结零时滞 MIMO-ILF 名义基线
+
+运行日期：2026-08-21
+
+本次计算只复现 `doc/6d_ilf_delay_robust_control_proposal.md` 式 (5)--(7) 的连续时间、
+零时滞基线：`rho=0`、`d=0`、`r=0`、固定编队目标、无饱和。物理执行器时间常数取
+`tau_x=tau_y=tau_omega=0.43 s` 时，式 (6) 仍将命令还原为
+`delta_u=e_v+0.43 nu`；由于名义变换精确，规范形的 ILF 综合本身不依赖这个正的
+`tau` 数值。
+
+使用 Polyakov、Efimov、Perruquetti (2016) 的 MIMO ILF 有限时间构造（Theorem 10），
+对三组二阶积分链取 `mu=0.5`，并在 `trace(X)=1` 的数值归一化下求解矩阵等式。运行
+命令：
+
+```bash
+python3 homo_multirobot_formation_control/scripts/ilf_6d_feasibility.py \
+  --run-nominal-ilf \
+  --nominal-csv homo_multirobot_formation_control/analysis/results/6d_ilf_feasibility/nominal_ilf_run.csv
+```
+
+| 指标 | 结果 |
+|---|---:|
+| `lambda_min(X)` | 0.0177779476967 |
+| `lambda_min(XH+HX)` | 0.0424297084865 |
+| Theorem 10 矩阵等式的无穷范数残差 | `5.52e-15` |
+| `max Re eig(A_tilde+B_tilde K)` | -1.25 |
+| 初值 `xi(0)` | `[1, -0.7, 0.3, 0, 0, 0]^T` |
+| `V(0)` | 4.14025770191 |
+| `V(4 s)` | 0.00120841894328 |
+| `||xi(4 s)||_2` | 0.000567927972065 |
+
+结果文件 `nominal_ilf_run.csv` 保存了 4002 个连续求解器输出点的状态、隐式 Lyapunov
+根和规范形输入 `nu`。该运行验证的是：MIMO 矩阵综合、正根计算、理论
+`dot V=-V^(1-mu)` 的数值实现，以及冻结零时滞模型的收敛。它**不**验证输入时滞、
+采样、Leader 变化、Disc 切换、饱和、测量误差或 ROS 控制器；尤其不能把式 (7) 的
+结论用于含 `delta_u(t-d(t))` 的式 (8)。下一道不可跳过的门是针对该延迟差分项建立
+ILKF/Razumikhin 界，并在 DDE 中扫描延迟上界和失配。

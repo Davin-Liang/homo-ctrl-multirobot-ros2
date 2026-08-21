@@ -50,6 +50,112 @@ def test_nominal_actuator_aware_6d_model_is_full_rank_controllable():
     assert np.isfinite(result["condition_number"])
 
 
+def test_nominal_input_transformation_gives_three_double_integrators():
+    feasibility = load_module()
+    tau = np.array([0.43, 0.43, 0.43])
+    A, B = feasibility.build_local_model(np.zeros(3), tau)
+
+    A_tilde, B_tilde = feasibility.build_nominal_canonical_model()
+    state_feedback = np.hstack((np.zeros((3, 3)), np.eye(3)))
+
+    np.testing.assert_allclose(A + B @ state_feedback, A_tilde)
+    np.testing.assert_allclose(B @ np.diag(tau), B_tilde)
+
+
+def test_canonical_control_maps_back_to_deviation_cmd_vel():
+    feasibility = load_module()
+
+    delta_u = feasibility.canonical_to_deviation_input(
+        xi=np.array([1.0, 2.0, 3.0, 0.1, -0.2, 0.3]),
+        nu=np.array([2.0, -1.0, 0.5]),
+        tau=np.array([0.5, 0.4, 0.2]),
+    )
+
+    np.testing.assert_allclose(delta_u, [1.1, -0.6, 0.4])
+
+
+def test_nominal_mimo_ilf_synthesis_satisfies_theorem_10_matrix_identity():
+    feasibility = load_module()
+    design = feasibility.synthesize_nominal_mimo_ilf(mu=0.5)
+    A_tilde, B_tilde = feasibility.build_nominal_canonical_model()
+    residual = (
+        A_tilde @ design.X
+        + design.X @ A_tilde.T
+        + B_tilde @ design.Y
+        + design.Y.T @ B_tilde.T
+        + design.H @ design.X
+        + design.X @ design.H
+    )
+
+    assert np.linalg.eigvalsh(design.X).min() > 1e-6
+    assert np.linalg.eigvalsh(design.X @ design.H + design.H @ design.X).min() > 1e-6
+    np.testing.assert_allclose(residual, np.zeros((6, 6)), atol=1e-7)
+    assert np.linalg.eigvals(A_tilde + B_tilde @ design.K).real.max() < 0.0
+
+
+def test_implicit_lyapunov_root_and_controller_satisfy_the_nominal_identity():
+    feasibility = load_module()
+    design = feasibility.synthesize_nominal_mimo_ilf(mu=0.5)
+    xi = np.array([1.0, -0.7, 0.3, 0.0, 0.0, 0.0])
+
+    value = feasibility.implicit_lyapunov_value(xi, design)
+    nu = feasibility.nominal_ilf_control(xi, design)
+    dilation = np.diag(
+        [value ** -(1.0 + design.mu)] * 3 + [value**-1.0] * 3
+    )
+    q_value = xi @ dilation @ design.P @ dilation @ xi - 1.0
+    A_tilde, B_tilde = feasibility.build_nominal_canonical_model()
+    finite_difference = (
+        feasibility.implicit_lyapunov_value(
+            xi + 1e-6 * (A_tilde @ xi + B_tilde @ nu), design
+        )
+        - value
+    ) / 1e-6
+
+    assert value > 0.0
+    np.testing.assert_allclose(q_value, 0.0, atol=1e-8)
+    np.testing.assert_allclose(
+        finite_difference,
+        -value ** (1.0 - design.mu),
+        rtol=2e-3,
+        atol=2e-4,
+    )
+
+
+def test_continuous_nominal_simulation_decreases_implicit_lyapunov_value():
+    feasibility = load_module()
+    design = feasibility.synthesize_nominal_mimo_ilf(mu=0.5)
+
+    result = feasibility.simulate_nominal_ilf(
+        x0=np.array([1.0, -0.7, 0.3, 0.0, 0.0, 0.0]),
+        design=design,
+        duration=4.0,
+        max_step=1e-3,
+    )
+
+    assert result["lyapunov"][-1] < result["lyapunov"][0] * 1e-3
+    assert np.linalg.norm(result["state"][-1]) < 2e-3
+
+
+def test_write_nominal_ilf_csv_has_expected_header_and_lf_endings(tmp_path):
+    feasibility = load_module()
+    design = feasibility.synthesize_nominal_mimo_ilf(mu=0.5)
+    result = feasibility.simulate_nominal_ilf(
+        np.array([0.2, 0.0, 0.0, 0.0, 0.0, 0.0]),
+        design,
+        duration=0.1,
+        max_step=1e-3,
+    )
+    output = tmp_path / "nominal.csv"
+
+    feasibility.write_nominal_ilf_csv(result, output)
+
+    assert output.read_text(encoding="utf-8").splitlines()[0] == (
+        "time,e_x,e_y,e_theta,e_vx,e_vy,e_omega,V,nu_x,nu_y,nu_omega"
+    )
+    assert b"\r\n" not in output.read_bytes()
+
+
 def test_scan_envelope_returns_one_full_rank_row_for_single_operating_point():
     feasibility = load_module()
 
