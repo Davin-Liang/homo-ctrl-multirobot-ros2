@@ -403,6 +403,15 @@ tau_x=tau_y=tau_omega in {0.25, 0.43, 0.55} s
 
 ### T3：MIMO ILF/ILKF 可行性
 
+- 名义 MIMO 控制律优先以 Polyakov、Efimov、Perruquetti 的线性 MIMO ILF
+  块分解/LMI 构造为基础；该文直接覆盖多输入线性系统的有限/固定时间稳定与扰动
+  鲁棒性，但**不处理输入时滞**；
+- 输入时滞分析可参考第 4.1 节的 ILKF 与 2019 ILF 时延结果，但其直接控制构造
+  不能被写成对本 3 输入模型的现成定理；
+- 因此必须在本课题中补充“名义 MIMO ILF 闭环 + 输入时滞项”的泛函导数估计，
+  或找到明确覆盖该组合假设的 MIMO 时滞定理；
+- 2026 年关于切换线性 MIMO 广义齐次控制的预印本可用于讨论共同/多 Lyapunov
+  函数和参数切换，但在同行评审前只作补充参考，不能替代上述证明；
 - 明确使用的 MIMO 定理或给出从 ILF 条件到三输入系统的完整推导；
 - 求解 `P>0`、扩张生成元 `G` 和反馈矩阵的矩阵等式/LMI；
 - 检查隐式方程对 `V>0` 存在唯一正根，避免在线求根多值或病态；
@@ -590,3 +599,10 @@ formation_control_node_6d_ilf
 5. A. Polyakov et al., “Finite-time stability analysis of homogeneous systems
    with sector nonlinearities,” *Automatica*, 2024. DOI:
    [10.1016/j.automatica.2024.111872](https://doi.org/10.1016/j.automatica.2024.111872).
+6. A. Polyakov, D. Efimov, W. Perruquetti, “Robust Stabilization of MIMO
+   Systems in Finite/Fixed Time,” *International Journal of Robust and
+   Nonlinear Control*, 26(1), 69–90, 2016. DOI:
+   [10.1002/rnc.3297](https://doi.org/10.1002/rnc.3297).
+7. M. Labbadi, A. Polyakov, D. Efimov, “Accelerated Stabilization of Switched
+   Linear MIMO Systems using Generalized Homogeneity,” arXiv preprint,
+   2026. [arXiv:2602.08903](https://arxiv.org/abs/2602.08903).
