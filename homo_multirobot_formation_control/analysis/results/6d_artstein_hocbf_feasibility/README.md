@@ -28,3 +28,9 @@ CSV 字段：
     python3 homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py --full-robustness --output homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility/scan.csv
 
 robustness_envelope.csv 不会删除碰撞、QP 无解或制动行。robustness_summary.csv 另列出 all 和 exact_feasible 两组；后者要求预测 tau 与真实 tau 相同、预测时延与真实时延相同，并且 QP 始终可行。sample_distance_gap 是已扫描场景中 1 kHz 最小距离减 20 Hz 最小距离的非负部分；它只构成经验数值膨胀项，不覆盖感知、定位、几何或未扫描的模型误差。
+
+半径膨胀搜索使用：
+
+    python3 homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py --radius-inflation --output homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility/scan.csv
+
+它额外生成 radius_inflation.csv 和 radius_inflation_summary.csv。控制器内部半径按 0 至 30 mm、1 mm 步长增加，但最终安全判据仍是基础物理半径 0.8 m。默认搜索一个已知 tau 失配越界场景和四个准确模型边界场景。required_inflation 是有限场景集合中的经验结果；它不是 ROS 的最终安全半径，也不是鲁棒 HOCBF 理论保证。

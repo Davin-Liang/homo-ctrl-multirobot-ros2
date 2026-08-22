@@ -72,7 +72,7 @@ Expected: AttributeError because the two search functions are absent.
 
 - [ ] **Step 3: Write minimal implementation**
 
-For each candidate, create a copy of config with safe_radius=base_radius+inflation. Run simulate_scenario and compare_sampling_rates. Record filter_radius, inflation, min_distance_20hz, min_distance_1khz, min_h_20hz, min_h_1khz, infeasible_steps, braking_steps, and safe. Set safe only when both distances are at least base_radius minus 1e-9 and infeasible_steps is zero. Evaluate every supplied candidate; select the smallest safe candidate by numeric order. Return baseline metrics from the zero-inflation candidate even if zero was not supplied.
+For each candidate in increasing order, create a copy of config with safe_radius=base_radius+inflation and run simulate_scenario. Record its 20 Hz distance, h, infeasibility and braking. Run compare_sampling_rates for zero inflation and every candidate whose 20 Hz distance is at least base_radius minus 1e-9 with zero infeasible steps; a candidate that already fails this necessary 20 Hz condition cannot satisfy the final dual-rate criterion. Set safe only when both available distances are at least base_radius minus 1e-9 and infeasible_steps is zero. The first safe candidate is the smallest on the ordered discrete grid, so stop after recording it. Return baseline metrics from the zero-inflation candidate even if zero was not supplied.
 
 - [ ] **Step 4: Run focused tests**
 

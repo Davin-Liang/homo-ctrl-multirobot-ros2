@@ -1,0 +1,3 @@
+group,scenario_count,resolved_count,unresolved_count,max_required_inflation
+exact,4,4,0,0.0
+mismatch,1,1,0,0.005

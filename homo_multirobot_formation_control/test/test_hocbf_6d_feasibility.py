@@ -407,3 +407,23 @@ def test_exact_model_safe_case_allows_zero_radius_inflation():
     assert result["baseline_safe"] is True
     assert result["found"] is True
     assert result["required_inflation"] == pytest.approx(0.0)
+
+
+def test_radius_inflation_summary_keeps_unresolved_case():
+    feasibility = load_module()
+    rows = [
+        {"exact_model": 1, "found": True, "required_inflation": 0.0},
+        {"exact_model": 0, "found": True, "required_inflation": 0.006},
+        {
+            "exact_model": 0,
+            "found": False,
+            "required_inflation": float("nan"),
+        },
+    ]
+
+    summary = feasibility.summarize_radius_inflation(rows)
+    mismatch = next(row for row in summary if row["group"] == "mismatch")
+
+    assert mismatch["scenario_count"] == 2
+    assert mismatch["unresolved_count"] == 1
+    assert mismatch["max_required_inflation"] == pytest.approx(0.006)

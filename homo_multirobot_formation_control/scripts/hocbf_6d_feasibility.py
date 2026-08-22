@@ -386,6 +386,35 @@ ROBUSTNESS_SUMMARY_FIELDNAMES = [
     "max_sample_distance_gap",
 ]
 
+RADIUS_INFLATION_FIELDNAMES = [
+    "tau_actual",
+    "tau_model",
+    "delay_actual",
+    "delay_model",
+    "initial_clearance",
+    "initial_radial_speed",
+    "initial_lateral_speed",
+    "nominal_radial_speed",
+    "base_radius",
+    "baseline_safe",
+    "baseline_min_distance_20hz",
+    "baseline_min_distance_1khz",
+    "found",
+    "required_inflation",
+    "selected_min_distance_20hz",
+    "selected_min_distance_1khz",
+    "selected_infeasible_steps",
+    "exact_model",
+]
+
+RADIUS_INFLATION_SUMMARY_FIELDNAMES = [
+    "group",
+    "scenario_count",
+    "resolved_count",
+    "unresolved_count",
+    "max_required_inflation",
+]
+
 
 def scan_envelope(
     tau_values: list[float],
@@ -468,6 +497,58 @@ def write_rows_csv(
         )
         writer.writeheader()
         writer.writerows(rows)
+
+
+def default_radius_inflation_cases() -> list[ScenarioConfig]:
+    """Return one known mismatch failure and four exact-model boundary cases."""
+    cases = []
+    for tau in [0.30, 0.55]:
+        for lateral_speed in [0.0, 0.2]:
+            cases.append(
+                ScenarioConfig(
+                    plant=PlantParams(
+                        tau=tau,
+                        delay=0.22,
+                        integration_dt=0.01,
+                        control_dt=0.05,
+                    ),
+                    predictor_tau=tau,
+                    predictor_delay=0.22,
+                    obstacle=np.zeros(2),
+                    safe_radius=0.8,
+                    initial_state=np.array(
+                        [1.2, 0.0, -0.5, lateral_speed]
+                    ),
+                    nominal_command=np.array([-0.8, 0.0]),
+                    vmax=1.0,
+                    amax=20.0,
+                    c1=2.0,
+                    c2=2.0,
+                    duration=4.0,
+                )
+            )
+    cases.append(
+        ScenarioConfig(
+            plant=PlantParams(
+                tau=0.55,
+                delay=0.22,
+                integration_dt=0.01,
+                control_dt=0.05,
+            ),
+            predictor_tau=0.66,
+            predictor_delay=0.22,
+            obstacle=np.zeros(2),
+            safe_radius=0.8,
+            initial_state=np.array([1.2, 0.0, -0.5, 0.2]),
+            nominal_command=np.array([-0.8, 0.0]),
+            vmax=1.0,
+            amax=20.0,
+            c1=2.0,
+            c2=2.0,
+            duration=4.0,
+        )
+    )
+    return cases
 
 
 def compare_sampling_rates(
@@ -603,27 +684,44 @@ def evaluate_radius_inflation(
     config: ScenarioConfig,
     base_radius: float,
     inflation: float,
+    run_reference: bool = True,
 ) -> dict[str, float | int | bool]:
     """Evaluate one internal-radius candidate against the fixed physical radius."""
     if base_radius <= 0.0 or inflation < 0.0:
         raise ValueError("base_radius must be positive and inflation non-negative")
     filtered = replace(config, safe_radius=base_radius + inflation)
     result = simulate_scenario(filtered)
-    comparison = compare_sampling_rates(filtered, low_rate=result)
-    safe = (
-        comparison["min_distance_20hz"] >= base_radius - 1e-9
-        and comparison["min_distance_1khz"] >= base_radius - 1e-9
+    low_distance = float(
+        np.linalg.norm(
+            result["state_internal"][:, :2] - filtered.obstacle, axis=1
+        ).min()
+    )
+    low_safe = (
+        low_distance >= base_radius - 1e-9
         and int((~result["feasible"]).sum()) == 0
+    )
+    if run_reference:
+        comparison = compare_sampling_rates(filtered, low_rate=result)
+        reference_distance = comparison["min_distance_1khz"]
+        reference_h = comparison["min_h_1khz"]
+    else:
+        reference_distance = float("nan")
+        reference_h = float("nan")
+    safe = (
+        low_safe
+        and run_reference
+        and reference_distance >= base_radius - 1e-9
     )
     return {
         "inflation": inflation,
         "filter_radius": base_radius + inflation,
-        "min_distance_20hz": comparison["min_distance_20hz"],
-        "min_distance_1khz": comparison["min_distance_1khz"],
-        "min_h_20hz": comparison["min_h_20hz"],
-        "min_h_1khz": comparison["min_h_1khz"],
+        "min_distance_20hz": low_distance,
+        "min_distance_1khz": reference_distance,
+        "min_h_20hz": float(result["h_internal"].min()),
+        "min_h_1khz": reference_h,
         "infeasible_steps": int((~result["feasible"]).sum()),
         "braking_steps": int(result["braking"].sum()),
+        "low_rate_safe": low_safe,
         "safe": safe,
     }
 
@@ -637,9 +735,19 @@ def find_required_radius_inflation(
     values = sorted(set([0.0, *candidates]))
     if any(value < 0.0 for value in values):
         raise ValueError("radius inflation candidates must be non-negative")
-    evaluations = [
-        evaluate_radius_inflation(config, base_radius, value) for value in values
-    ]
+    evaluations = []
+    for value in values:
+        baseline = value == 0.0
+        low_rate = evaluate_radius_inflation(
+            config, base_radius, value, run_reference=baseline
+        )
+        if not baseline and low_rate["low_rate_safe"]:
+            low_rate = evaluate_radius_inflation(
+                config, base_radius, value, run_reference=True
+            )
+        evaluations.append(low_rate)
+        if low_rate["safe"]:
+            break
     baseline = next(item for item in evaluations if item["inflation"] == 0.0)
     selected = next((item for item in evaluations if item["safe"]), None)
     return {
@@ -666,6 +774,94 @@ def find_required_radius_inflation(
         ),
         "candidate_evaluations": evaluations,
     }
+
+
+def run_radius_inflation_cases(
+    cases: list[ScenarioConfig],
+    base_radius: float,
+    candidates: list[float],
+) -> list[dict[str, float | int | bool]]:
+    """Search radius inflation for each supplied scenario without dropping failures."""
+    rows = []
+    for config in cases:
+        result = find_required_radius_inflation(
+            config, base_radius, candidates
+        )
+        predictor_tau = (
+            config.plant.tau
+            if config.predictor_tau is None
+            else config.predictor_tau
+        )
+        predictor_delay = (
+            config.plant.delay
+            if config.predictor_delay is None
+            else config.predictor_delay
+        )
+        rows.append(
+            {
+                "tau_actual": config.plant.tau,
+                "tau_model": predictor_tau,
+                "delay_actual": config.plant.delay,
+                "delay_model": predictor_delay,
+                "initial_clearance": config.initial_state[0] - base_radius,
+                "initial_radial_speed": -config.initial_state[2],
+                "initial_lateral_speed": config.initial_state[3],
+                "nominal_radial_speed": -config.nominal_command[0],
+                "base_radius": base_radius,
+                "baseline_safe": result["baseline_safe"],
+                "baseline_min_distance_20hz": result[
+                    "baseline_min_distance_20hz"
+                ],
+                "baseline_min_distance_1khz": result[
+                    "baseline_min_distance_1khz"
+                ],
+                "found": result["found"],
+                "required_inflation": result["required_inflation"],
+                "selected_min_distance_20hz": result[
+                    "selected_min_distance_20hz"
+                ],
+                "selected_min_distance_1khz": result[
+                    "selected_min_distance_1khz"
+                ],
+                "selected_infeasible_steps": result[
+                    "selected_infeasible_steps"
+                ],
+                "exact_model": int(
+                    np.isclose(config.plant.tau, predictor_tau)
+                    and np.isclose(config.plant.delay, predictor_delay)
+                ),
+            }
+        )
+    return rows
+
+
+def summarize_radius_inflation(
+    rows: list[dict[str, float | int | bool]],
+) -> list[dict[str, float | int | str]]:
+    """Summarize exact and mismatch scenario searches without hiding unresolved rows."""
+    if not rows:
+        raise ValueError("rows must not be empty")
+    groups = {
+        "exact": [row for row in rows if row["exact_model"] == 1],
+        "mismatch": [row for row in rows if row["exact_model"] == 0],
+    }
+    summary = []
+    for name, group_rows in groups.items():
+        resolved = [row for row in group_rows if row["found"]]
+        summary.append(
+            {
+                "group": name,
+                "scenario_count": len(group_rows),
+                "resolved_count": len(resolved),
+                "unresolved_count": len(group_rows) - len(resolved),
+                "max_required_inflation": (
+                    max(row["required_inflation"] for row in resolved)
+                    if resolved
+                    else float("nan")
+                ),
+            }
+        )
+    return summary
 
 
 def summarize_robustness_rows(
@@ -746,7 +942,34 @@ def main() -> None:
         action="store_true",
         help="Run the full 1,944-point robustness envelope instead of 16 boundary cases.",
     )
+    parser.add_argument(
+        "--radius-inflation",
+        action="store_true",
+        help="Search 0--30 mm empirical filter-radius inflation for five cases.",
+    )
     args = parser.parse_args()
+    if args.radius_inflation:
+        inflation_rows = run_radius_inflation_cases(
+            default_radius_inflation_cases(),
+            base_radius=0.8,
+            candidates=[index / 1000.0 for index in range(31)],
+        )
+        inflation_output = args.output.with_name("radius_inflation.csv")
+        inflation_summary_output = args.output.with_name(
+            "radius_inflation_summary.csv"
+        )
+        write_rows_csv(
+            inflation_rows,
+            inflation_output,
+            RADIUS_INFLATION_FIELDNAMES,
+        )
+        write_rows_csv(
+            summarize_radius_inflation(inflation_rows),
+            inflation_summary_output,
+            RADIUS_INFLATION_SUMMARY_FIELDNAMES,
+        )
+        print(f"wrote {len(inflation_rows)} radius-inflation rows")
+        return
     rows = scan_envelope(
         tau_values=[0.30, 0.43, 0.55],
         delay_values=[0.0, 0.22],
