@@ -22,3 +22,9 @@ CSV 字段：
 只有 delay_model 等于 delay_actual、infeasible_steps 等于 0、braking_steps 等于 0 且 min_h 大于等于 0 的行，才与准确模型、可行 HOCBF 情形的模型级安全结论一致。失配行和制动行用于刻画适用边界，不能作为鲁棒安全证明。
 
 同一次命令还会生成 sampling_rate_compare.csv。它比较默认正面接近场景在 20 Hz 控制与 1 kHz 控制参考下的最小安全函数、最小距离和两者差值。该对照量化采样实现误差，不单独构成 sampled-data 安全定理。
+
+同一次命令还会生成 robustness_envelope.csv 和 robustness_summary.csv。默认运行 16 个边界代表场景，覆盖快/慢执行器、准确/20% tau 低估、准确/50 ms 时延低估，以及有无横向初速度；完整 1,944 场景笛卡尔扫描使用：
+
+    python3 homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py --full-robustness --output homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility/scan.csv
+
+robustness_envelope.csv 不会删除碰撞、QP 无解或制动行。robustness_summary.csv 另列出 all 和 exact_feasible 两组；后者要求预测 tau 与真实 tau 相同、预测时延与真实时延相同，并且 QP 始终可行。sample_distance_gap 是已扫描场景中 1 kHz 最小距离减 20 Hz 最小距离的非负部分；它只构成经验数值膨胀项，不覆盖感知、定位、几何或未扫描的模型误差。

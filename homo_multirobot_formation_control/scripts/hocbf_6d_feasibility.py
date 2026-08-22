@@ -355,6 +355,37 @@ METRICS_FIELDNAMES = [
     "braking_steps",
 ]
 
+ROBUSTNESS_FIELDNAMES = [
+    "tau_actual",
+    "tau_model",
+    "delay_model",
+    "delay_actual",
+    "initial_clearance",
+    "initial_radial_speed",
+    "initial_lateral_speed",
+    "nominal_radial_speed",
+    "min_h",
+    "min_distance",
+    "min_psi2",
+    "max_command_norm",
+    "infeasible_steps",
+    "braking_steps",
+    "min_h_1khz",
+    "min_distance_1khz",
+    "sample_distance_gap",
+    "exact_model",
+]
+
+ROBUSTNESS_SUMMARY_FIELDNAMES = [
+    "group",
+    "scenario_count",
+    "unsafe_count",
+    "min_h",
+    "min_distance",
+    "infeasible_scenarios",
+    "max_sample_distance_gap",
+]
+
 
 def scan_envelope(
     tau_values: list[float],
@@ -417,6 +448,23 @@ def write_metrics_csv(rows: list[dict[str, float | int]], output: Path) -> None:
     with output.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(
             stream, fieldnames=METRICS_FIELDNAMES, lineterminator="\n"
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_rows_csv(
+    rows: list[dict[str, float | int | str]],
+    output: Path,
+    fieldnames: list[str],
+) -> None:
+    """Write a homogeneous metrics table with LF line endings."""
+    if not rows:
+        raise ValueError("rows must not be empty")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream, fieldnames=fieldnames, lineterminator="\n"
         )
         writer.writeheader()
         writer.writerows(rows)
@@ -551,6 +599,56 @@ def run_robustness_envelope(
     return rows
 
 
+def summarize_robustness_rows(
+    rows: list[dict[str, float | int]],
+) -> list[dict[str, float | int | str]]:
+    """Summarize every row and the exact-model feasible subset without filtering."""
+    if not rows:
+        raise ValueError("rows must not be empty")
+
+    groups = {
+        "all": rows,
+        "exact_feasible": [
+            row
+            for row in rows
+            if row["exact_model"] == 1 and row["infeasible_steps"] == 0
+        ],
+    }
+    summary = []
+    for name, group_rows in groups.items():
+        if not group_rows:
+            summary.append(
+                {
+                    "group": name,
+                    "scenario_count": 0,
+                    "unsafe_count": 0,
+                    "min_h": float("nan"),
+                    "min_distance": float("nan"),
+                    "infeasible_scenarios": 0,
+                    "max_sample_distance_gap": float("nan"),
+                }
+            )
+            continue
+        summary.append(
+            {
+                "group": name,
+                "scenario_count": len(group_rows),
+                "unsafe_count": sum(row["min_h"] < 0.0 for row in group_rows),
+                "min_h": min(row["min_h"] for row in group_rows),
+                "min_distance": min(
+                    row["min_distance"] for row in group_rows
+                ),
+                "infeasible_scenarios": sum(
+                    row["infeasible_steps"] > 0 for row in group_rows
+                ),
+                "max_sample_distance_gap": max(
+                    row["sample_distance_gap"] for row in group_rows
+                ),
+            }
+        )
+    return summary
+
+
 def write_rate_comparison_csv(row: dict[str, float], output: Path) -> None:
     """Write one sampling-rate comparison row with LF line endings."""
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -573,6 +671,11 @@ def main() -> None:
             "homo_multirobot_formation_control/analysis/results/"
             "6d_artstein_hocbf_feasibility/scan.csv"
         ),
+    )
+    parser.add_argument(
+        "--full-robustness",
+        action="store_true",
+        help="Run the full 1,944-point robustness envelope instead of 16 boundary cases.",
     )
     args = parser.parse_args()
     rows = scan_envelope(
@@ -603,9 +706,43 @@ def main() -> None:
     )
     comparison_output = args.output.with_name("sampling_rate_compare.csv")
     write_rate_comparison_csv(comparison, comparison_output)
+    if args.full_robustness:
+        robustness_args = {
+            "tau_actual_values": [0.30, 0.43, 0.55],
+            "tau_ratios": [0.8, 1.0, 1.2],
+            "delay_model_values": [0.0, 0.22],
+            "delay_mismatches": [0.0, 0.02, 0.05],
+            "clearances": [0.4, 0.8, 1.2],
+            "radial_speeds": [0.1, 0.3, 0.5],
+            "lateral_speeds": [0.0, 0.2],
+            "nominal_speeds": [0.4, 0.8],
+        }
+    else:
+        robustness_args = {
+            "tau_actual_values": [0.30, 0.55],
+            "tau_ratios": [1.0, 1.2],
+            "delay_model_values": [0.22],
+            "delay_mismatches": [0.0, 0.05],
+            "clearances": [0.4],
+            "radial_speeds": [0.5],
+            "lateral_speeds": [0.0, 0.2],
+            "nominal_speeds": [0.8],
+        }
+    robustness_rows = run_robustness_envelope(**robustness_args)
+    robustness_output = args.output.with_name("robustness_envelope.csv")
+    robustness_summary_output = args.output.with_name("robustness_summary.csv")
+    write_rows_csv(
+        robustness_rows, robustness_output, ROBUSTNESS_FIELDNAMES
+    )
+    write_rows_csv(
+        summarize_robustness_rows(robustness_rows),
+        robustness_summary_output,
+        ROBUSTNESS_SUMMARY_FIELDNAMES,
+    )
     print(
         f"wrote {len(rows)} rows to {args.output} and "
-        f"sampling comparison to {comparison_output}"
+        f"sampling comparison to {comparison_output}; "
+        f"wrote {len(robustness_rows)} robustness rows"
     )
 
 

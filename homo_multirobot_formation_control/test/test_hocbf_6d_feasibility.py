@@ -308,3 +308,36 @@ def test_robustness_envelope_has_every_parameter_combination_and_margin():
     assert rows[0]["sample_distance_gap"] >= 0.0
     assert rows[0]["exact_model"] == 1
     assert rows[1]["exact_model"] == 0
+
+
+def test_robustness_summary_reports_all_and_exact_feasible_groups():
+    feasibility = load_module()
+    rows = [
+        {
+            "exact_model": 1,
+            "infeasible_steps": 0,
+            "min_h": 0.1,
+            "min_distance": 0.9,
+            "sample_distance_gap": 0.02,
+        },
+        {
+            "exact_model": 1,
+            "infeasible_steps": 1,
+            "min_h": -0.1,
+            "min_distance": 0.7,
+            "sample_distance_gap": 0.03,
+        },
+        {
+            "exact_model": 0,
+            "infeasible_steps": 0,
+            "min_h": 0.01,
+            "min_distance": 0.81,
+            "sample_distance_gap": 0.04,
+        },
+    ]
+
+    summary = feasibility.summarize_robustness_rows(rows)
+    exact = next(row for row in summary if row["group"] == "exact_feasible")
+
+    assert exact["scenario_count"] == 1
+    assert exact["max_sample_distance_gap"] == pytest.approx(0.02)
