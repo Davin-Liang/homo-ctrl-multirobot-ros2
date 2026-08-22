@@ -288,3 +288,23 @@ def test_predictor_tau_must_be_positive():
             c2=2.0,
             duration=0.5,
         )
+
+
+def test_robustness_envelope_has_every_parameter_combination_and_margin():
+    feasibility = load_module()
+
+    rows = feasibility.run_robustness_envelope(
+        tau_actual_values=[0.43],
+        tau_ratios=[1.0, 1.2],
+        delay_model_values=[0.22],
+        delay_mismatches=[0.0],
+        clearances=[0.4],
+        radial_speeds=[0.1],
+        lateral_speeds=[0.0],
+        nominal_speeds=[0.4],
+    )
+
+    assert len(rows) == 2
+    assert rows[0]["sample_distance_gap"] >= 0.0
+    assert rows[0]["exact_model"] == 1
+    assert rows[1]["exact_model"] == 0

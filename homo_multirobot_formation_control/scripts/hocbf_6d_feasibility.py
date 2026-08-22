@@ -423,13 +423,16 @@ def write_metrics_csv(rows: list[dict[str, float | int]], output: Path) -> None:
 
 
 def compare_sampling_rates(
-    config: ScenarioConfig, reference_dt: float = 0.001
+    config: ScenarioConfig,
+    reference_dt: float = 0.001,
+    low_rate: dict[str, np.ndarray] | None = None,
 ) -> dict[str, float]:
     """Compare the configured controller rate against a high-rate reference."""
     if reference_dt <= 0.0 or reference_dt > config.plant.control_dt:
         raise ValueError("reference_dt must be positive and no larger than control_dt")
 
-    low_rate = simulate_scenario(config)
+    if low_rate is None:
+        low_rate = simulate_scenario(config)
     reference_plant = replace(
         config.plant,
         integration_dt=reference_dt,
@@ -453,6 +456,99 @@ def compare_sampling_rates(
         "min_distance_1khz": float(reference_distance),
         "min_h_difference": min_h_20hz - min_h_1khz,
     }
+
+
+def run_robustness_envelope(
+    tau_actual_values: list[float],
+    tau_ratios: list[float],
+    delay_model_values: list[float],
+    delay_mismatches: list[float],
+    clearances: list[float],
+    radial_speeds: list[float],
+    lateral_speeds: list[float],
+    nominal_speeds: list[float],
+) -> list[dict[str, float | int]]:
+    """Evaluate all requested model, delay, state, and command combinations."""
+    rows = []
+    for (
+        tau_actual,
+        tau_ratio,
+        delay_model,
+        delay_mismatch,
+        clearance,
+        radial_speed,
+        lateral_speed,
+        nominal_speed,
+    ) in itertools.product(
+        tau_actual_values,
+        tau_ratios,
+        delay_model_values,
+        delay_mismatches,
+        clearances,
+        radial_speeds,
+        lateral_speeds,
+        nominal_speeds,
+    ):
+        tau_model = tau_actual * tau_ratio
+        delay_actual = delay_model + delay_mismatch
+        config = ScenarioConfig(
+            plant=PlantParams(
+                tau=tau_actual,
+                delay=delay_actual,
+                integration_dt=0.01,
+                control_dt=0.05,
+            ),
+            predictor_delay=delay_model,
+            predictor_tau=tau_model,
+            obstacle=np.zeros(2),
+            safe_radius=0.8,
+            initial_state=np.array(
+                [0.8 + clearance, 0.0, -radial_speed, lateral_speed]
+            ),
+            nominal_command=np.array([-nominal_speed, 0.0]),
+            vmax=1.0,
+            amax=20.0,
+            c1=2.0,
+            c2=2.0,
+            duration=4.0,
+        )
+        result = simulate_scenario(config)
+        comparison = compare_sampling_rates(config, low_rate=result)
+        distances = np.linalg.norm(
+            result["state_internal"][:, :2] - config.obstacle, axis=1
+        )
+        rows.append(
+            {
+                "tau_actual": tau_actual,
+                "tau_model": tau_model,
+                "delay_model": delay_model,
+                "delay_actual": delay_actual,
+                "initial_clearance": clearance,
+                "initial_radial_speed": radial_speed,
+                "initial_lateral_speed": lateral_speed,
+                "nominal_radial_speed": nominal_speed,
+                "min_h": float(result["h_internal"].min()),
+                "min_distance": float(distances.min()),
+                "min_psi2": float(result["psi2"].min()),
+                "max_command_norm": float(
+                    np.linalg.norm(result["command"], axis=1).max()
+                ),
+                "infeasible_steps": int((~result["feasible"]).sum()),
+                "braking_steps": int(result["braking"].sum()),
+                "min_h_1khz": comparison["min_h_1khz"],
+                "min_distance_1khz": comparison["min_distance_1khz"],
+                "sample_distance_gap": max(
+                    0.0,
+                    comparison["min_distance_1khz"]
+                    - comparison["min_distance_20hz"],
+                ),
+                "exact_model": int(
+                    np.isclose(tau_ratio, 1.0)
+                    and np.isclose(delay_mismatch, 0.0)
+                ),
+            }
+        )
+    return rows
 
 
 def write_rate_comparison_csv(row: dict[str, float], output: Path) -> None:
