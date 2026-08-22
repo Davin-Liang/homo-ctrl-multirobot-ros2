@@ -427,3 +427,41 @@ def test_radius_inflation_summary_keeps_unresolved_case():
     assert mismatch["scenario_count"] == 2
     assert mismatch["unresolved_count"] == 1
     assert mismatch["max_required_inflation"] == pytest.approx(0.006)
+
+
+def test_ideal_scenario_rotates_position_velocity_and_command():
+    feasibility = load_module()
+
+    config = feasibility.build_ideal_scenario(
+        clearance=0.4,
+        radial_speed=0.5,
+        lateral_speed=0.2,
+        nominal_speed=0.8,
+        bearing_rad=np.pi / 2,
+    )
+
+    np.testing.assert_allclose(config.initial_state[:2], [0.0, 1.2], atol=1e-12)
+    np.testing.assert_allclose(config.initial_state[2:], [-0.2, -0.5], atol=1e-12)
+    np.testing.assert_allclose(config.nominal_command, [0.0, -0.8], atol=1e-12)
+    assert config.plant.tau == config.predictor_tau == pytest.approx(0.43)
+    assert config.plant.delay == config.predictor_delay == pytest.approx(0.22)
+
+
+def test_ideal_grid_returns_one_row_per_20hz_scenario():
+    feasibility = load_module()
+
+    rows = feasibility.run_ideal_feasibility_grid(
+        clearances=[0.4],
+        radial_speeds=[0.1],
+        lateral_speeds=[0.0],
+        nominal_speeds=[0.2],
+        bearings_rad=[0.0, np.pi / 2],
+        reference_band=0.02,
+    )
+
+    assert len(rows) == 2
+    assert set(rows[0]) >= {
+        "reference_checked",
+        "classification",
+        "ideal_safe",
+    }

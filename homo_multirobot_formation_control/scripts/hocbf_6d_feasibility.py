@@ -551,6 +551,122 @@ def default_radius_inflation_cases() -> list[ScenarioConfig]:
     return cases
 
 
+def build_ideal_scenario(
+    clearance: float,
+    radial_speed: float,
+    lateral_speed: float,
+    nominal_speed: float,
+    bearing_rad: float,
+) -> ScenarioConfig:
+    """Build an exact-parameter obstacle approach scenario at a given bearing."""
+    if clearance < 0.0 or radial_speed < 0.0 or nominal_speed < 0.0:
+        raise ValueError(
+            "clearance, radial_speed, and nominal_speed must be non-negative"
+        )
+    radial = np.array([np.cos(bearing_rad), np.sin(bearing_rad)])
+    tangent = np.array([-np.sin(bearing_rad), np.cos(bearing_rad)])
+    return ScenarioConfig(
+        plant=PlantParams(0.43, 0.22, 0.01, 0.05),
+        predictor_tau=0.43,
+        predictor_delay=0.22,
+        obstacle=np.zeros(2),
+        safe_radius=0.8,
+        initial_state=np.concatenate(
+            (
+                (0.8 + clearance) * radial,
+                -radial_speed * radial + lateral_speed * tangent,
+            )
+        ),
+        nominal_command=-nominal_speed * radial,
+        vmax=1.0,
+        amax=20.0,
+        c1=2.0,
+        c2=2.0,
+        duration=4.0,
+    )
+
+
+def run_ideal_feasibility_grid(
+    clearances: list[float],
+    radial_speeds: list[float],
+    lateral_speeds: list[float],
+    nominal_speeds: list[float],
+    bearings_rad: list[float],
+    reference_band: float,
+) -> list[dict[str, float | int | bool | str]]:
+    """Run exact-model 20 Hz grid and 1 kHz checks near its safety boundary."""
+    if reference_band < 0.0:
+        raise ValueError("reference_band must be non-negative")
+    rows = []
+    for clearance, radial_speed, lateral_speed, nominal_speed, bearing in itertools.product(
+        clearances,
+        radial_speeds,
+        lateral_speeds,
+        nominal_speeds,
+        bearings_rad,
+    ):
+        config = build_ideal_scenario(
+            clearance, radial_speed, lateral_speed, nominal_speed, bearing
+        )
+        result = simulate_scenario(config)
+        min_distance = float(
+            np.linalg.norm(
+                result["state_internal"][:, :2] - config.obstacle, axis=1
+            ).min()
+        )
+        infeasible_steps = int((~result["feasible"]).sum())
+        reference_checked = (
+            min_distance <= config.safe_radius + reference_band
+            or result["h_internal"].min() < 0.0
+            or infeasible_steps > 0
+        )
+        min_distance_reference = float("nan")
+        min_h_reference = float("nan")
+        if reference_checked:
+            comparison = compare_sampling_rates(config, low_rate=result)
+            min_distance_reference = comparison["min_distance_1khz"]
+            min_h_reference = comparison["min_h_1khz"]
+
+        violation = (
+            min_distance < config.safe_radius - 1e-9
+            or (
+                reference_checked
+                and min_distance_reference < config.safe_radius - 1e-9
+            )
+        )
+        if not reference_checked:
+            classification, ideal_safe = "unverified", False
+        elif violation and infeasible_steps > 0:
+            classification, ideal_safe = "both", False
+        elif violation:
+            classification, ideal_safe = "physical_violation", False
+        elif infeasible_steps > 0:
+            classification, ideal_safe = "qp_infeasible", False
+        else:
+            classification, ideal_safe = "ideal_safe", True
+
+        rows.append(
+            {
+                "clearance": clearance,
+                "radial_speed": radial_speed,
+                "lateral_speed": lateral_speed,
+                "nominal_speed": nominal_speed,
+                "bearing_rad": bearing,
+                "min_h_20hz": float(result["h_internal"].min()),
+                "min_distance_20hz": min_distance,
+                "min_psi2_20hz": float(result["psi2"].min()),
+                "infeasible_steps_20hz": infeasible_steps,
+                "braking_steps_20hz": int(result["braking"].sum()),
+                "reference_checked": reference_checked,
+                "min_h_1khz": min_h_reference,
+                "min_distance_1khz": min_distance_reference,
+                "classification": classification,
+                "ideal_safe": ideal_safe,
+            }
+        )
+    return rows
+
+
 def compare_sampling_rates(
     config: ScenarioConfig,
     reference_dt: float = 0.001,
