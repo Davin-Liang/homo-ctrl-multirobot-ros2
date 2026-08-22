@@ -548,6 +548,27 @@ def step_direct_plant(x: np.ndarray, cmd: np.ndarray, h: float) -> np.ndarray:
     return y
 
 
+def make_delay_line(initial_cmd: np.ndarray, delay: float, plant_dt: float) -> deque[np.ndarray]:
+    """Create a ZOH delay line whose first new command acts at exactly delay."""
+    if delay < 0.0 or plant_dt <= 0.0:
+        raise ValueError("delay must be non-negative and plant_dt positive")
+    delay_steps = delay / plant_dt
+    if not np.isclose(delay_steps, round(delay_steps), atol=1e-12):
+        raise ValueError("delay must be an integer multiple of plant_dt")
+    return deque(
+        [np.asarray(initial_cmd, dtype=float).copy() for _ in range(int(round(delay_steps)))],
+    )
+
+
+def advance_delay_line(delay_line: deque[np.ndarray], command: np.ndarray) -> np.ndarray:
+    """Apply the oldest delayed command and append the current ZOH command."""
+    if not delay_line:
+        return np.asarray(command, dtype=float).copy()
+    applied = delay_line.popleft()
+    delay_line.append(np.asarray(command, dtype=float).copy())
+    return applied
+
+
 def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, Td: float,
                   pos_noise: float = 0.0, yaw_noise: float = 0.0,
                   vel_noise: float = 0.0, omega_noise: float = 0.0,
@@ -557,7 +578,11 @@ def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, 
                   inertia: float = 1.0, hpc_c_min: float = 0.5,
                   initial_min_lambda: float = 1.0,
                   switch_min_lambda: float = 4.0,
-                  use_hpc: bool = True):
+                  use_hpc: bool = True, plant_dt: float = 0.01):
+    control_substeps = h / plant_dt
+    if not np.isclose(control_substeps, round(control_substeps), atol=1e-12):
+        raise ValueError("plant_dt must be an integer multiple of control period")
+    control_substeps = int(round(control_substeps))
     ctrl = Hpc6DDisc(mass=mass, inertia=inertia, control_period=h,
                      hpc_c_min=hpc_c_min,
                      initial_min_lambda=initial_min_lambda,
@@ -569,10 +594,8 @@ def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, 
                              heading=leader_heading)
     x2 = np.array([4.2, -0.4, follower_yaw0, 0.0, 0.0, 0.0])
 
-    delay_steps = max(1, int(np.ceil(Td / h)))
-    delay_line = deque([x2[3:6].copy() for _ in range(delay_steps + 1)],
-                       maxlen=delay_steps + 1)
-    hist_len = delay_steps + 2
+    delay_line = make_delay_line(x2[3:6], Td, plant_dt)
+    hist_len = max(1, int(np.ceil(Td / h))) + 2
     vcmd_map_hist = deque([body_to_map(x2[2], x2[3:5]) for _ in range(hist_len)],
                           maxlen=hist_len)
     wcmd_hist = deque([np.array([x2[5]]) for _ in range(hist_len)], maxlen=hist_len)
@@ -619,11 +642,12 @@ def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, 
             np.clip(cmd[2], -0.8, 0.8),
         ])
 
-        if kind == "ideal":
-            x2 = step_direct_plant(x2, cmd, h)
-        else:
-            delay_line.appendleft(cmd.copy())
-            x2 = step_plant(x2, delay_line[-1], h, tau_v, tau_w)
+        for _ in range(control_substeps):
+            if kind == "ideal":
+                x2 = step_direct_plant(x2, cmd, plant_dt)
+            else:
+                delayed_cmd = advance_delay_line(delay_line, cmd)
+                x2 = step_plant(x2, delayed_cmd, plant_dt, tau_v, tau_w)
 
         last_cmd = cmd.copy()
         last_vcmd_map = body_to_map(x2_meas[2], cmd[0:2])
@@ -634,7 +658,7 @@ def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, 
         t += h
         pos_dist, yaw_err, sixd_dist = ctrl.distance(x1, x2)
         e_cur, _, _, _ = ctrl.compute_error(x1, x2)
-        cmd_map = body_to_map(x2[2], cmd[0:2])
+        cmd_map = body_to_map(x2_meas[2], cmd[0:2])
         rows.append((
             t, x1.copy(), x2.copy(), x1_ctrl.copy(), x2_ctrl.copy(), cmd.copy(),
             cmd_map.copy(), e_cur.copy(), pos_dist, yaw_err, sixd_dist,
