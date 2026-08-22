@@ -36,6 +36,40 @@ class SafetyFilterResult:
     active_constraints: int
 
 
+@dataclass(frozen=True)
+class ScenarioConfig:
+    """One oracle scenario with a static circular obstacle."""
+
+    plant: PlantParams
+    obstacle: np.ndarray
+    safe_radius: float
+    initial_state: np.ndarray
+    nominal_command: np.ndarray
+    vmax: float
+    amax: float
+    c1: float
+    c2: float
+    duration: float
+    predictor_delay: float | None = None
+
+    def __post_init__(self):
+        if self.safe_radius <= 0.0 or self.vmax <= 0.0 or self.amax <= 0.0:
+            raise ValueError("safe_radius, vmax, and amax must be positive")
+        if self.c1 <= 0.0 or self.c2 <= 0.0 or self.duration <= 0.0:
+            raise ValueError("c1, c2, and duration must be positive")
+        if np.asarray(self.obstacle).shape != (2,):
+            raise ValueError("obstacle must be two-dimensional")
+        if np.asarray(self.initial_state).shape != (4,):
+            raise ValueError("initial_state must contain [px, py, vx, vy]")
+        if np.asarray(self.nominal_command).shape != (2,):
+            raise ValueError("nominal_command must be two-dimensional")
+        if self.predictor_delay is not None:
+            if self.predictor_delay < 0.0:
+                raise ValueError("predictor_delay must be non-negative")
+            if self.predictor_delay > self.plant.delay + 1e-12:
+                raise ValueError("predictor_delay must not exceed plant delay")
+
+
 def zoh_matrices(params: PlantParams) -> tuple[np.ndarray, np.ndarray]:
     """Return exact ZOH matrices for p_dot=v and v_dot=(-v+u)/tau."""
     a = np.block(
@@ -161,3 +195,101 @@ def solve_hocbf_qp(
     command = min(candidates, key=lambda value: float(np.sum((value - u_nom) ** 2)))
     active = sum(abs(a @ command - b) <= 1e-9 for a, b in constraints)
     return SafetyFilterResult(command, True, active)
+
+
+def _braking_command(u_prev: np.ndarray, amax: float, dt: float) -> np.ndarray:
+    delta = amax * dt
+    return np.sign(u_prev) * np.maximum(np.abs(u_prev) - delta, 0.0)
+
+
+def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
+    """Simulate the delayed plant with predictor-state HOCBF filtering."""
+    actual_ad, actual_bd = zoh_matrices(config.plant)
+    predictor_delay = (
+        config.plant.delay
+        if config.predictor_delay is None
+        else config.predictor_delay
+    )
+    predictor_params = PlantParams(
+        tau=config.plant.tau,
+        delay=predictor_delay,
+        dt=config.plant.dt,
+    )
+    predictor_ad, predictor_bd = zoh_matrices(predictor_params)
+    steps = int(round(config.duration / config.plant.dt))
+    if steps <= 0:
+        raise ValueError("duration must include at least one sample")
+
+    state = np.asarray(config.initial_state, dtype=float).copy()
+    obstacle = np.asarray(config.obstacle, dtype=float)
+    nominal_command = np.asarray(config.nominal_command, dtype=float)
+    queue = [np.zeros(2) for _ in range(config.plant.delay_steps)]
+    previous_command = np.zeros(2)
+
+    times = []
+    states = []
+    commands = []
+    h_values = []
+    psi1_values = []
+    psi2_values = []
+    feasible_values = []
+    braking_values = []
+
+    for index in range(steps):
+        prediction_queue = queue[: predictor_params.delay_steps]
+        predicted = predict_delayed_state(
+            state, prediction_queue, predictor_ad, predictor_bd
+        )
+        a, b, _, psi1 = hocbf_halfspace(
+            predicted,
+            obstacle,
+            config.safe_radius,
+            config.plant.tau,
+            config.c1,
+            config.c2,
+        )
+        result = solve_hocbf_qp(
+            nominal_command,
+            previous_command,
+            [(a, b)],
+            config.vmax,
+            config.amax,
+            config.plant.dt,
+        )
+        braking = not result.feasible
+        command = (
+            _braking_command(previous_command, config.amax, config.plant.dt)
+            if braking
+            else result.command
+        )
+
+        actual_h = float(
+            np.sum((state[:2] - obstacle) ** 2) - config.safe_radius**2
+        )
+        times.append(index * config.plant.dt)
+        states.append(state.copy())
+        commands.append(command.copy())
+        h_values.append(actual_h)
+        psi1_values.append(psi1)
+        psi2_values.append(float(a @ command - b))
+        feasible_values.append(result.feasible)
+        braking_values.append(braking)
+
+        if queue:
+            applied = queue.pop(0)
+            queue.append(command.copy())
+        else:
+            applied = command
+        state = actual_ad @ state + actual_bd @ applied
+        previous_command = command
+
+    return {
+        "time": np.asarray(times),
+        "state": np.asarray(states),
+        "command": np.asarray(commands),
+        "h": np.asarray(h_values),
+        "psi1": np.asarray(psi1_values),
+        "psi2": np.asarray(psi2_values),
+        "feasible": np.asarray(feasible_values, dtype=bool),
+        "braking": np.asarray(braking_values, dtype=bool),
+    }

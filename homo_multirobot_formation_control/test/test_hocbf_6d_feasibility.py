@@ -103,3 +103,50 @@ def test_hard_qp_reports_conflicting_barriers_as_infeasible():
     )
 
     assert not result.feasible
+
+
+def test_no_obstacle_scenario_preserves_nominal_command():
+    feasibility = load_module()
+
+    result = feasibility.simulate_scenario(
+        feasibility.ScenarioConfig(
+            plant=feasibility.PlantParams(tau=0.43, delay=0.2, dt=0.05),
+            obstacle=np.array([100.0, 0.0]),
+            safe_radius=0.5,
+            initial_state=np.zeros(4),
+            nominal_command=np.array([0.2, 0.0]),
+            vmax=1.0,
+            amax=20.0,
+            c1=1.0,
+            c2=1.0,
+            duration=0.5,
+        )
+    )
+
+    assert not result["braking"].any()
+    np.testing.assert_allclose(
+        result["command"],
+        np.tile(np.array([0.2, 0.0]), (len(result["command"]), 1)),
+    )
+
+
+def test_head_on_feasible_case_keeps_h_nonnegative():
+    feasibility = load_module()
+
+    result = feasibility.simulate_scenario(
+        feasibility.ScenarioConfig(
+            plant=feasibility.PlantParams(tau=0.43, delay=0.2, dt=0.05),
+            obstacle=np.zeros(2),
+            safe_radius=0.8,
+            initial_state=np.array([2.0, 0.0, -0.1, 0.0]),
+            nominal_command=np.array([-0.8, 0.0]),
+            vmax=1.0,
+            amax=20.0,
+            c1=2.0,
+            c2=2.0,
+            duration=4.0,
+        )
+    )
+
+    assert result["feasible"].all()
+    assert result["h"].min() >= -1e-9

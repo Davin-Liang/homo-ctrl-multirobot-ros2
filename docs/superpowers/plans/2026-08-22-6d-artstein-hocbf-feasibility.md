@@ -175,7 +175,7 @@ Expected: AttributeError because ScenarioConfig and simulate_scenario are absent
 
 - [ ] **Step 3: Write minimal implementation**
 
-At every sample, advance the actual state with plant.delay and the oldest queued command. Predict through the future-applied queued commands using predictor_delay when it is provided, otherwise plant.delay; the predictor uses the same tau and dt as the plant. Construct the one-obstacle HOCBF row, solve Task 2, and append the final command to the actual delay queue. On infeasibility, issue the componentwise rate-limited command toward zero, mark braking=True, and still append that final command to history. Return equal-length arrays time, state, command, h, psi1, psi2, feasible, and braking.
+At every sample, first predict through the complete queue, including the command that acts during the current interval; this produces the state at which the new command first acts. Use predictor_delay when it is provided, otherwise plant.delay; the predictor uses the same tau and dt as the plant. Construct the one-obstacle HOCBF row and solve Task 2. Then pop the oldest queued command, append the final command, and advance the actual state with the popped command. On infeasibility, issue the componentwise rate-limited command toward zero, mark braking=True, and still append that final command to history. Return equal-length arrays time, state, command, h, psi1, psi2, feasible, and braking.
 
 - [ ] **Step 4: Run tests to verify pass**
 
