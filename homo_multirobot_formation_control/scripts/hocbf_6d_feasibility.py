@@ -599,6 +599,75 @@ def run_robustness_envelope(
     return rows
 
 
+def evaluate_radius_inflation(
+    config: ScenarioConfig,
+    base_radius: float,
+    inflation: float,
+) -> dict[str, float | int | bool]:
+    """Evaluate one internal-radius candidate against the fixed physical radius."""
+    if base_radius <= 0.0 or inflation < 0.0:
+        raise ValueError("base_radius must be positive and inflation non-negative")
+    filtered = replace(config, safe_radius=base_radius + inflation)
+    result = simulate_scenario(filtered)
+    comparison = compare_sampling_rates(filtered, low_rate=result)
+    safe = (
+        comparison["min_distance_20hz"] >= base_radius - 1e-9
+        and comparison["min_distance_1khz"] >= base_radius - 1e-9
+        and int((~result["feasible"]).sum()) == 0
+    )
+    return {
+        "inflation": inflation,
+        "filter_radius": base_radius + inflation,
+        "min_distance_20hz": comparison["min_distance_20hz"],
+        "min_distance_1khz": comparison["min_distance_1khz"],
+        "min_h_20hz": comparison["min_h_20hz"],
+        "min_h_1khz": comparison["min_h_1khz"],
+        "infeasible_steps": int((~result["feasible"]).sum()),
+        "braking_steps": int(result["braking"].sum()),
+        "safe": safe,
+    }
+
+
+def find_required_radius_inflation(
+    config: ScenarioConfig,
+    base_radius: float,
+    candidates: list[float],
+) -> dict[str, float | int | bool | list[dict[str, float | int | bool]]]:
+    """Evaluate all radius candidates and select the smallest safe one."""
+    values = sorted(set([0.0, *candidates]))
+    if any(value < 0.0 for value in values):
+        raise ValueError("radius inflation candidates must be non-negative")
+    evaluations = [
+        evaluate_radius_inflation(config, base_radius, value) for value in values
+    ]
+    baseline = next(item for item in evaluations if item["inflation"] == 0.0)
+    selected = next((item for item in evaluations if item["safe"]), None)
+    return {
+        "base_radius": base_radius,
+        "baseline_safe": baseline["safe"],
+        "baseline_min_distance_20hz": baseline["min_distance_20hz"],
+        "baseline_min_distance_1khz": baseline["min_distance_1khz"],
+        "found": selected is not None,
+        "required_inflation": (
+            float(selected["inflation"]) if selected is not None else float("nan")
+        ),
+        "selected_min_distance_20hz": (
+            float(selected["min_distance_20hz"])
+            if selected is not None
+            else float("nan")
+        ),
+        "selected_min_distance_1khz": (
+            float(selected["min_distance_1khz"])
+            if selected is not None
+            else float("nan")
+        ),
+        "selected_infeasible_steps": (
+            int(selected["infeasible_steps"]) if selected is not None else -1
+        ),
+        "candidate_evaluations": evaluations,
+    }
+
+
 def summarize_robustness_rows(
     rows: list[dict[str, float | int]],
 ) -> list[dict[str, float | int | str]]:

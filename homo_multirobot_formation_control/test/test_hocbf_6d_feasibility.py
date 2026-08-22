@@ -341,3 +341,69 @@ def test_robustness_summary_reports_all_and_exact_feasible_groups():
 
     assert exact["scenario_count"] == 1
     assert exact["max_sample_distance_gap"] == pytest.approx(0.02)
+
+
+def make_known_failed_mismatch(module):
+    return module.ScenarioConfig(
+        plant=module.PlantParams(
+            tau=0.55, delay=0.22, integration_dt=0.01, control_dt=0.05
+        ),
+        predictor_tau=0.66,
+        predictor_delay=0.22,
+        obstacle=np.zeros(2),
+        safe_radius=0.8,
+        initial_state=np.array([1.2, 0.0, -0.5, 0.2]),
+        nominal_command=np.array([-0.8, 0.0]),
+        vmax=1.0,
+        amax=20.0,
+        c1=2.0,
+        c2=2.0,
+        duration=4.0,
+    )
+
+
+def make_exact_safe_case(module):
+    return module.ScenarioConfig(
+        plant=module.PlantParams(
+            tau=0.55, delay=0.22, integration_dt=0.01, control_dt=0.05
+        ),
+        predictor_tau=0.55,
+        predictor_delay=0.22,
+        obstacle=np.zeros(2),
+        safe_radius=0.8,
+        initial_state=np.array([1.2, 0.0, -0.5, 0.0]),
+        nominal_command=np.array([-0.8, 0.0]),
+        vmax=1.0,
+        amax=20.0,
+        c1=2.0,
+        c2=2.0,
+        duration=4.0,
+    )
+
+
+def test_known_tau_mismatch_requires_positive_radius_inflation():
+    feasibility = load_module()
+
+    result = feasibility.find_required_radius_inflation(
+        make_known_failed_mismatch(feasibility),
+        base_radius=0.8,
+        candidates=[0.0, 0.005, 0.010],
+    )
+
+    assert result["baseline_safe"] is False
+    assert result["found"] is True
+    assert result["required_inflation"] > 0.0
+
+
+def test_exact_model_safe_case_allows_zero_radius_inflation():
+    feasibility = load_module()
+
+    result = feasibility.find_required_radius_inflation(
+        make_exact_safe_case(feasibility),
+        base_radius=0.8,
+        candidates=[0.0, 0.005],
+    )
+
+    assert result["baseline_safe"] is True
+    assert result["found"] is True
+    assert result["required_inflation"] == pytest.approx(0.0)
