@@ -20,3 +20,5 @@ CSV 字段：
 - infeasible_steps、braking_steps：硬约束 QP 无解和后备制动的控制周期数。
 
 只有 delay_model 等于 delay_actual、infeasible_steps 等于 0、braking_steps 等于 0 且 min_h 大于等于 0 的行，才与准确模型、可行 HOCBF 情形的模型级安全结论一致。失配行和制动行用于刻画适用边界，不能作为鲁棒安全证明。
+
+同一次命令还会生成 sampling_rate_compare.csv。它比较默认正面接近场景在 20 Hz 控制与 1 kHz 控制参考下的最小安全函数、最小距离和两者差值。该对照量化采样实现误差，不单独构成 sampled-data 安全定理。

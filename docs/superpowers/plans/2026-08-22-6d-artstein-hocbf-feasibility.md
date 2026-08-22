@@ -250,3 +250,52 @@ Run:
 
     git add homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py homo_multirobot_formation_control/test/test_hocbf_6d_feasibility.py homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility
     git commit -m "增加HOCBF数值可行性扫描"
+
+### Task 5: 20 Hz and 1 kHz sampled-control comparison
+
+**Files:**
+- Modify: homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py
+- Modify: homo_multirobot_formation_control/test/test_hocbf_6d_feasibility.py
+- Modify: homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility/README.md
+
+**Interfaces:**
+- compare_sampling_rates(config: ScenarioConfig, reference_dt: float = 0.001) -> dict[str, float]
+
+- [ ] **Step 1: Write the failing test**
+
+    def test_sampling_rate_comparison_matches_stationary_safe_case():
+        config = module.ScenarioConfig(
+            plant=module.PlantParams(0.43, 0.22, 0.01, 0.05),
+            obstacle=np.array([2.0, 0.0]), safe_radius=0.5,
+            initial_state=np.zeros(4), nominal_command=np.zeros(2),
+            vmax=1.0, amax=20.0, c1=1.0, c2=1.0, duration=0.5)
+        summary = module.compare_sampling_rates(config, reference_dt=0.001)
+        assert summary["control_dt"] == pytest.approx(0.05)
+        assert summary["reference_dt"] == pytest.approx(0.001)
+        assert summary["min_h_20hz"] == pytest.approx(summary["min_h_1khz"])
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: python3 -m pytest -q homo_multirobot_formation_control/test/test_hocbf_6d_feasibility.py -k sampling_rate
+
+Expected: AttributeError because compare_sampling_rates is absent.
+
+- [ ] **Step 3: Write minimal implementation**
+
+Run the supplied config as the 20 Hz case. For the reference, retain tau, delay, initial state, obstacle, constraints, and nominal command, but set both integration_dt and control_dt to reference_dt. Return control_dt, reference_dt, min_h_20hz, min_h_1khz, min_distance_20hz, min_distance_1khz, and the difference min_h_20hz-min_h_1khz. Add the default head-on exact-model comparison as one row in sampling_rate_compare.csv.
+
+- [ ] **Step 4: Run tests and generate comparison evidence**
+
+Run:
+
+    python3 -m pytest -q homo_multirobot_formation_control/test/test_hocbf_6d_feasibility.py
+    python3 homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py --output homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility/scan.csv
+
+Expected: all tests pass; CLI writes both scan.csv and sampling_rate_compare.csv.
+
+- [ ] **Step 5: Commit**
+
+Run:
+
+    git add docs/superpowers/plans/2026-08-22-6d-artstein-hocbf-feasibility.md homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py homo_multirobot_formation_control/test/test_hocbf_6d_feasibility.py homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility
+    git commit -m "补充HOCBF采样率对照"

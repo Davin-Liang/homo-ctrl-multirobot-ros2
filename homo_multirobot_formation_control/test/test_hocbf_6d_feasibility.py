@@ -219,3 +219,27 @@ def test_metrics_csv_has_lf_and_expected_header(tmp_path):
         "tau,delay_model,delay_actual,initial_clearance"
     )
     assert b"\r\n" not in output.read_bytes()
+
+
+def test_sampling_rate_comparison_matches_stationary_safe_case():
+    feasibility = load_module()
+    config = feasibility.ScenarioConfig(
+        plant=feasibility.PlantParams(
+            tau=0.43, delay=0.22, integration_dt=0.01, control_dt=0.05
+        ),
+        obstacle=np.array([2.0, 0.0]),
+        safe_radius=0.5,
+        initial_state=np.zeros(4),
+        nominal_command=np.zeros(2),
+        vmax=1.0,
+        amax=20.0,
+        c1=1.0,
+        c2=1.0,
+        duration=0.5,
+    )
+
+    summary = feasibility.compare_sampling_rates(config, reference_dt=0.001)
+
+    assert summary["control_dt"] == pytest.approx(0.05)
+    assert summary["reference_dt"] == pytest.approx(0.001)
+    assert summary["min_h_20hz"] == pytest.approx(summary["min_h_1khz"])

@@ -4,7 +4,7 @@
 import argparse
 import csv
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import numpy as np
@@ -414,6 +414,50 @@ def write_metrics_csv(rows: list[dict[str, float | int]], output: Path) -> None:
         writer.writerows(rows)
 
 
+def compare_sampling_rates(
+    config: ScenarioConfig, reference_dt: float = 0.001
+) -> dict[str, float]:
+    """Compare the configured controller rate against a high-rate reference."""
+    if reference_dt <= 0.0 or reference_dt > config.plant.control_dt:
+        raise ValueError("reference_dt must be positive and no larger than control_dt")
+
+    low_rate = simulate_scenario(config)
+    reference_plant = replace(
+        config.plant,
+        integration_dt=reference_dt,
+        control_dt=reference_dt,
+    )
+    reference = simulate_scenario(replace(config, plant=reference_plant))
+    low_distance = np.linalg.norm(
+        low_rate["state_internal"][:, :2] - config.obstacle, axis=1
+    ).min()
+    reference_distance = np.linalg.norm(
+        reference["state_internal"][:, :2] - config.obstacle, axis=1
+    ).min()
+    min_h_20hz = float(low_rate["h_internal"].min())
+    min_h_1khz = float(reference["h_internal"].min())
+    return {
+        "control_dt": config.plant.control_dt,
+        "reference_dt": reference_dt,
+        "min_h_20hz": min_h_20hz,
+        "min_h_1khz": min_h_1khz,
+        "min_distance_20hz": float(low_distance),
+        "min_distance_1khz": float(reference_distance),
+        "min_h_difference": min_h_20hz - min_h_1khz,
+    }
+
+
+def write_rate_comparison_csv(row: dict[str, float], output: Path) -> None:
+    """Write one sampling-rate comparison row with LF line endings."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream, fieldnames=list(row), lineterminator="\n"
+        )
+        writer.writeheader()
+        writer.writerow(row)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Scan static-obstacle predictor-state HOCBF feasibility."
@@ -434,7 +478,31 @@ def main() -> None:
         delay_mismatches=[0.0, 0.02, 0.05],
     )
     write_metrics_csv(rows, args.output)
-    print(f"wrote {len(rows)} rows to {args.output}")
+    comparison = compare_sampling_rates(
+        ScenarioConfig(
+            plant=PlantParams(
+                tau=0.43,
+                delay=0.22,
+                integration_dt=0.01,
+                control_dt=0.05,
+            ),
+            obstacle=np.zeros(2),
+            safe_radius=0.8,
+            initial_state=np.array([1.6, 0.0, -0.1, 0.0]),
+            nominal_command=np.array([-0.8, 0.0]),
+            vmax=1.0,
+            amax=20.0,
+            c1=2.0,
+            c2=2.0,
+            duration=4.0,
+        )
+    )
+    comparison_output = args.output.with_name("sampling_rate_compare.csv")
+    write_rate_comparison_csv(comparison, comparison_output)
+    print(
+        f"wrote {len(rows)} rows to {args.output} and "
+        f"sampling comparison to {comparison_output}"
+    )
 
 
 if __name__ == "__main__":
