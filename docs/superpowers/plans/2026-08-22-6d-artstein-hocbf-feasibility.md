@@ -49,8 +49,8 @@
         np.testing.assert_allclose(a, [8.0, 0.0])
         assert h == pytest.approx(3.0)
         assert psi1 == pytest.approx(1.0)
-        assert a @ np.zeros(2) < b
-        assert a @ np.array([1.0, 0.0]) >= b
+        assert a @ np.array([-1.0, 0.0]) < b
+        assert a @ np.zeros(2) >= b
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
