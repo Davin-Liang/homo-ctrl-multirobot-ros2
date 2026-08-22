@@ -70,6 +70,7 @@ class ScenarioConfig:
     c2: float
     duration: float
     predictor_delay: float | None = None
+    predictor_tau: float | None = None
 
     def __post_init__(self):
         if self.safe_radius <= 0.0 or self.vmax <= 0.0 or self.amax <= 0.0:
@@ -87,6 +88,8 @@ class ScenarioConfig:
                 raise ValueError("predictor_delay must be non-negative")
             if self.predictor_delay > self.plant.delay + 1e-12:
                 raise ValueError("predictor_delay must not exceed plant delay")
+        if self.predictor_tau is not None and self.predictor_tau <= 0.0:
+            raise ValueError("predictor_tau must be positive")
 
 
 def zoh_matrices(params: PlantParams) -> tuple[np.ndarray, np.ndarray]:
@@ -229,8 +232,11 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
         if config.predictor_delay is None
         else config.predictor_delay
     )
+    predictor_tau = (
+        config.plant.tau if config.predictor_tau is None else config.predictor_tau
+    )
     predictor_params = PlantParams(
-        tau=config.plant.tau,
+        tau=predictor_tau,
         delay=predictor_delay,
         integration_dt=config.plant.integration_dt,
         control_dt=config.plant.control_dt,
@@ -267,7 +273,7 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
             predicted,
             obstacle,
             config.safe_radius,
-            config.plant.tau,
+            predictor_tau,
             config.c1,
             config.c2,
         )
@@ -331,6 +337,8 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
         "time_internal": np.asarray(internal_times),
         "state_internal": internal_state_array,
         "h_internal": internal_h,
+        "plant_tau": config.plant.tau,
+        "predictor_tau": predictor_tau,
     }
 
 

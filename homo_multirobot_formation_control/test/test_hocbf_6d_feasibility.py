@@ -243,3 +243,48 @@ def test_sampling_rate_comparison_matches_stationary_safe_case():
     assert summary["control_dt"] == pytest.approx(0.05)
     assert summary["reference_dt"] == pytest.approx(0.001)
     assert summary["min_h_20hz"] == pytest.approx(summary["min_h_1khz"])
+
+
+def test_predictor_tau_changes_the_predicted_actuator_model_only():
+    feasibility = load_module()
+    config = feasibility.ScenarioConfig(
+        plant=feasibility.PlantParams(
+            tau=0.5, delay=0.22, integration_dt=0.01, control_dt=0.05
+        ),
+        predictor_tau=0.3,
+        obstacle=np.zeros(2),
+        safe_radius=0.8,
+        initial_state=np.array([2.0, 0.0, -0.2, 0.0]),
+        nominal_command=np.array([-0.6, 0.0]),
+        vmax=1.0,
+        amax=20.0,
+        c1=2.0,
+        c2=2.0,
+        duration=0.5,
+    )
+
+    result = feasibility.simulate_scenario(config)
+
+    assert result["predictor_tau"] == pytest.approx(0.3)
+    assert result["plant_tau"] == pytest.approx(0.5)
+
+
+def test_predictor_tau_must_be_positive():
+    feasibility = load_module()
+
+    with pytest.raises(ValueError, match="predictor_tau"):
+        feasibility.ScenarioConfig(
+            plant=feasibility.PlantParams(
+                tau=0.5, delay=0.22, integration_dt=0.01, control_dt=0.05
+            ),
+            predictor_tau=0.0,
+            obstacle=np.zeros(2),
+            safe_radius=0.8,
+            initial_state=np.zeros(4),
+            nominal_command=np.zeros(2),
+            vmax=1.0,
+            amax=20.0,
+            c1=2.0,
+            c2=2.0,
+            duration=0.5,
+        )
