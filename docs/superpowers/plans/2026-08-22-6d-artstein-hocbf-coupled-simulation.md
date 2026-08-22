@@ -41,7 +41,7 @@
 - Create: homo_multirobot_formation_control/analysis/results/6d_artstein_disc_hocbf/README.md
 
 **Interfaces:**
-- simulate_compensated_hocbf(...) -> rows
+- simulate_compensated_hocbf(Tmax, h, tau_v, tau_w, Td, obstacle, safe_radius) -> rows
 - CLI writes coupled_summary.csv, coupled_timeseries.csv, and coupled_compare.png.
 
 - [ ] Write failing test: HOCBF rows retain final safe map command in their next predictor-history sample and include h, distance, correction norm, and feasibility fields.
