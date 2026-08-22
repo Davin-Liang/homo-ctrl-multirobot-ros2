@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """Oracle numerical utilities for predictor-state HOCBF feasibility studies."""
 
+import argparse
+import csv
+import itertools
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 from scipy.linalg import expm
@@ -9,22 +13,37 @@ from scipy.linalg import expm
 
 @dataclass(frozen=True)
 class PlantParams:
-    """Discrete simulation parameters for the planar delayed actuator model."""
+    """Time scales for the planar delayed actuator model."""
 
     tau: float
     delay: float
-    dt: float
+    integration_dt: float
+    control_dt: float
 
     def __post_init__(self):
-        if self.tau <= 0.0 or self.dt <= 0.0 or self.delay < 0.0:
-            raise ValueError("tau and dt must be positive; delay must be non-negative")
-        delay_steps = self.delay / self.dt
+        if (
+            self.tau <= 0.0
+            or self.integration_dt <= 0.0
+            or self.control_dt <= 0.0
+            or self.delay < 0.0
+        ):
+            raise ValueError(
+                "tau and time steps must be positive; delay must be non-negative"
+            )
+        delay_steps = self.delay / self.integration_dt
         if not np.isclose(delay_steps, round(delay_steps), atol=1e-12):
-            raise ValueError("delay must be an integer multiple of dt")
+            raise ValueError("delay must be an integer multiple of integration_dt")
+        control_steps = self.control_dt / self.integration_dt
+        if not np.isclose(control_steps, round(control_steps), atol=1e-12):
+            raise ValueError("control_dt must be an integer multiple of integration_dt")
 
     @property
     def delay_steps(self) -> int:
-        return int(round(self.delay / self.dt))
+        return int(round(self.delay / self.integration_dt))
+
+    @property
+    def control_steps(self) -> int:
+        return int(round(self.control_dt / self.integration_dt))
 
 
 @dataclass(frozen=True)
@@ -82,7 +101,7 @@ def zoh_matrices(params: PlantParams) -> tuple[np.ndarray, np.ndarray]:
     augmented = np.zeros((6, 6))
     augmented[:4, :4] = a
     augmented[:4, 4:] = b
-    transition = expm(augmented * params.dt)
+    transition = expm(augmented * params.integration_dt)
     return transition[:4, :4], transition[:4, 4:]
 
 
@@ -213,12 +232,14 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
     predictor_params = PlantParams(
         tau=config.plant.tau,
         delay=predictor_delay,
-        dt=config.plant.dt,
+        integration_dt=config.plant.integration_dt,
+        control_dt=config.plant.control_dt,
     )
     predictor_ad, predictor_bd = zoh_matrices(predictor_params)
-    steps = int(round(config.duration / config.plant.dt))
-    if steps <= 0:
-        raise ValueError("duration must include at least one sample")
+    steps = config.duration / config.plant.control_dt
+    if not np.isclose(steps, round(steps), atol=1e-12) or steps <= 0:
+        raise ValueError("duration must be an integer number of control samples")
+    control_samples = int(round(steps))
 
     state = np.asarray(config.initial_state, dtype=float).copy()
     obstacle = np.asarray(config.obstacle, dtype=float)
@@ -234,8 +255,10 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
     psi2_values = []
     feasible_values = []
     braking_values = []
+    internal_times = [0.0]
+    internal_states = [state.copy()]
 
-    for index in range(steps):
+    for index in range(control_samples):
         prediction_queue = queue[: predictor_params.delay_steps]
         predicted = predict_delayed_state(
             state, prediction_queue, predictor_ad, predictor_bd
@@ -254,11 +277,13 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
             [(a, b)],
             config.vmax,
             config.amax,
-            config.plant.dt,
+            config.plant.control_dt,
         )
         braking = not result.feasible
         command = (
-            _braking_command(previous_command, config.amax, config.plant.dt)
+            _braking_command(
+                previous_command, config.amax, config.plant.control_dt
+            )
             if braking
             else result.command
         )
@@ -266,7 +291,7 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
         actual_h = float(
             np.sum((state[:2] - obstacle) ** 2) - config.safe_radius**2
         )
-        times.append(index * config.plant.dt)
+        times.append(index * config.plant.control_dt)
         states.append(state.copy())
         commands.append(command.copy())
         h_values.append(actual_h)
@@ -275,14 +300,25 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
         feasible_values.append(result.feasible)
         braking_values.append(braking)
 
-        if queue:
-            applied = queue.pop(0)
-            queue.append(command.copy())
-        else:
-            applied = command
-        state = actual_ad @ state + actual_bd @ applied
+        for substep in range(config.plant.control_steps):
+            if queue:
+                applied = queue.pop(0)
+                queue.append(command.copy())
+            else:
+                applied = command
+            state = actual_ad @ state + actual_bd @ applied
+            internal_times.append(
+                index * config.plant.control_dt
+                + (substep + 1) * config.plant.integration_dt
+            )
+            internal_states.append(state.copy())
         previous_command = command
 
+    internal_state_array = np.asarray(internal_states)
+    internal_h = (
+        np.sum((internal_state_array[:, :2] - obstacle) ** 2, axis=1)
+        - config.safe_radius**2
+    )
     return {
         "time": np.asarray(times),
         "state": np.asarray(states),
@@ -292,4 +328,114 @@ def simulate_scenario(config: ScenarioConfig) -> dict[str, np.ndarray]:
         "psi2": np.asarray(psi2_values),
         "feasible": np.asarray(feasible_values, dtype=bool),
         "braking": np.asarray(braking_values, dtype=bool),
+        "time_internal": np.asarray(internal_times),
+        "state_internal": internal_state_array,
+        "h_internal": internal_h,
     }
+
+
+METRICS_FIELDNAMES = [
+    "tau",
+    "delay_model",
+    "delay_actual",
+    "initial_clearance",
+    "min_h",
+    "min_distance",
+    "min_psi2",
+    "max_command_norm",
+    "infeasible_steps",
+    "braking_steps",
+]
+
+
+def scan_envelope(
+    tau_values: list[float],
+    delay_values: list[float],
+    clearances: list[float],
+    delay_mismatches: list[float],
+) -> list[dict[str, float | int]]:
+    """Run the head-on scenario over model, plant, and initial-condition grids."""
+    rows = []
+    for tau, delay_model, clearance, delay_mismatch in itertools.product(
+        tau_values, delay_values, clearances, delay_mismatches
+    ):
+        delay_actual = delay_model + delay_mismatch
+        config = ScenarioConfig(
+            plant=PlantParams(
+                tau=tau,
+                delay=delay_actual,
+                integration_dt=0.01,
+                control_dt=0.05,
+            ),
+            predictor_delay=delay_model,
+            obstacle=np.zeros(2),
+            safe_radius=0.8,
+            initial_state=np.array([0.8 + clearance, 0.0, -0.1, 0.0]),
+            nominal_command=np.array([-0.8, 0.0]),
+            vmax=1.0,
+            amax=20.0,
+            c1=2.0,
+            c2=2.0,
+            duration=4.0,
+        )
+        result = simulate_scenario(config)
+        distances = np.linalg.norm(
+            result["state_internal"][:, :2] - config.obstacle, axis=1
+        )
+        rows.append(
+            {
+                "tau": tau,
+                "delay_model": delay_model,
+                "delay_actual": delay_actual,
+                "initial_clearance": clearance,
+                "min_h": float(result["h_internal"].min()),
+                "min_distance": float(distances.min()),
+                "min_psi2": float(result["psi2"].min()),
+                "max_command_norm": float(
+                    np.linalg.norm(result["command"], axis=1).max()
+                ),
+                "infeasible_steps": int((~result["feasible"]).sum()),
+                "braking_steps": int(result["braking"].sum()),
+            }
+        )
+    return rows
+
+
+def write_metrics_csv(rows: list[dict[str, float | int]], output: Path) -> None:
+    """Write scan metrics with a stable column order and LF line endings."""
+    if not rows:
+        raise ValueError("rows must not be empty")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream, fieldnames=METRICS_FIELDNAMES, lineterminator="\n"
+        )
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Scan static-obstacle predictor-state HOCBF feasibility."
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path(
+            "homo_multirobot_formation_control/analysis/results/"
+            "6d_artstein_hocbf_feasibility/scan.csv"
+        ),
+    )
+    args = parser.parse_args()
+    rows = scan_envelope(
+        tau_values=[0.30, 0.43, 0.55],
+        delay_values=[0.0, 0.22],
+        clearances=[0.4, 0.8, 1.2],
+        delay_mismatches=[0.0, 0.02, 0.05],
+    )
+    write_metrics_csv(rows, args.output)
+    print(f"wrote {len(rows)} rows to {args.output}")
+
+
+if __name__ == "__main__":
+    main()

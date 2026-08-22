@@ -4,7 +4,7 @@
 
 **Goal:** Build a deterministic offline oracle simulation that tests whether a predictor-state, hard-constraint HOCBF filter keeps a delayed first-order omnidirectional plant outside static circular obstacles.
 
-**Architecture:** Add a standalone Python module, independent of ROS and the current soft-penalty ObstacleAvoider. It uses exact ZOH matrices for the two-dimensional actuator model, a finite-history predictor, and finite active-set enumeration to exactly solve the 2D strictly convex HOCBF-QP without a new dependency. The scenario runner will report safety and infeasibility metrics for 20 Hz control.
+**Architecture:** Add a standalone Python module, independent of ROS and the current soft-penalty ObstacleAvoider. It uses exact ZOH matrices for the two-dimensional actuator model, a finite-history predictor, and finite active-set enumeration to exactly solve the 2D strictly convex HOCBF-QP without a new dependency. Commands update at 20 Hz while the plant and delay queue integrate at 10 ms, so the model represents Td=0.22 s exactly. The scenario runner reports safety and infeasibility metrics.
 
 **Tech Stack:** Python 3, NumPy, SciPy scipy.linalg.expm, pytest, standard-library CSV.
 
@@ -15,6 +15,7 @@
 - Store final published map-frame commands in predictor history, never nominal commands.
 - Do not add a safety slack variable. Report QP infeasibility and use deterministic braking.
 - Results are model-level feasibility evidence, not a 20 Hz formal safety proof.
+- Use control_dt=0.05 s and integration_dt=0.01 s for the primary scan; the delay must be an integer multiple of integration_dt.
 - CSV output must use LF line endings.
 
 ---
@@ -26,7 +27,7 @@
 - Create: homo_multirobot_formation_control/test/test_hocbf_6d_feasibility.py
 
 **Interfaces:**
-- PlantParams(tau: float, delay: float, dt: float)
+- PlantParams(tau: float, delay: float, integration_dt: float, control_dt: float)
 - zoh_matrices(params: PlantParams) -> tuple[np.ndarray, np.ndarray]
 - predict_delayed_state(x, queued_commands, ad, bd) -> np.ndarray
 - hocbf_halfspace(x_pred, obstacle, safe_radius, tau, c1, c2) -> tuple[np.ndarray, float, float, float]
@@ -60,7 +61,7 @@ Expected: collection fails because the module does not exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Use the augmented matrix exponential to calculate Ad and Bd. Require delay / dt to be an integer. Starting from x, apply each queued command in time order as x <- Ad x + Bd u. For predicted position p, velocity v, and r=p-obstacle, return:
+Use the augmented matrix exponential to calculate Ad and Bd at integration_dt. Require delay / integration_dt and control_dt / integration_dt to be integers. Starting from x, apply each queued command in time order as x <- Ad x + Bd u. For predicted position p, velocity v, and r=p-obstacle, return:
 
     h = r @ r - safe_radius**2
     psi1 = 2 * r @ v + c1 * h
@@ -175,7 +176,7 @@ Expected: AttributeError because ScenarioConfig and simulate_scenario are absent
 
 - [ ] **Step 3: Write minimal implementation**
 
-At every sample, first predict through the complete queue, including the command that acts during the current interval; this produces the state at which the new command first acts. Use predictor_delay when it is provided, otherwise plant.delay; the predictor uses the same tau and dt as the plant. Construct the one-obstacle HOCBF row and solve Task 2. Then pop the oldest queued command, append the final command, and advance the actual state with the popped command. On infeasibility, issue the componentwise rate-limited command toward zero, mark braking=True, and still append that final command to history. Return equal-length arrays time, state, command, h, psi1, psi2, feasible, and braking.
+At every 50 ms sample, first predict through the complete high-rate queue, including the command that acts during the current interval; this produces the state at which the new command first acts. Use predictor_delay when it is provided, otherwise plant.delay. Construct the one-obstacle HOCBF row and solve Task 2 with control_dt. Then apply the final command over control_dt by repeatedly popping the oldest 10 ms queued command, appending the final command, and advancing the plant at integration_dt. On infeasibility, issue the componentwise rate-limited command toward zero, mark braking=True, and still append that final command to history. Return control-rate arrays time, state, command, h, psi1, psi2, feasible, braking and high-rate arrays time_internal, state_internal, h_internal.
 
 - [ ] **Step 4: Run tests to verify pass**
 

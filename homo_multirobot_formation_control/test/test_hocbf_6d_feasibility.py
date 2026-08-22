@@ -25,7 +25,9 @@ def load_module():
 
 def test_exact_predictor_matches_future_delayed_zoh_state():
     feasibility = load_module()
-    params = feasibility.PlantParams(tau=0.4, delay=0.1, dt=0.05)
+    params = feasibility.PlantParams(
+        tau=0.4, delay=0.02, integration_dt=0.01, control_dt=0.05
+    )
     ad, bd = feasibility.zoh_matrices(params)
     x0 = np.array([0.0, 0.0, 0.2, -0.1])
     queued = [np.array([0.3, 0.0]), np.array([0.1, -0.2])]
@@ -34,6 +36,17 @@ def test_exact_predictor_matches_future_delayed_zoh_state():
     expected = ad @ (ad @ x0 + bd @ queued[0]) + bd @ queued[1]
 
     np.testing.assert_allclose(predicted, expected, atol=1e-12)
+
+
+def test_two_time_scale_params_represent_220ms_delay_at_20hz_control():
+    feasibility = load_module()
+
+    params = feasibility.PlantParams(
+        tau=0.43, delay=0.22, integration_dt=0.01, control_dt=0.05
+    )
+
+    assert params.delay_steps == 22
+    assert params.control_steps == 5
 
 
 def test_hocbf_halfspace_tightens_head_on_approach():
@@ -110,7 +123,9 @@ def test_no_obstacle_scenario_preserves_nominal_command():
 
     result = feasibility.simulate_scenario(
         feasibility.ScenarioConfig(
-            plant=feasibility.PlantParams(tau=0.43, delay=0.2, dt=0.05),
+            plant=feasibility.PlantParams(
+                tau=0.43, delay=0.22, integration_dt=0.01, control_dt=0.05
+            ),
             obstacle=np.array([100.0, 0.0]),
             safe_radius=0.5,
             initial_state=np.zeros(4),
@@ -135,7 +150,9 @@ def test_head_on_feasible_case_keeps_h_nonnegative():
 
     result = feasibility.simulate_scenario(
         feasibility.ScenarioConfig(
-            plant=feasibility.PlantParams(tau=0.43, delay=0.2, dt=0.05),
+            plant=feasibility.PlantParams(
+                tau=0.43, delay=0.22, integration_dt=0.01, control_dt=0.05
+            ),
             obstacle=np.zeros(2),
             safe_radius=0.8,
             initial_state=np.array([2.0, 0.0, -0.1, 0.0]),
@@ -150,3 +167,55 @@ def test_head_on_feasible_case_keeps_h_nonnegative():
 
     assert result["feasible"].all()
     assert result["h"].min() >= -1e-9
+
+
+def test_scan_envelope_has_one_row_per_parameter_combination():
+    feasibility = load_module()
+
+    rows = feasibility.scan_envelope(
+        tau_values=[0.3, 0.5],
+        delay_values=[0.0],
+        clearances=[1.0],
+        delay_mismatches=[0.0, 0.05],
+    )
+
+    assert len(rows) == 4
+    assert set(rows[0]) >= {
+        "tau",
+        "delay_model",
+        "delay_actual",
+        "initial_clearance",
+        "min_h",
+        "min_distance",
+        "min_psi2",
+        "infeasible_steps",
+        "braking_steps",
+    }
+
+
+def test_metrics_csv_has_lf_and_expected_header(tmp_path):
+    feasibility = load_module()
+    output = tmp_path / "scan.csv"
+
+    feasibility.write_metrics_csv(
+        [
+            {
+                "tau": 0.43,
+                "delay_model": 0.2,
+                "delay_actual": 0.2,
+                "initial_clearance": 1.0,
+                "min_h": 0.1,
+                "min_distance": 0.6,
+                "min_psi2": 0.0,
+                "max_command_norm": 0.5,
+                "infeasible_steps": 0,
+                "braking_steps": 0,
+            }
+        ],
+        output,
+    )
+
+    assert output.read_text(encoding="utf-8").splitlines()[0].startswith(
+        "tau,delay_model,delay_actual,initial_clearance"
+    )
+    assert b"\r\n" not in output.read_bytes()
