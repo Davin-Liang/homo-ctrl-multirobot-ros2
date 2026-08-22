@@ -53,3 +53,53 @@ def test_hocbf_halfspace_tightens_head_on_approach():
     assert psi1 == pytest.approx(1.0)
     assert a @ np.array([-1.0, 0.0]) < b
     assert a @ np.zeros(2) >= b
+
+
+def test_hard_qp_returns_nominal_command_when_feasible():
+    feasibility = load_module()
+
+    result = feasibility.solve_hocbf_qp(
+        u_nom=np.array([0.3, -0.2]),
+        u_prev=np.zeros(2),
+        halfspaces=[(np.array([1.0, 0.0]), -1.0)],
+        vmax=1.0,
+        amax=20.0,
+        dt=0.05,
+    )
+
+    assert result.feasible
+    np.testing.assert_allclose(result.command, [0.3, -0.2])
+
+
+def test_hard_qp_projects_nominal_command_onto_barrier():
+    feasibility = load_module()
+
+    result = feasibility.solve_hocbf_qp(
+        u_nom=np.array([-1.0, 0.0]),
+        u_prev=np.zeros(2),
+        halfspaces=[(np.array([1.0, 0.0]), 0.2)],
+        vmax=1.0,
+        amax=20.0,
+        dt=0.05,
+    )
+
+    assert result.feasible
+    np.testing.assert_allclose(result.command, [0.2, 0.0], atol=1e-12)
+
+
+def test_hard_qp_reports_conflicting_barriers_as_infeasible():
+    feasibility = load_module()
+
+    result = feasibility.solve_hocbf_qp(
+        u_nom=np.zeros(2),
+        u_prev=np.zeros(2),
+        halfspaces=[
+            (np.array([1.0, 0.0]), 0.8),
+            (np.array([-1.0, 0.0]), 0.8),
+        ],
+        vmax=1.0,
+        amax=20.0,
+        dt=0.05,
+    )
+
+    assert not result.feasible

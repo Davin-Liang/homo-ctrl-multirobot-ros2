@@ -27,6 +27,15 @@ class PlantParams:
         return int(round(self.delay / self.dt))
 
 
+@dataclass(frozen=True)
+class SafetyFilterResult:
+    """Result of the hard constrained planar minimum-correction QP."""
+
+    command: np.ndarray
+    feasible: bool
+    active_constraints: int
+
+
 def zoh_matrices(params: PlantParams) -> tuple[np.ndarray, np.ndarray]:
     """Return exact ZOH matrices for p_dot=v and v_dot=(-v+u)/tau."""
     a = np.block(
@@ -90,3 +99,65 @@ def hocbf_halfspace(
         - c2 * psi1
     )
     return a, b, h, psi1
+
+
+def solve_hocbf_qp(
+    u_nom: np.ndarray,
+    u_prev: np.ndarray,
+    halfspaces: list[tuple[np.ndarray, float]],
+    vmax: float,
+    amax: float,
+    dt: float,
+) -> SafetyFilterResult:
+    """Solve the 2D hard HOCBF QP by enumerating the active constraint set."""
+    u_nom = np.asarray(u_nom, dtype=float)
+    u_prev = np.asarray(u_prev, dtype=float)
+    if u_nom.shape != (2,) or u_prev.shape != (2,):
+        raise ValueError("u_nom and u_prev must be two-dimensional")
+    if vmax <= 0.0 or amax <= 0.0 or dt <= 0.0:
+        raise ValueError("vmax, amax, and dt must be positive")
+
+    lower = np.maximum(-vmax, u_prev - amax * dt)
+    upper = np.minimum(vmax, u_prev + amax * dt)
+    constraints = [
+        (np.array([1.0, 0.0]), float(lower[0])),
+        (np.array([-1.0, 0.0]), float(-upper[0])),
+        (np.array([0.0, 1.0]), float(lower[1])),
+        (np.array([0.0, -1.0]), float(-upper[1])),
+    ]
+    for a, b in halfspaces:
+        a = np.asarray(a, dtype=float)
+        if a.shape != (2,):
+            raise ValueError("halfspace normals must be two-dimensional")
+        constraints.append((a, float(b)))
+
+    def is_feasible(candidate: np.ndarray) -> bool:
+        return all(a @ candidate >= b - 1e-10 for a, b in constraints)
+
+    candidates = []
+    if is_feasible(u_nom):
+        candidates.append(u_nom)
+
+    for a, b in constraints:
+        norm_squared = float(a @ a)
+        if norm_squared <= 1e-15:
+            continue
+        candidate = u_nom + (b - a @ u_nom) / norm_squared * a
+        if is_feasible(candidate):
+            candidates.append(candidate)
+
+    for i, (a_i, b_i) in enumerate(constraints):
+        for a_j, b_j in constraints[i + 1 :]:
+            matrix = np.vstack((a_i, a_j))
+            if abs(np.linalg.det(matrix)) <= 1e-12:
+                continue
+            candidate = np.linalg.solve(matrix, np.array([b_i, b_j]))
+            if is_feasible(candidate):
+                candidates.append(candidate)
+
+    if not candidates:
+        return SafetyFilterResult(np.zeros(2), False, 0)
+
+    command = min(candidates, key=lambda value: float(np.sum((value - u_nom) ** 2)))
+    active = sum(abs(a @ command - b) <= 1e-9 for a, b in constraints)
+    return SafetyFilterResult(command, True, active)
