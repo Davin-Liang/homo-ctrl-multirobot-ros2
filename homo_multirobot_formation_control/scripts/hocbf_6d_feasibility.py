@@ -415,6 +415,36 @@ RADIUS_INFLATION_SUMMARY_FIELDNAMES = [
     "max_required_inflation",
 ]
 
+IDEAL_FEASIBILITY_FIELDNAMES = [
+    "clearance",
+    "radial_speed",
+    "lateral_speed",
+    "nominal_speed",
+    "bearing_rad",
+    "min_h_20hz",
+    "min_distance_20hz",
+    "min_psi2_20hz",
+    "infeasible_steps_20hz",
+    "braking_steps_20hz",
+    "reference_checked",
+    "min_h_1khz",
+    "min_distance_1khz",
+    "classification",
+    "ideal_safe",
+]
+
+IDEAL_FEASIBILITY_SUMMARY_FIELDNAMES = [
+    "scenario_count",
+    "ideal_safe_count",
+    "physical_violation_count",
+    "qp_infeasible_count",
+    "both_count",
+    "unverified_count",
+    "reference_checked_count",
+    "min_distance_20hz",
+    "min_distance_1khz_checked",
+]
+
 
 def scan_envelope(
     tau_values: list[float],
@@ -665,6 +695,40 @@ def run_ideal_feasibility_grid(
             }
         )
     return rows
+
+
+def summarize_ideal_feasibility(
+    rows: list[dict[str, float | int | bool | str]],
+) -> dict[str, float | int]:
+    """Count classifications without treating unverified rows as safe."""
+    if not rows:
+        raise ValueError("rows must not be empty")
+    counts = {
+        "ideal_safe_count": 0,
+        "physical_violation_count": 0,
+        "qp_infeasible_count": 0,
+        "both_count": 0,
+        "unverified_count": 0,
+    }
+    for row in rows:
+        classification = row["classification"]
+        key = f"{classification}_count"
+        if key in counts:
+            counts[key] += 1
+    counts["scenario_count"] = len(rows)
+    counts["min_distance_20hz"] = min(
+        row["min_distance_20hz"] for row in rows
+    )
+    checked = [
+        row["min_distance_1khz"]
+        for row in rows
+        if row.get("reference_checked", False)
+    ]
+    counts["reference_checked_count"] = len(checked)
+    counts["min_distance_1khz_checked"] = (
+        min(checked) if checked else float("nan")
+    )
+    return counts
 
 
 def compare_sampling_rates(
@@ -1063,7 +1127,52 @@ def main() -> None:
         action="store_true",
         help="Search 0--30 mm empirical filter-radius inflation for five cases.",
     )
+    parser.add_argument(
+        "--ideal-feasibility",
+        action="store_true",
+        help="Run the exact-model HOCBF ideal-feasibility grid.",
+    )
+    parser.add_argument(
+        "--full-ideal",
+        action="store_true",
+        help="Use the full 4,800-point ideal grid; requires --ideal-feasibility.",
+    )
     args = parser.parse_args()
+    if args.full_ideal and not args.ideal_feasibility:
+        parser.error("--full-ideal requires --ideal-feasibility")
+    if args.ideal_feasibility:
+        if args.full_ideal:
+            ideal_args = {
+                "clearances": [0.1, 0.2, 0.4, 0.8, 1.2],
+                "radial_speeds": [0.0, 0.1, 0.3, 0.5, 0.7],
+                "lateral_speeds": [0.0, 0.2, 0.4],
+                "nominal_speeds": [0.2, 0.5, 0.8, 1.0],
+                "bearings_rad": [0.0, np.pi / 4, np.pi / 2, 3 * np.pi / 4],
+            }
+        else:
+            ideal_args = {
+                "clearances": [0.1, 0.4],
+                "radial_speeds": [0.0, 0.5],
+                "lateral_speeds": [0.0],
+                "nominal_speeds": [0.8],
+                "bearings_rad": [0.0],
+            }
+        ideal_rows = run_ideal_feasibility_grid(
+            **ideal_args,
+            reference_band=0.02,
+        )
+        ideal_output = args.output.with_name("ideal_feasibility_boundary.csv")
+        ideal_summary_output = args.output.with_name(
+            "ideal_feasibility_summary.csv"
+        )
+        write_rows_csv(ideal_rows, ideal_output, IDEAL_FEASIBILITY_FIELDNAMES)
+        write_rows_csv(
+            [summarize_ideal_feasibility(ideal_rows)],
+            ideal_summary_output,
+            IDEAL_FEASIBILITY_SUMMARY_FIELDNAMES,
+        )
+        print(f"wrote {len(ideal_rows)} ideal-feasibility rows")
+        return
     if args.radius_inflation:
         inflation_rows = run_radius_inflation_cases(
             default_radius_inflation_cases(),

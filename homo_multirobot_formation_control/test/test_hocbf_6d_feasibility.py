@@ -465,3 +465,18 @@ def test_ideal_grid_returns_one_row_per_20hz_scenario():
         "classification",
         "ideal_safe",
     }
+
+
+def test_ideal_summary_separates_safe_unsafe_and_unverified():
+    feasibility = load_module()
+    rows = [
+        {"classification": "ideal_safe", "min_distance_20hz": 0.81},
+        {"classification": "physical_violation", "min_distance_20hz": 0.79},
+        {"classification": "unverified", "min_distance_20hz": 0.90},
+    ]
+
+    summary = feasibility.summarize_ideal_feasibility(rows)
+
+    assert summary["ideal_safe_count"] == 1
+    assert summary["physical_violation_count"] == 1
+    assert summary["unverified_count"] == 1

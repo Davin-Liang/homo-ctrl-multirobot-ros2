@@ -34,3 +34,9 @@ robustness_envelope.csv 不会删除碰撞、QP 无解或制动行。robustness_
     python3 homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py --radius-inflation --output homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility/scan.csv
 
 它额外生成 radius_inflation.csv 和 radius_inflation_summary.csv。控制器内部半径按 0 至 30 mm、1 mm 步长增加，但最终安全判据仍是基础物理半径 0.8 m。默认搜索一个已知 tau 失配越界场景和四个准确模型边界场景。required_inflation 是有限场景集合中的经验结果；它不是 ROS 的最终安全半径，也不是鲁棒 HOCBF 理论保证。
+
+理想模型可行域扫描使用：
+
+    python3 homo_multirobot_formation_control/scripts/hocbf_6d_feasibility.py --ideal-feasibility --output homo_multirobot_formation_control/analysis/results/6d_artstein_hocbf_feasibility/scan.csv
+
+它生成 ideal_feasibility_boundary.csv 和 ideal_feasibility_summary.csv。默认网格有 4 个精确模型轴向基线场景；完整 4,800 点网格使用 --ideal-feasibility --full-ideal。所有场景均记录 20 Hz 结果；距边界 20 mm 内、20 Hz 越界或 QP 无解的场景额外运行 1 kHz 参考。未进入参考复核的行标为 unverified，不能报告为双频安全。
