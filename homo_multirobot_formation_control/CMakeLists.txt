@@ -291,7 +291,6 @@ install(DIRECTORY include/
 )
 
 install(PROGRAMS
-  scripts/leader_control.py
   scripts/leader_circle.py
   scripts/leader_eight.py
   scripts/record_trajectory.py
