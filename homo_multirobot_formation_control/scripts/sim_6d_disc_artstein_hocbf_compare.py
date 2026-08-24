@@ -59,6 +59,10 @@ class LocalReferenceGovernor:
                 np.cos(phi + lookahead), np.sin(phi + lookahead)
             ])
         elif self.state == "RETURN":
+            if np.linalg.norm(follower - target) < self.return_tolerance:
+                self.state = "NORMAL"
+                self.reference = target.copy()
+                return self
             self.reference += self.return_alpha * (target - self.reference)
             if np.linalg.norm(self.reference - target) < self.return_tolerance:
                 self.state = "NORMAL"
@@ -86,6 +90,8 @@ def filter_translation_command(
     cmd_nom_body = np.asarray(cmd_nom_body, dtype=float)
     cmd_nom_map = body_to_map(yaw_meas, cmd_nom_body[:2])
     v_pred_map = body_to_map(x_pred[2], x_pred[3:5])
+    if isinstance(obstacles, np.ndarray) and obstacles.shape == (2,):
+        obstacles = [obstacles]
     halfspaces = []
     h_values = []
     for obstacle in obstacles:
@@ -107,9 +113,16 @@ def filter_translation_command(
     )
 
 
-def simulate_compensated_hocbf(Tmax, h, tau_v, tau_w, Td, obstacles, safe_radius,
-                               leader_heading_fixed=False, leader_speed=0.45):
+def simulate_compensated_hocbf(Tmax, h, tau_v, tau_w, Td, obstacles=None, safe_radius=0.8,
+                               leader_heading_fixed=False, leader_speed=0.45,
+                               obstacle=None):
     """Existing compensated loop with final command replaced by HOCBF output."""
+    if obstacle is not None:
+        obstacles = [obstacle]
+    if obstacles is None:
+        obstacles = [np.array([2.0, 0.0])]
+    if isinstance(obstacles, np.ndarray) and obstacles.shape == (2,):
+        obstacles = [obstacles]
     ctrl = Hpc6DDisc(control_period=h)
     x1 = circle_leader_state(0.0, speed=leader_speed, heading_fixed=leader_heading_fixed)
     x2 = np.array([4.2, -0.4, np.pi / 2, 0.0, 0.0, 0.0])
