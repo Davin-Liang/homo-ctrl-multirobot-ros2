@@ -189,6 +189,19 @@ install(TARGETS formation_control_node_6d_artstein_disc
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_executable(formation_control_node_6d_artstein_disc_hocbf
+  src/main_6d_artstein_disc_hocbf.cpp
+  src/formation_control_node_6d_artstein_disc_hocbf.cpp
+  src/hocbf_safety_filter.cpp
+)
+target_include_directories(formation_control_node_6d_artstein_disc_hocbf PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+ament_target_dependencies(formation_control_node_6d_artstein_disc_hocbf rclcpp geometry_msgs nav_msgs sensor_msgs tf2 tf2_ros tf2_geometry_msgs)
+target_link_libraries(formation_control_node_6d_artstein_disc_hocbf Eigen3::Eigen)
+install(TARGETS formation_control_node_6d_artstein_disc_hocbf DESTINATION lib/${PROJECT_NAME})
+
 # ---- 8D Pade 姝诲尯澧炲箍鎺у埗鍣紙doc/pade_deadtime_full.md锛?--------------------
 # add_executable(formation_control_node_8d_motor
 #   src/main_8d_motor.cpp
@@ -478,6 +491,17 @@ if(BUILD_TESTING)
   )
   add_test(NAME test_homo_controller_4d_artstein
     COMMAND test_homo_controller_4d_artstein)
+
+  add_executable(test_hocbf_safety_filter
+    test/test_hocbf_safety_filter.cpp
+    src/hocbf_safety_filter.cpp
+  )
+  target_include_directories(test_hocbf_safety_filter PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+  target_link_libraries(test_hocbf_safety_filter Eigen3::Eigen)
+  add_test(NAME test_hocbf_safety_filter COMMAND test_hocbf_safety_filter)
 endif()
 
 install(DIRECTORY config launch
