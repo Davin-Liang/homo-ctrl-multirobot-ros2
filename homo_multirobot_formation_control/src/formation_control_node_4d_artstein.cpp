@@ -99,9 +99,6 @@ FormationController4DArtstein::FormationController4DArtstein()
   double tol    = declare_parameter("tol",     0.1);
   double mass   = declare_parameter("mass",    1.0);   // 4D 中为速度通道等效增益
   double tau    = declare_parameter("tau",     0.43);
-  double tau_min = declare_parameter("tau_min", 0.25);
-  double tau_max = declare_parameter("tau_max", 0.55);
-  double v_tau_trans = declare_parameter("v_tau_trans", 0.10);
   double omega_d = declare_parameter("omega_d", 0.7);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
   K_ff_         = declare_parameter("K_ff",    1.0);
@@ -138,8 +135,7 @@ FormationController4DArtstein::FormationController4DArtstein()
                                                     omega_d, use_hpc,
                                                     1.0 / control_rate_,
                                                     hpc_c_min,
-                                                    tau_min, tau_max,
-                                                    v_tau_trans, Td_,
+                                                    Td_,
                                                     initial_min_lambda,
                                                     switch_min_lambda);
 

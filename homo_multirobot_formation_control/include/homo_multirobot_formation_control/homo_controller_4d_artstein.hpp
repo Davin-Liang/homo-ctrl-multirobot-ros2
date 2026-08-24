@@ -27,18 +27,13 @@ public:
                           double mass = 2.0, double tau_nominal = 0.43,
                           double omega_d = 0.7, bool use_hpc = true,
                           double control_period = 0.05, double hpc_c_min = 0.1,
-                          double tau_min = 0.25, double tau_max = 0.55,
-                          double v_tau_trans = 0.10, double Td = 0.22,
+                          double Td = 0.22,
                           double initial_min_lambda = 1.0,
                           double switch_min_lambda = 4.0)
     : hpc_(m_p, radius, tol, mass, omega_d, use_hpc, hpc_c_min, control_period,
            initial_min_lambda, switch_min_lambda),
       tau_(tau_nominal), h_(control_period), Td_(Td)
   {
-    (void)tau_min;
-    (void)tau_max;
-    (void)v_tau_trans;
-
     if (tau_ <= 0.0) {
       throw std::invalid_argument("LpcController4DArtstein: tau must be positive");
     }

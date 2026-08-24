@@ -80,9 +80,6 @@ FormationController4DArtsteinLqr::FormationController4DArtsteinLqr()
   const double tol = declare_parameter("tol", 0.1);
   const double mass = declare_parameter("mass", 2.0);
   const double tau = declare_parameter("tau", 0.43);
-  const double tau_min = declare_parameter("tau_min", 0.25);
-  const double tau_max = declare_parameter("tau_max", 0.55);
-  const double v_tau_trans = declare_parameter("v_tau_trans", 0.10);
 
   Kp_yaw_ = declare_parameter("Kp_yaw", 4.0);
   K_ff_ = declare_parameter("K_ff", 1.0);
@@ -106,7 +103,7 @@ FormationController4DArtsteinLqr::FormationController4DArtsteinLqr()
 
   predictor_ = std::make_unique<LpcController4DArtstein>(
       m_p, radius, tol, mass, tau, 0.7, false, 1.0 / control_rate_, 0.1,
-      tau_min, tau_max, v_tau_trans, Td_, 1.0, 4.0);
+      Td_, 1.0, 4.0);
 
   LqrController4DArtstein::Params lqr_params;
   lqr_params.dt = 1.0 / control_rate_;

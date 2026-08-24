@@ -163,9 +163,8 @@ initial_min_lambda、switch_min_lambda，并让 C2/C3 使用完全相同的值�
 正式实验前应修改原始节点，使其使用 `control_period=1/control_rate`，推荐将该项作为公平性
 检查的阻断条件。
 
-当前 4D Artstein 控制器虽然声明了 `tau_min`、`tau_max` 和 `v_tau_trans` 参数，但控制器类
-暂未使用这三个参数。因此本章应将 `tau` 视为固定时间常数，不能把当前实验表述为“自适应
-tau”实验。若后续启用自适应 tau，应新增独立工况并记录每个时刻的 `tau_eff(t)`。
+当前 4D Artstein 使用固定 `tau` 作为等效执行器时间常数。本章不包含自适应
+tau 实验，也不将在线参数调度作为理论结论。
 
 ## 3. 数据采集清单
 

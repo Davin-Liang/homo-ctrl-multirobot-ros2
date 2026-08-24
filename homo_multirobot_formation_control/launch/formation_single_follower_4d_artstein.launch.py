@@ -72,9 +72,6 @@ def generate_launch_description():
             "tol": tol,
             "mass": mass,
             "tau": tau,
-            "tau_min": LaunchConfiguration("tau_min"),
-            "tau_max": LaunchConfiguration("tau_max"),
-            "v_tau_trans": LaunchConfiguration("v_tau_trans"),
             "Td": Td,
             "omega_d": omega_d,
             "Kp_yaw": Kp_yaw,
@@ -133,15 +130,7 @@ def generate_launch_description():
         DeclareLaunchArgument("mass", default_value="2.0",
                               description="Double-integrator HPC mass parameter. Default 2.0 matches the MATLAB/Python numerical tests."),
         DeclareLaunchArgument("tau", default_value="0.43",
-                              description="Motor time constant (s). With adaptive tau, "
-                                          "this is the nominal value; actual tau varies "
-                                          "between tau_min and tau_max based on |v_cmd|."),
-        DeclareLaunchArgument("tau_min", default_value="0.25",
-                              description="Adaptive tau lower bound (s)."),
-        DeclareLaunchArgument("tau_max", default_value="0.55",
-                              description="Adaptive tau upper bound (s)."),
-        DeclareLaunchArgument("v_tau_trans", default_value="0.10",
-                              description="Transition velocity (m/s) for adaptive tau."),
+                              description="Fixed equivalent motor time constant (s)."),
         DeclareLaunchArgument("Td", default_value="0.22",
                               description="Actuator dead time (s). Real robot ~220ms. "
                                           "Artstein reduction transforms the input-delay "

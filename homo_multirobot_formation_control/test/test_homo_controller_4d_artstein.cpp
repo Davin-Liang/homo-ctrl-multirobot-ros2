@@ -13,7 +13,7 @@ int main()
 
   formation_control::LpcController4DArtstein controller(
       4, 2.0, 0.1, mass, 0.43, 0.7, false, control_period, 0.1,
-      0.25, 0.55, 0.10, 0.22, 1.0, 4.0);
+      0.22, 1.0, 4.0);
   formation_control::LpcController baseline(
       4, 2.0, 0.1, mass, 0.7, false, 0.1, control_period, 1.0, 4.0);
 
