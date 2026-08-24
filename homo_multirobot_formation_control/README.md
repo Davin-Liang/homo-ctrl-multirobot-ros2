@@ -312,7 +312,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
   min_cmd_vel:=0.0 max_linear_accel:=0.4 \
   use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.4 \
-  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0 \
+  leader_vel_lpf_tau:=0.0 \
   enable_radial_safety:=true
 ```
 
@@ -342,7 +342,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
   min_cmd_vel:=0.03 max_linear_accel:=0.25 \
   use_motor_delay:=false \
-  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0
+  leader_vel_lpf_tau:=0.0
 ```
 
 ### 启动（4D Artstein-LQR 对照组）
