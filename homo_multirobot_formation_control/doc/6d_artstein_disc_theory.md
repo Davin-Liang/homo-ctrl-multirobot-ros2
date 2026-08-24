@@ -615,7 +615,6 @@ map/body 坐标转换误差
 6D Motor
 6D Artstein Disc
 6D+OA QP fusion
-MPC 6D
 ```
 
 ### 7.1 状态定义

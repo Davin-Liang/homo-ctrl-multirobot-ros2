@@ -9,7 +9,7 @@
 **6D Artstein Disc**（map 系平移预测 + yaw 预测 + 6D Disc HPC 核心）、
 **6D Motor 电机感知模型**（执行器一阶滞后显式增广，面向实物大延迟场景）、
 **6D+OA 运动学 + 避障模型**（在 6D 基础上集成 QP 避障融合）、
-以及 **4D Artstein-LQR / MPC 6D** 对照控制器。
+以及 **4D Artstein-LQR** 对照控制器。
 
 ## 目录
 
@@ -41,11 +41,6 @@
 | **6D Artstein Disc + HOCBF** | `formation_single_follower_6d_artstein_disc_hocbf.launch.py` | `formation_control_node_6d_artstein_disc_hocbf` | 同 6D Artstein Disc；预测 map 平移状态进入多圆柱 HOCBF-QP | 离散多边形 + 局部切向通行偏置 | 保留 Artstein yaw 输出 |
 | **6D Motor (电机感知模型)** | `formation_single_follower_6d_motor.launch.py` | `formation_control_node_6d_motor` | `[p_x,p_y,v_x^c,v_y^c,v_x^r,v_y^r]` (map 系, cmd/real 拆分) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
-| **MPC 6D (模型预测控制)** | `formation_single_follower_mpc_6d.launch.py` | `formation_control_node_mpc_6d` | 同 6D | 固定偏移（Leader 车体系） | 集成于 6D 主回路 |
-
-**MPC 6D** 是基于顺序线性化 + OSQP 求解的模型预测编队控制器，作为 HPC 齐次控制的对照组。
-采用单点局部线性化（整个预测时域用同一组 $A_d, B_d, C_d$），QP 规模 366 变量，求解时间 ~1-5ms。
-当前默认使用 Leader 车体系固定偏移编队（位置/速度参考一致），边界投影模式需多轮 SQP 迭代，待后续完善。
 
 **4D Artstein-LQR 对照** 复用同一预测补偿层，只把上层控制律替换为基于 DARE 的离散 LQR；
 可用于 ROS/Gazebo 对照实验，数值仿真说明见 `doc/4d_artstein_lqr_simulation.md`。
@@ -261,73 +256,6 @@ $w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
 
 - **适用**：圆柱体、球体等光滑曲面障碍物
 - **不适用**：正方体、长方体等多面体——最近点会在面间跳变，导致 QP 反复拉锯
-
-## 算法原理 (MPC 6D)
-
-MPC 6D 将编队控制描述为一个有限时域最优控制问题，每步求解 QP（二次规划）得到最优加速度。
-
-### 模型
-
-状态 $x = [p_x, p_y, \theta, v_x^b, v_y^b, \omega]^T$（与 6D HPC 相同），
-输入 $u = [a_x^b, a_y^b, \alpha]^T$（车体系加速度）。MPC 内部不使用 mass/I，输入直接解释为加速度。
-
-非线性模型在每个控制周期于当前跟随者状态处做**单点局部线性化**，离散化（前向 Euler）后得到仿射线性模型：
-
-$$A_d = I + dt \cdot A_c, \quad B_d = dt \cdot B, \quad C_d = dt \cdot (f(x_0,0) - A_c \cdot x_0)$$
-
-### QP 形式
-
-非紧凑形式，决策变量 $z = [x_0, u_0, x_1, u_1, \dots, x_{N-1}, u_{N-1}, x_N]$，$N=40$（2.0s 时域），共 366 个变量。
-
-$$\min \sum_{k=0}^{N-1} \left[(x_k - x_{\text{ref},k})^T Q (x_k - x_{\text{ref},k}) + u_k^T R u_k\right] + (x_N - x_{\text{ref},N})^T Q_f (x_N - x_{\text{ref},N})$$
-
-约束包括：动力学等式、输入限幅、车体速度限幅（从 $x_3$ 开始，避免 $x_0$ 超限不可行）、轮速通过 `KinematicConstraint` 后处理。
-
-### 求解器
-
-使用 OSQP（Operator Splitting QP），通过 `ros-humble-osqp-vendor` 安装。每步完整 rebuild + solve，未使用 warm-start。
-
-### Leader 预测与参考轨迹
-
-Leader 跟踪采用恒定车体速度积分（含旋转积分公式），参考位置为 Leader 车体系固定偏移量。
-参考速度使用跟随者实际朝向 $R(\theta_f)^T$ 旋转到车体系，保证侧向跟踪对称性。
-参考角度使用 $(\theta_L - \theta_f)$ unwrap 连续化处理。
-
-### 已知局限
-
-- 单点局部线性化在大角度 / 高速运动时预测精度有限
-- 固定偏移编队与 HPC 的边界投影策略不同，后续可升级为沿预测轨迹时变线性化
-- 未使用 warm-start，求解器每次完整 rebuild
-
-### MPC 参数（launch 可改）
-
-| 参数 | 类型 | 默认值 | 作用 |
-|------|------|--------|------|
-| `mpc_horizon` | int | 40 | 预测时域步数 N |
-| `formation_radius` | double | 2.0 | 编队圆半径（边界投影模式） |
-| `formation_offset_x` | double | -2.0 | Leader 车体系 x 偏移（固定偏移模式） |
-| `formation_offset_y` | double | 0.0 | Leader 车体系 y 偏移 |
-| `mpc_q_px` / `mpc_q_py` | double | 5.0 | 位置跟踪权重 |
-| `mpc_q_theta` | double | 20.0 | 朝向跟踪权重 |
-| `mpc_q_vx` / `mpc_q_vy` | double | 0.5 | 速度阻尼权重 |
-| `mpc_q_omega` | double | 2.0 | 角速度阻尼权重 |
-| `mpc_r_ax` / `mpc_r_ay` | double | 0.01 | 线加速度惩罚 |
-| `mpc_r_alpha` | double | 0.01 | 角加速度惩罚 |
-| `mpc_terminal_factor` | double | 10.0 | 终端代价倍数 |
-| `max_linear_vel` | double | 1.0 | 线速度上限 (m/s) |
-| `max_angular_vel` | double | 2.0 | 角速度上限 (rad/s) |
-| `max_linear_accel` | double | 2.0 | 线加速度上限 (m/s²) |
-| `max_angular_accel` | double | 6.0 | 角加速度上限 (rad/s²) |
-
-### 典型调参建议
-
-| 场景 | 操作 |
-|------|------|
-| 保持力不够 | 增大 `mpc_q_px/py` 到 20.0 |
-| 控制太激进 | 增大 `mpc_r_ax/ay` 到 0.1 |
-| 航向转太慢 | 增大 `mpc_q_theta` |
-| 侧向跟踪弱 | 增大 `mpc_q_py`，降低 `mpc_r_ay` 到 0.005 |
-| 求解太慢 | 减小 `mpc_horizon` 到 20 |
 
 ## 数据输入
 
@@ -606,22 +534,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 控制器日志中的 `|v_raw|/|v_clamped|/|v_final|` 分别表示 6D Artstein 核心输出、速度分量限幅后、
 以及轮速/加速度约束后的线速度模长；`YAW_DIAG` 用于判断 yaw 通道是否正在主导轮速缩放或角速度饱和。
 
-### 启动（MPC 6D 单 follower）
-
-```bash
-ros2 launch homo_multirobot_formation_control formation_single_follower_mpc_6d.launch.py
-```
-
-带参数：
-
-```bash
-ros2 launch homo_multirobot_formation_control formation_single_follower_mpc_6d.launch.py \
-  formation_offset_x:=-1.0 \
-  mpc_q_px:=20.0 mpc_q_py:=20.0 \
-  mpc_r_ax:=0.005 mpc_r_ay:=0.005 \
-  max_linear_vel:=2.0
-```
-
 ### 启动（双 follower，4D 版）
 
 ```bash
@@ -847,11 +759,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launc
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py \
   safety_distance:=0.6 radius:=1.0
 
-# 3d. 编队控制 — MPC 6D 版（对照组）
-ros2 launch homo_multirobot_formation_control formation_single_follower_mpc_6d.launch.py \
-  formation_offset_x:=-1.0 mpc_q_px:=20.0 mpc_q_py:=20.0
-
-# 3e. 编队控制 — 6D Artstein Disc 版（延迟预测补偿）
+# 3d. 编队控制 — 6D Artstein Disc 版（延迟预测补偿）
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py \
   leader_ns:=/robot1 follower_ns:=/robot2 \
   use_motor_delay:=true tau:=0.43 tau_yaw:=0.43 Td:=0.22
