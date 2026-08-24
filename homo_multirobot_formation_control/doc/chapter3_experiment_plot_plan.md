@@ -108,7 +108,7 @@ C3 和 C4 除 HPC/LPC 开关外，其余参数必须一致：
 ```text
 tau, Td, radius, m_p, tol, mass, omega_d
 控制频率、最大速度、最大加速度、轮速约束
-min_cmd_vel、cmd_integrator_base
+min_cmd_vel
 初始状态、leader 轨迹、实验时长
 ```
 
@@ -141,8 +141,7 @@ motor_tau=0.43，transport_delay=0.0，delay_max_accel=0.25
 实际传入值，避免后续命令行覆盖默认参数造成混淆。
 
 Artstein launch 还默认启用 `min_cmd_vel=0.03`，原始 4D 节点没有同名补偿参数；
-`cmd_integrator_base` 也只存在于 Artstein 节点。数值/Gazebo 公平对比时应将
-`min_cmd_vel:=0.0`，并固定记录 `cmd_integrator_base`；实物对比若保留 `min_cmd_vel=0.03`，
+数值/Gazebo 公平对比时应将 `min_cmd_vel:=0.0`；实物对比若保留 `min_cmd_vel=0.03`，
 必须在论文中说明 Artstein 组同时包含速度死区补偿，不能把改善全部归因于 Artstein 预测。
 
 正文实验应采用以下配置原则：

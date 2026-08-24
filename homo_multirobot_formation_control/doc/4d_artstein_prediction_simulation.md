@@ -128,7 +128,7 @@ summary_metrics.csv
 - 加速度限幅不能只求大。过大可能导致速度变化幅度大、指令更激进；实物应从保守值开始。
 - 噪声增大后，新架构仍可跟踪，但速度指令会更容易出现抖动，需要结合滤波和限幅处理。
 - `leader_vel_lpf_tau` 会平滑 Leader 速度估计，但也会引入相位滞后；之前测试中推荐默认 `0.0`。
-- `cmd_integrator_base:=pred` 比 `cmd` 更符合预测补偿架构，仿真表现更好。
+- 速度命令直接由预测状态上的 HPC 输出，不额外从旧命令做欧拉积分。
 
 注意：Python 脚本默认 `--dt 0.01` 便于复现连续时间数值结果；面向 ROS/Gazebo/实物延迟链路时，
 应使用 `--dt 0.05` 对齐 20Hz 控制周期，或至少单独做 20Hz 消融对照。
@@ -151,7 +151,6 @@ use_motor_delay:=true
 motor_tau:=0.43
 transport_delay:=0.22
 delay_max_accel:=0.5
-cmd_integrator_base:=pred
 leader_vel_lpf_tau:=0.0
 ```
 
@@ -165,7 +164,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
   min_cmd_vel:=0.0 max_linear_accel:=0.5 \
   use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.5 \
-  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0
+  leader_vel_lpf_tau:=0.0
 ```
 
 ### 实物保守起步
@@ -181,7 +180,6 @@ switch_min_lambda:=4.0
 min_cmd_vel:=0.03
 max_linear_accel:=0.25
 use_motor_delay:=false
-cmd_integrator_base:=pred
 leader_vel_lpf_tau:=0.0
 ```
 
@@ -195,7 +193,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
   min_cmd_vel:=0.03 max_linear_accel:=0.25 \
   use_motor_delay:=false \
-  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0
+  leader_vel_lpf_tau:=0.0
 ```
 
 ## 7. Python 数值仿真与 ROS C++ 的对应关系

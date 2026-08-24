@@ -160,10 +160,7 @@ v_{cmd,k+1}=v_{base,k}+h u_{hpc,k}/m
 
 生成。当前实现支持两种积分基准：
 
-```text
-cmd_integrator_base:=pred  # v_base = v_pred
-cmd_integrator_base:=cmd   # v_base = v_cmd_prev
-```
+预测器直接输出当前周期的 map 系速度命令，不再提供基于上一帧命令的显式欧拉积分模式。
 
 当前实验中 `pred` 模式更稳定，因此作为默认模式。
 
@@ -473,7 +470,6 @@ T_{\mathrm{eff}}=\texttt{transport\_delay}+\texttt{motor\_tau}.
 | `hpc_c_min` | HPC 齐次范数下界 |
 | `initial_min_lambda` | 初始化反馈极点下界 |
 | `switch_min_lambda` | 编队点切换后反馈极点下界 |
-| `cmd_integrator_base` | 速度命令积分基准 |
 | `leader_vel_lpf_tau` | Leader 测量速度低通时间常数 |
 
 ## 12. 推荐实验参数
@@ -488,7 +484,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   initial_min_lambda:=1.5 switch_min_lambda:=4.0 \
   min_cmd_vel:=0.0 max_linear_accel:=0.4 \
   use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.4 \
-  cmd_integrator_base:=pred leader_vel_lpf_tau:=0.0 \
+  leader_vel_lpf_tau:=0.0 \
   enable_radial_safety:=true
 ```
 
@@ -511,9 +507,8 @@ A_h=\begin{bmatrix}0&I\\0&0\end{bmatrix},\qquad A_h^2=0.
 
 ## 14. 当前实验观察
 
-1. `cmd_integrator_base:=pred` 通常优于 `cmd`。
-2. `leader_vel_lpf_tau` 会引入 Leader 预测相位滞后，当前推荐为 `0.0`。
-3. 单独提高 `hpc_c_min` 从 `0.1` 到 `0.2` 对 `cmd_vel_raw` 波动改善不明显。
+1. `leader_vel_lpf_tau` 会引入 Leader 预测相位滞后，当前推荐为 `0.0`。
+2. 单独提高 `hpc_c_min` 从 `0.1` 到 `0.2` 对 `cmd_vel_raw` 波动改善不明显。
 4. 降低 `initial_min_lambda` 和 `switch_min_lambda` 可明显压缩 `cmd_vel_raw` 的速度幅值波动。
 5. 当 `transport_delay=0` 而 `motor_tau=0.43` 时效果较好是合理的，因为名义一阶等效响应比纯时间延迟更容易预测补偿。
 6. 静止 Leader、`Td=0.22 s`、`tau=0.43 s`、保守制动能力约 `0.4 m/s^2` 的场景中，原始命令链可能出现约 `0.15 m` 的径向过冲；径向制动安全层应在进入编队圆前开始撤销向内命令。仍需在完整 Gazebo/实物闭环中记录最大径向侵入量，作为最终验证。

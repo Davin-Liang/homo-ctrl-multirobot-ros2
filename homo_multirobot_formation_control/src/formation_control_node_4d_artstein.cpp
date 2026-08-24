@@ -127,7 +127,6 @@ FormationController4DArtstein::FormationController4DArtstein()
   double switch_min_lambda = declare_parameter("switch_min_lambda", 4.0);
   leader_vel_lpf_tau_ = declare_parameter("leader_vel_lpf_tau", 0.0);
   min_cmd_vel_ = declare_parameter("min_cmd_vel", 0.03);
-  cmd_integrator_base_ = declare_parameter("cmd_integrator_base", std::string("pred"));
   enable_radial_safety_ = declare_parameter("enable_radial_safety", true);
 
   // ---- 控制器 ---------------------------------------------------------------
@@ -169,8 +168,8 @@ FormationController4DArtstein::FormationController4DArtstein()
   int ms = static_cast<int>(1000.0 / control_rate_);
   timer_ = create_wall_timer(std::chrono::milliseconds(ms), [this]() { timer_cb(); });
 
-  RCLCPP_INFO(get_logger(), "4D Artstein-HPC node started (Td=%.3fs, tau=%.2fs, cmd_integrator_base=%s).",
-              Td_, tau, cmd_integrator_base_.c_str());
+  RCLCPP_INFO(get_logger(), "4D Artstein-HPC node started (Td=%.3fs, tau=%.2fs).",
+              Td_, tau);
   RCLCPP_INFO(get_logger(), "  Leader: %s, Follower: %s",
               leader_ns_.c_str(), follower_ns_.c_str());
 }
@@ -269,16 +268,9 @@ void FormationController4DArtstein::timer_cb()
     v_real_mag, v_cmd_mag, v_pred_mag, pred_pos_shift, pred_vel_shift);
 
   // ---- 步骤 5: 原始 4D 双积分 HPC → map 系速度指令 -------------------------
-  Eigen::Vector2d out_map;
-  if (cmd_integrator_base_ == "cmd") {
-    Eigen::Vector2d accel_map = ctrl_->accel_calculate(x1_h, x2_h);
-    double dt = 1.0 / control_rate_;
-    out_map << vx_cmd_map_ + dt * accel_map(0),
-               vy_cmd_map_ + dt * accel_map(1);
-  } else {
-    auto out = ctrl_->lpc_calculate(x1_h, x2_h);
-    out_map << out[0], out[1];
-  }
+  // 预测器已经提供 x_h；HPC 直接输出当前周期的 map 系速度命令。
+  const auto out = ctrl_->lpc_calculate(x1_h, x2_h);
+  Eigen::Vector2d out_map(out[0], out[1]);
 
   const double safety_max_decel =
       radial_safety_max_decel_ > 0.0

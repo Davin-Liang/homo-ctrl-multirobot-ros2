@@ -93,7 +93,6 @@ def generate_launch_description():
             "switch_min_lambda": LaunchConfiguration("switch_min_lambda"),
             "leader_vel_lpf_tau": LaunchConfiguration("leader_vel_lpf_tau"),
             "min_cmd_vel": LaunchConfiguration("min_cmd_vel"),
-            "cmd_integrator_base": LaunchConfiguration("cmd_integrator_base"),
         }],
     )
 
@@ -184,8 +183,6 @@ def generate_launch_description():
                               description="Transport delay (s, e.g. serial)."),
         DeclareLaunchArgument("delay_max_accel", default_value="0.25",
                               description="Delay node linear accel limit (m/s^2)."),
-        DeclareLaunchArgument("cmd_integrator_base", default_value="pred",
-                              description="Velocity command integration base: pred keeps current behavior; cmd integrates from previous published cmd_vel."),
         formation_node,
         delay_node,
     ])

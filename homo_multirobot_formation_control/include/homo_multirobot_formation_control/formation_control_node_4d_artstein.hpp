@@ -40,7 +40,6 @@ private:
   double formation_radius_ = 2.0;
   double tau_ = 0.43;
   double min_cmd_vel_ = 0.03;
-  std::string cmd_integrator_base_ = "pred";
   double Td_;       // 死区时延 (s)
   double control_rate_;
   bool enable_radial_safety_ = true;

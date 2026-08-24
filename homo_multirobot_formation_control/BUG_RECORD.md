@@ -53,10 +53,10 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   leader_ns:=/robot1 follower_ns:=/robot2 \
   use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 \
   delay_max_accel:=0.4 tau:=0.43 Td:=0.22 control_rate:=20.0 \
-  mass:=2.0 hpc_c_min:=0.1 cmd_integrator_base:=pred min_cmd_vel:=0.0
+  mass:=2.0 hpc_c_min:=0.1 min_cmd_vel:=0.0
 ```
 
-单独尝试提高 `delay_max_accel`、切换 `cmd_integrator_base:=cmd`、设 `Td:=0` 或
+单独尝试提高 `delay_max_accel`、设 `Td:=0` 或
 `tau:=0.01` 都不能消除该现象，说明它不是单个预测参数或积分基准的简单失配。
 
 **诊断**: EKF 数据新鲜度正常；靠近圆周时，控制器已经开始降低甚至反向最终命令，但延迟节点输出仍保持朝向 Leader 的速度。例如一段日志中：

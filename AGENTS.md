@@ -128,7 +128,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower.launch.p
 ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein.launch.py \
   leader_ns:=/robot1 follower_ns:=/robot2 \
   tau:=0.43 Td:=0.22 control_rate:=20.0 \
-  mass:=2.0 hpc_c_min:=0.1 cmd_integrator_base:=pred
+  mass:=2.0 hpc_c_min:=0.1
 
 # Leader-Follower 编队控制 — 4D Cont 质点模型（连续边界投影，无 tol/m_p）
 ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py

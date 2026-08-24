@@ -180,8 +180,8 @@
 
   <rect x="1170" y="512" width="280" height="132" class="box hpc"/>
   <text x="1192" y="545" class="box-title">Map-frame Command</text>
-  <text x="1192" y="574" class="box-text">cmd_integrator_base:=pred</text>
-  <text x="1192" y="599" class="box-text">or cmd-mode accel integration</text>
+  <text x="1192" y="574" class="box-text">predicted-state HPC output</text>
+  <text x="1192" y="599" class="box-text">direct map-frame velocity command</text>
   <text x="1192" y="624" class="formula">out_map = [v_x, v_y]</text>
 
   <path d="M1060 225 C1130 225,1125 475,1170 540" class="blue-arrow"/>
