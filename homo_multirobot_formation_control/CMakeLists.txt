@@ -296,7 +296,6 @@ install(PROGRAMS
   scripts/leader_eight.py
   scripts/record_trajectory.py
   scripts/record_velocity_diagnostics.py
-  scripts/formation_control_py.py
   scripts/virtual_leader_circle.py
   scripts/measure_motor_latency.py
   scripts/measure_cross_machine_delay.py
