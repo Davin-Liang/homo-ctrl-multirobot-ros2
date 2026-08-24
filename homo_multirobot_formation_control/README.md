@@ -18,6 +18,7 @@
 - [算法原理 (4D)](#算法原理-4d)
 - [算法原理 (4D Artstein)](#算法原理-4d-artstein)
 - [算法原理 (6D Artstein Disc)](#算法原理-6d-artstein-disc)
+- [算法原理 (6D Artstein Disc + HOCBF)](#算法原理-6d-artstein-disc--hocbf)
 - [算法原理 (6D)](#算法原理-6d)
 - [算法原理 (6D Motor)](#算法原理-6d-motor)
 - [数据输入](#数据输入)
@@ -39,6 +40,7 @@
 | **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
 | **6D Artstein Disc (预测补偿)** | `formation_single_follower_6d_artstein_disc.launch.py` | `formation_control_node_6d_artstein_disc` | 同 6D，进入 HPC 前做平移/yaw 预测 | 离散多边形 + tol 切换 | 2D Artstein 预测后集成于 6D 主回路 |
+| **6D Artstein Disc + HOCBF** | `formation_single_follower_6d_artstein_disc_hocbf.launch.py` | `formation_control_node_6d_artstein_disc_hocbf` | 同 6D Artstein Disc；预测 map 平移状态进入多圆柱 HOCBF-QP | 离散多边形 + 局部切向通行偏置 | 保留 Artstein yaw 输出 |
 | **6D Bearing (运动学, 方位角约束)** | `formation_single_follower_6d_bearing.launch.py` | `formation_control_node_6d_bearing` | 同 6D | 固定方位角 $\phi_d$，无切换 | 集成于 6D 主回路 |
 | **6D Motor (电机感知模型)** | `formation_single_follower_6d_motor.launch.py` | `formation_control_node_6d_motor` | `[p_x,p_y,v_x^c,v_y^c,v_x^r,v_y^r]` (map 系, cmd/real 拆分) | 离散多边形 + tol 切换 | 独立 P+前馈 |
 | **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
@@ -78,6 +80,49 @@ MPC 使用 ZOH 离散化和 OSQP 非紧凑 QP，输出 `x_{1|0}.tail(2)` 作为�
 
 这样 6D Disc 的车体级 HPC 核心、离散编队点和全向轮约束保持不变，理论结论只按 nominal/local 预测补偿表述。
 详见 `doc/6d_artstein_disc_theory.md`，数值仿真脚本为 `scripts/sim_6d_disc_artstein_compare.py`。
+
+## 算法原理 (6D Artstein Disc + HOCBF)
+
+该版本以 6D Artstein Disc 为名义编队控制器，并在最终平移命令发布前增加 map 系 predictor-HOCBF 安全滤波：
+
+```text
+EKF/TF -> 6D Artstein 平移/yaw 预测 -> 6D Disc HPC nominal body cmd
+/scan -> 连续点聚类 -> 静态圆柱最小二乘拟合 -> map 系保守圆盘
+预测 [p_x,p_y,v_x,v_y] + 多圆盘 -> HOCBF 硬 QP -> safe map cmd
+safe map cmd -> follower body cmd_vel -> 全向轮/加速度约束 -> 实际命令回写 Artstein 历史
+```
+
+控制器**不接收障碍物真值位置或半径**。拟合圆柱半径会膨胀为：
+
+\[
+R_{\mathrm{filter}}=r_{\mathrm{fit}}+r_{\mathrm{follower}}
++d_{\mathrm{clearance}}+\epsilon_{\mathrm{perception}}.
+\]
+
+所有已识别圆柱同时形成 QP 硬约束。圆柱正挡名义轨迹时，纯 HOCBF 会选择制动；因此该实现仅在最近圆柱附近给 QP 参考命令加入小切向偏置，首次进入时选定并保持左/右绕行侧，离开释放半径后自动回到纯 Artstein 跟踪。偏置只改善通行性，不能突破 HOCBF 安全约束。
+
+### 启动（6D Artstein Disc + HOCBF）
+
+```bash
+ros2 launch homo_multirobot_formation_control \
+  formation_single_follower_6d_artstein_disc_hocbf.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  follower_radius:=0.15 clearance:=0.10 perception_margin:=0.15 \
+  scan_timeout:=0.30 use_latest_tf_fallback:=true \
+  passage_gain:=0.25 passage_activation_margin:=0.60 \
+  passage_release_margin:=0.80
+```
+
+该 launch 只启动 follower 控制器；leader 速度由单独的 leader 轨迹节点设置，不能传入 `leader_speed`。重要避障参数：
+
+- `cluster_tolerance`、`min_cluster_points`、`max_fit_residual`：激光簇及圆柱拟合质量；
+- `min_cylinder_radius`、`max_cylinder_radius`：接受的圆柱尺寸范围；
+- `perception_margin`：量测、TF、采样及离散实现的保守裕量；
+- `use_latest_tf_fallback`：scan 时间戳 TF 缺失时是否使用最新 TF；开启时必须保留足够 `perception_margin`；
+- `passage_gain`、`passage_activation_margin`、`passage_release_margin`：局部切向绕行强度、激活距离与释放滞回距离。
+
+当前阶段仅支持 scan 可见的静态圆柱。墙面、凹形障碍、动态障碍和死胡同仍需要更高层感知/规划；20 Hz 实现是连续 predictor-HOCBF 理论的工程离散化，不应表述为严格离散时间不变性证明。
 
 约束和齐次控制基础模块：
 三套控制器共享以下模块（不修改原 4D/6D 代码）：

@@ -1074,3 +1074,33 @@ if handles:
 rg -n "启动（4D Artstein-MPC|启动（4D Artstein-LQR|启动（4D Cont" \
   homo_multirobot_formation_control/README.md
 ```
+
+---
+
+## 44) HOCBF scan 时间戳 TF 查询要求未来外推，控制器进入停车
+
+**现象**：启动 `formation_control_node_6d_artstein_disc_hocbf` 后出现：
+
+```text
+HOCBF scan timestamp TF unavailable: Lookup would require extrapolation into the future.
+Requested time 107.569000 but the latest data is at time 107.539000.
+HOCBF stopping: stale scan or infeasible QP
+```
+
+**原因**：新 HOCBF 节点需要把 scan 拟合出的圆柱由 `robot2_laser_link` 变换至 map 系，因此优先查询
+`map <- laser_link` 在 `scan.header.stamp` 的历史 TF。Gazebo 中 scan、EKF 与 TF 发布异步，scan 时间可比
+TF 缓冲区最新数据领先数十毫秒；严格查询会要求 TF2 向未来外推并失败。旧 OA 直接在 body 系处理 scan，
+普通 6D Artstein Disc 只取 `map <- odom` 的最新 TF，因此不会暴露同一问题。
+
+**处理**：实现“scan 时间戳 TF 优先，最新 TF 兜底”策略。参数
+`use_latest_tf_fallback:=true` 时历史查询失败后改查 `tf2::TimePointZero`，同时节流打印原始异常；
+两种查询均失败时才停止平移。最新 TF 兜底带来时刻不一致，必须通过 `perception_margin` 保守吸收。
+
+**排查命令**：
+
+```bash
+ros2 topic echo /robot2/scan --once --field header
+ros2 run tf2_ros tf2_echo map robot2_laser_link
+```
+
+**注意**：该兜底是工程实现，不等价于 scan 时间戳严格同步。论文中应明确区分连续/时间对齐理论与 20 Hz、最新 TF 兜底的 ROS 实现。
