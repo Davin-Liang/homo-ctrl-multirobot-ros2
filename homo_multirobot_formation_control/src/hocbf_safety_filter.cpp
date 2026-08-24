@@ -24,6 +24,7 @@ Eigen::Vector2d apply_tangential_passage_bias(
     const Circle& obstacle, double gain, double activation_margin,
     double release_margin, PassageState& state)
 {
+  // HOCBF 只负责“不撞”；该项仅为正挡路径时提供确定性的绕行方向。
   const Eigen::Vector2d radial = position - obstacle.center;
   const double distance = radial.norm();
   if (distance <= 1e-9 || gain <= 0.0 || activation_margin <= 0.0 ||
@@ -32,6 +33,7 @@ Eigen::Vector2d apply_tangential_passage_bias(
   }
   const double activation_distance = obstacle.radius + activation_margin;
   const double release_distance = obstacle.radius + release_margin;
+  // 释放半径大于激活半径，避免噪声造成左右两侧反复切换。
   if (state.active && distance >= release_distance) state.active = false;
   if (!state.active && distance < activation_distance) {
     const Eigen::Vector2d normal = radial / distance;
@@ -41,6 +43,7 @@ Eigen::Vector2d apply_tangential_passage_bias(
   }
   if (!state.active) return nominal;
   const Eigen::Vector2d normal = radial / distance;
+  // 切向速度不直接缩短到圆心的距离；最终仍要经过下方 HOCBF 硬 QP。
   const Eigen::Vector2d tangent(-normal.y(), normal.x());
   const double weight = std::clamp(
       (activation_distance - distance) / activation_margin, 0.0, 1.0);
@@ -81,6 +84,7 @@ Halfspace hocbf_halfspace(const Eigen::Vector4d& state,
   if (obstacle.radius <= 0.0 || tau <= 0.0 || c1 <= 0.0 || c2 <= 0.0) {
     throw std::invalid_argument("HOCBF parameters must be positive");
   }
+  // 状态为 [p_x,p_y,v_x,v_y]，全部在 map 系；obstacle.radius 已含安全膨胀。
   const Eigen::Vector2d radial = state.head<2>() - obstacle.center;
   const Eigen::Vector2d velocity = state.tail<2>();
   const double h = radial.squaredNorm() - obstacle.radius * obstacle.radius;
@@ -101,6 +105,7 @@ QpResult solve_translation_qp(const Eigen::Vector2d& nominal,
   if (max_velocity <= 0.0 || max_acceleration <= 0.0 || dt <= 0.0) {
     throw std::invalid_argument("QP limits must be positive");
   }
+  // 盒约束同时施加速度上限与相邻 20 Hz 控制周期的加速度上限。
   const Eigen::Vector2d lower = (-Eigen::Vector2d::Constant(max_velocity))
       .cwiseMax(previous - Eigen::Vector2d::Constant(max_acceleration * dt));
   const Eigen::Vector2d upper = Eigen::Vector2d::Constant(max_velocity)
@@ -121,6 +126,7 @@ QpResult solve_translation_qp(const Eigen::Vector2d& nominal,
         + (constraint.b - constraint.a.dot(nominal)) / norm_sq * constraint.a;
     if (satisfies(candidate, constraints)) candidates.push_back(candidate);
   }
+  // 二维凸 QP 的最优点只可能在名义点、单条边界投影或两条边界交点上。
   for (size_t i = 0; i < constraints.size(); ++i) {
     for (size_t j = i + 1; j < constraints.size(); ++j) {
       Eigen::Matrix2d matrix;

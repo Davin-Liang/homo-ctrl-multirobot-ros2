@@ -24,7 +24,7 @@ from hocbf_6d_feasibility import hocbf_halfspace, solve_hocbf_qp
 
 @dataclass(frozen=True)
 class ObstacleSpec:
-    """Static cylinder geometry after robot and safety margins are included."""
+    """静态圆柱在 map 系的保守几何：物理安全半径与 HOCBF 滤波半径分开保存。"""
     center: np.ndarray
     physical_radius: float
     filter_radius: float
@@ -40,6 +40,7 @@ def make_obstacle_specs(centers, cylinder_radii, follower_radius, clearance,
     for center, cylinder_radius in zip(centers, cylinder_radii):
         if cylinder_radius <= 0.0:
             raise ValueError("all cylinder radii must be positive")
+        # 物理圆包含圆柱、follower 外形和所需净空；滤波圆再吸收离散/耦合误差。
         physical_radius = follower_radius + cylinder_radius + clearance
         specs.append(ObstacleSpec(
             np.asarray(center, dtype=float), physical_radius,
@@ -134,11 +135,13 @@ def filter_translation_command(
 ) -> tuple[np.ndarray, np.ndarray, bool, float, np.ndarray]:
     """Apply map-frame HOCBF to translation while retaining nominal yaw command."""
     cmd_nom_body = np.asarray(cmd_nom_body, dtype=float)
+    # HPC 的平移输出在 body 系；HOCBF 的位置、速度和障碍物统一在 map 系。
     cmd_nom_map = body_to_map(yaw_meas, cmd_nom_body[:2])
     v_pred_map = body_to_map(x_pred[2], x_pred[3:5])
     halfspaces = []
     h_values = []
     for obstacle in obstacles:
+        # 每个圆柱都生成一条硬半空间，随后同时送进同一个二维 QP。
         a, b, h, _ = hocbf_halfspace(
             np.r_[x_pred[:2], v_pred_map], obstacle.center,
             obstacle.filter_radius, tau, c1, c2
@@ -148,6 +151,7 @@ def filter_translation_command(
     result = solve_hocbf_qp(
         cmd_nom_map, previous_map_command, halfspaces, vmax, amax, dt
     )
+    # QP 不可行时不再沿用名义命令，数值实验显式执行平移停车。
     safe_map = result.command if result.feasible else np.zeros(2)
     safe_body = map_to_body(yaw_meas, safe_map)
     return (
@@ -174,6 +178,7 @@ def simulate_compensated_hocbf(Tmax, h, tau_v, tau_w, Td, obstacles=None, safe_r
     hist_len = max(1, int(np.ceil(Td / h))) + 2
     hist = deque([body_to_map(x2[2], x2[3:5]) for _ in range(hist_len)], maxlen=hist_len)
     whist = deque([np.array([x2[5]]) for _ in range(hist_len)], maxlen=hist_len)
+    # 被控对象以 10 ms 积分，但控制器/HOCBF 每 h=50 ms 更新一次。
     delay = make_delay_line(x2[3:6], Td, 0.01)
     last_map = hist[0].copy(); last_w = 0.0; prev_map = last_map.copy()
     x1c = se2_predict_constant_twist(x1, Td + tau_v)
@@ -188,6 +193,7 @@ def simulate_compensated_hocbf(Tmax, h, tau_v, tau_w, Td, obstacles=None, safe_r
         safe, safe_map, feasible, hval, h_values = filter_translation_command(
             x2c, yaw_meas, nominal, obstacles, tau_v, 2.0, 2.0,
             prev_map, 1.0, 20.0, h)
+        # 控制周期内零阶保持 HOCBF 后的 body 指令，模拟执行器输入死区。
         for _ in range(int(round(h / .01))):
             x2 = step_plant(x2, advance_delay_line(delay, safe), .01, tau_v, tau_w)
         # Match the ROS node: history stores the command published in the

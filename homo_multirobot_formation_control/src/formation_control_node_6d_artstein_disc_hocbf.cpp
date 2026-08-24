@@ -194,6 +194,7 @@ void FormationController6DArtsteinDiscHocbf::scan_cb(
     clusters.push_back(current_cluster);
   }
 
+  // 优先保证“scan 时刻”的 map 几何；历史 TF 缺失时才退化到最新 TF。
   geometry_msgs::msg::TransformStamped transform;
   try {
     transform = tf_->lookupTransform(
@@ -233,6 +234,7 @@ void FormationController6DArtsteinDiscHocbf::scan_cb(
       }
       fitted->center = body_to_map(yaw, fitted->center) + Eigen::Vector2d(
           transform.transform.translation.x, transform.transform.translation.y);
+      // 将感知到的圆柱半径膨胀为 HOCBF 使用的保守安全圆。
       fitted->radius += follower_radius_ + clearance_ + perception_margin_;
       detected.push_back(*fitted);
     }
@@ -290,6 +292,7 @@ void FormationController6DArtsteinDiscHocbf::timer_cb()
         predicted(2), predicted.segment<2>(3));
     state << predicted(0), predicted(1), velocity_map.x(), velocity_map.y();
     if (!obstacles_.empty()) {
+      // 仅最近圆柱提供绕行偏置；全部圆柱仍会在下面成为安全硬约束。
       const auto nearest = std::min_element(
           obstacles_.begin(), obstacles_.end(), [&state](const auto& left,
                                                           const auto& right) {
@@ -300,6 +303,7 @@ void FormationController6DArtsteinDiscHocbf::timer_cb()
           nominal_map, state.head<2>(), *nearest, passage_gain_,
           passage_activation_margin_, passage_release_margin_, passage_state_);
     }
+    // 多圆柱约束一起送入 QP，任何一个圆柱都不能被“绕行偏置”突破。
     for (const auto& obstacle : obstacles_) {
       constraints.push_back(formation_control::hocbf::hocbf_halfspace(
           state, obstacle, tau_, 2.0, 2.0));
@@ -322,6 +326,7 @@ void FormationController6DArtsteinDiscHocbf::timer_cb()
   constraint_.apply(cmd.linear.x, cmd.linear.y, cmd.angular.z, 1.0 / rate_);
   pub_->publish(cmd);
 
+  // 回写最终发布值，而非名义值，保证下一次 Artstein 积分使用真实命令历史。
   last_map_cmd_ = body_to_map(
       follower.x(2), Eigen::Vector2d(cmd.linear.x, cmd.linear.y));
   last_wcmd_ = cmd.angular.z;
