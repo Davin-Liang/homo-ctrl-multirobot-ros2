@@ -63,7 +63,7 @@ source install/setup.bash
 | `homo_multirobot_gazebo` | Gazebo 世界文件、双机/单机 spawn launch、控制器 YAML 配置 |
 | `homo_multirobot_localization` | 定位/里程计链路 launch 与配置：rf2o 激光里程计 + EKF（robot_localization） |
 | `homo_multirobot_nav` | 已知地图定位（AMCL 或 slam_toolbox 纯定位）：单车/双车 launch + RViz |
-| `homo_multirobot_formation_control` | Leader-Follower 编队控制（齐次控制算法，C++/Eigen）。4D 质点模型、**4D Artstein + prediction**（输入延迟补偿 + 电机前向预测，保持 4D 双积分 HPC 幂零结构）、4D Cont 连续投影、6D 运动学模型（含 Disc/Bearing/边界投影）、**6D Motor 电机感知模型**（执行器滞后增广，面向实物大延迟）、6D+OA（避障）、MPC 6D。通过 TF + EKF odometry 获取状态，6D+OA 通过 /scan 实现 QP 避障融合 |
+| `homo_multirobot_formation_control` | Leader-Follower 编队控制（齐次控制算法，C++/Eigen）。4D、**4D Artstein + prediction**、4D Artstein-LQR、4D Cont、6D、6D Disc、**6D Motor**、旧 6D+OA，以及 **6D Artstein Disc + predictor-HOCBF**。HOCBF 节点从 `/scan` 拟合静态圆柱，在 map 系预测状态上施加多圆柱硬 QP，并将最终命令回写 Artstein 历史。 |
 | `homo_multirobot_slam_toolbox` | 对上游 `slam_toolbox` 的多机器人封装，支持选定一台车建图、多车复用同一张地图 |
 | `third_party/*` | 上游源码引入副本：`rf2o_laser_odometry`（已补丁：发布横向速度 lin_speed_y，原版只考虑差速车）、`robot_localization`、`omnidirectional_controllers` |
 
@@ -145,11 +145,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.launch.py \
   m_p:=4 tol:=0.1 radius:=1.0 mass:=8.0 I:=1.0
 
-# Leader-Follower 编队控制 — 6D Bearing 方位角约束编队（6D 模型 + 固定方位角，无切换平滑弧线）
-ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py
-ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py \
-  radius:=2.0 phi_d:=3.1416 mass:=1.5 I:=0.3 omega_d:=0.8 omega_d_theta:=0.8
-
 # Leader-Follower 编队控制 — 6D+OA 运动学 + 避障（基于 /scan 激光雷达）
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py
@@ -174,12 +169,9 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 
 # 设计文档
 # 6D Motor 电机感知模型: doc/motor_homogeneous_control_full.md
-# 8D Pade 死区增广模型: doc/pade_deadtime_full.md
-# 6D 运动学模型:         doc/kinematic_homogeneous_control_full.md
 # 原始设计草稿:          doc/6d_motor_model_design.md
 
 # 领航者轨迹（开环 cmd_vel，依赖 Gazebo/EKF 提供里程计）
-ros2 run homo_multirobot_formation_control leader_control.py --ros-args -r __ns:=/robot1
 ros2 run homo_multirobot_formation_control leader_circle.py --ros-args -r __ns:=/robot1
 ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/robot1
 
@@ -228,10 +220,11 @@ ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py \
   leader_ns:=/virtual_leader follower_ns:=/robot2
 
-# 或使用 6D 方位角约束编队（固定方位角，无切换平滑弧线）
-ros2 launch homo_multirobot_formation_control formation_single_follower_6d_bearing.launch.py \
+# 或使用 6D Artstein Disc + predictor-HOCBF（仅 scan 感知静态圆柱）
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc_hocbf.launch.py \
   leader_ns:=/virtual_leader follower_ns:=/robot2 \
-  radius:=2.0 phi_d:=3.1416 mass:=1.5 I:=0.3 omega_d:=0.8
+  tau:=0.43 Td:=0.22 control_rate:=20.0 \
+  follower_radius:=0.15 clearance:=0.10 perception_margin:=0.15
 
 # 或使用 6D Motor 电机感知模型 + 虚拟 Leader
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
@@ -291,15 +284,17 @@ MAKEFLAGS="-j1" colcon build --packages-select homo_multirobot_formation_control
 
 **3. 目标选择**
 
-> CMakeLists.txt 中已默认注释掉大部分 6D/MPC 目标，当前仅编译
-> `formation_control_node` (4D) 和 `formation_control_node_4d_artstein`。
+> CMakeLists.txt 中默认注释掉部分旧 6D/Motor/OA 目标；当前包含 4D、4D Artstein、
+> 4D Artstein-LQR、6D Artstein Disc 与 6D Artstein Disc + HOCBF。
 > 如需编译 6D Motor 等目标，先取消对应 `add_executable` 的注释再编译，
 > 编译完成后建议重新注释以减轻后续编译内存压力。
 
 **4. 编译后确认可执行文件**
 ```bash
 ls install/homo_multirobot_formation_control/lib/homo_multirobot_formation_control/
-# 当前包含: formation_control_node, formation_control_node_4d_artstein
+# 当前至少包含: formation_control_node, formation_control_node_4d_artstein,
+# formation_control_node_4d_artstein_lqr, formation_control_node_6d_artstein_disc,
+# formation_control_node_6d_artstein_disc_hocbf
 ```
 
 **5. 编译后关闭 swap（可选，释放磁盘空间）**
