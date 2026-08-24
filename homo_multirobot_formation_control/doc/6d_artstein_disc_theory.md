@@ -615,7 +615,6 @@ map/body 坐标转换误差
 6D Bearing
 6D Motor
 6D Artstein Disc
-8D Pade / dead-time augmentation
 6D+OA QP fusion
 MPC 6D
 ```

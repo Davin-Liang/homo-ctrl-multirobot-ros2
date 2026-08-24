@@ -68,7 +68,7 @@ MPC 使用 ZOH 离散化和 OSQP 非紧凑 QP，输出 `x_{1|0}.tail(2)` 作为�
 "指令速度 ≠ 实际速度"，消除过度补偿震荡。v_cmd 为控制器内部积分状态
 （发布后用最终 cmd_vel 回写，抗饱和），v_real 来自 EKF。编队点策略与 4D 相同
 （离散多边形 + tol），可直接与 4D baseline 对比。关键参数 `tau`（默认 0.5，
-实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。自适应 τ（tau_min/tau_max/v_tau_trans）匹配实物变加速度特性；Smith 预估器（smith_Td=0.22）补偿 ~220ms 死区。后续 8D Pade 全链路模型见 `doc/pade_deadtime_full.md`。
+实测 ~0.43，须 ≥ 0.1）。详见 `doc/motor_homogeneous_control_full.md`（正式设计文档）和 `doc/6d_motor_model_design.md`（原始方案草稿）。自适应 τ（tau_min/tau_max/v_tau_trans）匹配实物变加速度特性；Smith 预估器（smith_Td=0.22）补偿 ~220ms 死区。
 
 **4D Artstein** 是原始 4D 双积分 HPC 的输入延迟与电机响应预测补偿版本。上层 HPC 核心仍保持原始 4D 双积分器结构和 `A_h^2=0` 幂零性质；`Td` 只表示纯输入/传输延迟补偿参数，由 Artstein 输入时延补偿处理；`tau` 表示一阶电机响应预测参数，用于把测得的 Follower 状态向前预测到等效双积分状态。该版本默认还启用径向制动安全层：当 Follower 接近编队圆、其相对 Leader 的向内速度已超过在 `Td + tau` 延迟与可用制动能力下的安全值时，禁止继续发布朝向 Leader 的径向内切速度，给底盘留出刹停距离。该层不修改 4D HPC 控制律或 Artstein 变换，只在 map 系速度命令生成后、旋转到 body 系和最终限幅前生效。详见 `doc/4d_artstein_prediction_theory.md`；数值仿真说明见 `doc/4d_artstein_prediction_simulation.md`；早期 Artstein 约简草稿见 `doc/artstein_reduction.md`。
 
