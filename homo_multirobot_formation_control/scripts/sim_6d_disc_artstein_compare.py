@@ -578,7 +578,8 @@ def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, 
                   inertia: float = 1.0, hpc_c_min: float = 0.5,
                   initial_min_lambda: float = 1.0,
                   switch_min_lambda: float = 4.0,
-                  use_hpc: bool = True, plant_dt: float = 0.01):
+                  use_hpc: bool = True, plant_dt: float = 0.01,
+                  leader_speed: float = 0.45):
     control_substeps = h / plant_dt
     if not np.isclose(control_substeps, round(control_substeps), atol=1e-12):
         raise ValueError("plant_dt must be an integer multiple of control period")
@@ -590,7 +591,7 @@ def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, 
                      use_hpc=use_hpc,
                      offset_frame=offset_frame)
     rng = np.random.default_rng(seed)
-    x1 = circle_leader_state(0.0, heading_fixed=leader_heading_fixed,
+    x1 = circle_leader_state(0.0, speed=leader_speed, heading_fixed=leader_heading_fixed,
                              heading=leader_heading)
     x2 = np.array([4.2, -0.4, follower_yaw0, 0.0, 0.0, 0.0])
 
@@ -621,7 +622,7 @@ def simulate_case(kind: str, Tmax: float, h: float, tau_v: float, tau_w: float, 
     rows = []
     t = 0.0
     while t < Tmax - 1e-12:
-        x1 = circle_leader_state(t, heading_fixed=leader_heading_fixed,
+        x1 = circle_leader_state(t, speed=leader_speed, heading_fixed=leader_heading_fixed,
                                  heading=leader_heading)
         x1_meas = add_measurement_noise(x1, pos_noise, yaw_noise, vel_noise, omega_noise, rng)
         x2_meas = add_measurement_noise(x2, pos_noise, yaw_noise, vel_noise, omega_noise, rng)
