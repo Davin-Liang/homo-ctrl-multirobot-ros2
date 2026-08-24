@@ -1,4 +1,9 @@
-"""6D Artstein Disc formation with scan-only static-cylinder HOCBF safety."""
+"""6D Artstein Disc formation with scan-only static-cylinder HOCBF safety.
+
+This launch only starts the follower controller.  It subscribes to the leader
+odometry and therefore intentionally has no ``leader_speed`` argument; set the
+leader speed on the separately launched leader trajectory node.
+"""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
