@@ -26,6 +26,9 @@ FormationController6DArtsteinDiscHocbf::FormationController6DArtsteinDiscHocbf()
   clearance_ = declare_parameter("clearance", 0.10);
   perception_margin_ = declare_parameter("perception_margin", 0.15);
   scan_timeout_ = declare_parameter("scan_timeout", 0.30);
+  passage_gain_ = declare_parameter("passage_gain", 0.25);
+  passage_activation_margin_ = declare_parameter("passage_activation_margin", 0.60);
+  passage_release_margin_ = declare_parameter("passage_release_margin", 0.80);
   use_latest_tf_fallback_ = declare_parameter("use_latest_tf_fallback", true);
   cluster_tolerance_ = declare_parameter("cluster_tolerance", 0.10);
   min_cluster_points_ = declare_parameter("min_cluster_points", 5);
@@ -277,6 +280,7 @@ void FormationController6DArtsteinDiscHocbf::timer_cb()
       predict_leader(leader.x, Td_ + std::max(tau_, tau_yaw_)), predicted);
   const auto nominal_map = body_to_map(
       follower.x(2), Eigen::Vector2d(nominal[0], nominal[1]));
+  Eigen::Vector2d reference_map = nominal_map;
   Eigen::Vector2d safe_map = Eigen::Vector2d::Zero();
   bool safe = false;
   if ((now() - last_scan_).seconds() <= scan_timeout_) {
@@ -285,12 +289,23 @@ void FormationController6DArtsteinDiscHocbf::timer_cb()
     const auto velocity_map = body_to_map(
         predicted(2), predicted.segment<2>(3));
     state << predicted(0), predicted(1), velocity_map.x(), velocity_map.y();
+    if (!obstacles_.empty()) {
+      const auto nearest = std::min_element(
+          obstacles_.begin(), obstacles_.end(), [&state](const auto& left,
+                                                          const auto& right) {
+            return (state.head<2>() - left.center).squaredNorm() <
+                   (state.head<2>() - right.center).squaredNorm();
+          });
+      reference_map = formation_control::hocbf::apply_tangential_passage_bias(
+          nominal_map, state.head<2>(), *nearest, passage_gain_,
+          passage_activation_margin_, passage_release_margin_, passage_state_);
+    }
     for (const auto& obstacle : obstacles_) {
       constraints.push_back(formation_control::hocbf::hocbf_halfspace(
           state, obstacle, tau_, 2.0, 2.0));
     }
     const auto result = formation_control::hocbf::solve_translation_qp(
-        nominal_map, last_map_cmd_, constraints, vmax_, amax_, 1.0 / rate_);
+        reference_map, last_map_cmd_, constraints, vmax_, amax_, 1.0 / rate_);
     safe_map = result.command;
     safe = result.feasible;
   }

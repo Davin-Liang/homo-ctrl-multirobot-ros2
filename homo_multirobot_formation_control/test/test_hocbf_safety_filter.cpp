@@ -34,6 +34,13 @@ int main()
   assert(std::abs(result.command.x() - 0.20) < 1e-10);
   assert(std::abs(result.command.y()) < 1e-10);
 
+  formation_control::hocbf::PassageState passage;
+  const auto biased = formation_control::hocbf::apply_tangential_passage_bias(
+      Eigen::Vector2d(-0.4, 0.0), Eigen::Vector2d(1.1, 0.0),
+      {{0.0, 0.0}, 1.0, 0.0}, 0.2, 0.3, 0.5, passage);
+  assert(passage.active);
+  assert(std::abs(biased.y()) > 1e-6);
+
   std::cout << "hocbf safety filter test passed\n";
   return 0;
 }

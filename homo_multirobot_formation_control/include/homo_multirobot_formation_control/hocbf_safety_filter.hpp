@@ -27,6 +27,17 @@ struct QpResult
   int active_constraints = 0;
 };
 
+struct PassageState
+{
+  bool active = false;
+  int side = 1;
+};
+
+Eigen::Vector2d apply_tangential_passage_bias(
+    const Eigen::Vector2d& nominal, const Eigen::Vector2d& position,
+    const Circle& obstacle, double gain, double activation_margin,
+    double release_margin, PassageState& state);
+
 std::optional<Circle> fit_circle(const std::vector<Eigen::Vector2d>& points,
                                  double max_rms_residual);
 

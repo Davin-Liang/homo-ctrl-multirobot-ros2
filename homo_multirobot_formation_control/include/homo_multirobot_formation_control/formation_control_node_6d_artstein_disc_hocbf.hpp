@@ -35,6 +35,7 @@ private:
   std::string leader_ns_, follower_ns_;
   double rate_, tau_, tau_yaw_, Td_, vmax_, wmax_, amax_;
   double follower_radius_, clearance_, perception_margin_, scan_timeout_;
+  double passage_gain_, passage_activation_margin_, passage_release_margin_;
   bool use_latest_tf_fallback_ = true;
   double cluster_tolerance_, max_fit_residual_, min_cylinder_radius_, max_cylinder_radius_;
   int min_cluster_points_, max_obstacles_;
@@ -45,6 +46,7 @@ private:
   Eigen::Vector2d last_map_cmd_ = Eigen::Vector2d::Zero();
   double last_wcmd_ = 0.0;
   std::vector<formation_control::hocbf::Circle> obstacles_;
+  formation_control::hocbf::PassageState passage_state_;
   rclcpp::Time last_scan_{0, 0, RCL_ROS_TIME};
   std::unique_ptr<tf2_ros::Buffer> tf_;
   std::unique_ptr<tf2_ros::TransformListener> tf_listener_;

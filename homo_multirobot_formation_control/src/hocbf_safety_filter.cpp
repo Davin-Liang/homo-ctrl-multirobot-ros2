@@ -1,5 +1,6 @@
 #include "homo_multirobot_formation_control/hocbf_safety_filter.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -17,6 +18,34 @@ bool satisfies(const Eigen::Vector2d& command,
 }
 
 }  // namespace
+
+Eigen::Vector2d apply_tangential_passage_bias(
+    const Eigen::Vector2d& nominal, const Eigen::Vector2d& position,
+    const Circle& obstacle, double gain, double activation_margin,
+    double release_margin, PassageState& state)
+{
+  const Eigen::Vector2d radial = position - obstacle.center;
+  const double distance = radial.norm();
+  if (distance <= 1e-9 || gain <= 0.0 || activation_margin <= 0.0 ||
+      release_margin < activation_margin) {
+    return nominal;
+  }
+  const double activation_distance = obstacle.radius + activation_margin;
+  const double release_distance = obstacle.radius + release_margin;
+  if (state.active && distance >= release_distance) state.active = false;
+  if (!state.active && distance < activation_distance) {
+    const Eigen::Vector2d normal = radial / distance;
+    const Eigen::Vector2d tangent(-normal.y(), normal.x());
+    state.side = tangent.dot(nominal) >= 0.0 ? 1 : -1;
+    state.active = true;
+  }
+  if (!state.active) return nominal;
+  const Eigen::Vector2d normal = radial / distance;
+  const Eigen::Vector2d tangent(-normal.y(), normal.x());
+  const double weight = std::clamp(
+      (activation_distance - distance) / activation_margin, 0.0, 1.0);
+  return nominal + gain * weight * static_cast<double>(state.side) * tangent;
+}
 
 std::optional<Circle> fit_circle(const std::vector<Eigen::Vector2d>& points,
                                  double max_rms_residual)
