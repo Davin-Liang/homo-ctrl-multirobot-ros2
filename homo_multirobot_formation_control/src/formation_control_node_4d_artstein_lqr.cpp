@@ -1,6 +1,6 @@
 /// @file 4D Artstein-LQR 编队控制节点实现。
 ///
-/// 数据流与 4D Artstein-MPC 节点一致，只替换上层平移控制律:
+/// 数据流与 4D Artstein 节点一致，只替换上层平移控制律:
 ///   EKF/TF -> Artstein Td 补偿 -> 一阶电机 tau 前向预测
 ///          -> 4D DARE-LQR -> cmd_vel 后处理/发布。
 

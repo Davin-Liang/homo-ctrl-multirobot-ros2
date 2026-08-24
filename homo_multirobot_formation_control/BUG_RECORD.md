@@ -1046,7 +1046,7 @@ No artists with labels found to put in legend.
 **原因**: `plot_group()` 的右下角子图用于显示 MPC solve time。LQR/HPC 没有优化求解时间，
 该子图没有任何曲线，但函数仍对所有子图无条件调用 `legend()`。
 
-**处理**: 在 `scripts/sim_4d_artstein_mpc_compare.py` 中改为只有存在 handles 时才调用：
+**处理**: 在当时的 4D Artstein 数值对比脚本中改为只有存在 handles 时才调用：
 
 ```python
 handles, labels = ax.get_legend_handles_labels()
@@ -1061,7 +1061,7 @@ if handles:
 ## 42) 4D Artstein-LQR 文档中 MPC 段落被插入内容打断
 
 **现象**: 向 README 增加 4D Artstein-LQR 启动说明时，曾把 LQR 小节插入到
-4D Artstein-MPC 注意事项中间，导致“经验上先设 `delay_max_accel:=2.0`，确认补偿链路正常后，”
+4D Artstein 对照控制器注意事项中间，导致“经验上先设 `delay_max_accel:=2.0`，确认补偿链路正常后，”
 和“再单独研究低加速度饱和场景。”分离。
 
 **原因**: README 的 MPC 段落较长，包含普通启动、延迟启动、径向安全和 delay node 参数解释；
@@ -1071,7 +1071,7 @@ if handles:
 `### 启动（4D Artstein-LQR 对照组）` 小节。后续更新 README 时应先检查小节边界：
 
 ```bash
-rg -n "启动（4D Artstein-MPC|启动（4D Artstein-LQR|启动（4D Cont" \
+rg -n "启动（4D Artstein-LQR|启动（4D Cont" \
   homo_multirobot_formation_control/README.md
 ```
 

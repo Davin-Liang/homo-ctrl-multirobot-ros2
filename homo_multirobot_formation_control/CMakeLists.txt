@@ -103,36 +103,6 @@ install(TARGETS formation_control_node_4d_artstein
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# ---- 4D Artstein-MPC 对照控制器（同一预测层 + 4D linear MPC）---------------
-add_executable(formation_control_node_4d_artstein_mpc
-  src/main_4d_artstein_mpc.cpp
-  src/formation_control_node_4d_artstein_mpc.cpp
-)
-
-target_include_directories(formation_control_node_4d_artstein_mpc PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-)
-
-ament_target_dependencies(formation_control_node_4d_artstein_mpc
-  rclcpp
-  geometry_msgs
-  nav_msgs
-  tf2
-  tf2_ros
-  tf2_geometry_msgs
-  osqp_vendor
-)
-
-target_link_libraries(formation_control_node_4d_artstein_mpc
-  Eigen3::Eigen
-  osqp::osqp
-)
-
-install(TARGETS formation_control_node_4d_artstein_mpc
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 # ---- 4D Artstein-LQR 对照控制器（同一预测层 + DARE-LQR）------------------
 add_executable(formation_control_node_4d_artstein_lqr
   src/main_4d_artstein_lqr.cpp
@@ -363,27 +333,11 @@ install(PROGRAMS
   scripts/measure_cross_machine_delay.py
   scripts/sim_motor_delay.py
   scripts/sim_4d_hpc_artstein_compare.py
-  scripts/sim_4d_artstein_lqr_compare.py
-  scripts/sim_4d_artstein_mpc_compare.py
   scripts/sim_6d_disc_artstein_compare.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
-  add_executable(test_mpc_controller_4d_artstein
-    test/test_mpc_controller_4d_artstein.cpp
-  )
-  target_include_directories(test_mpc_controller_4d_artstein PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-  )
-  target_link_libraries(test_mpc_controller_4d_artstein
-    Eigen3::Eigen
-    osqp::osqp
-  )
-  add_test(NAME test_mpc_controller_4d_artstein
-    COMMAND test_mpc_controller_4d_artstein)
-
   add_executable(test_lqr_controller_4d_artstein
     test/test_lqr_controller_4d_artstein.cpp
   )
