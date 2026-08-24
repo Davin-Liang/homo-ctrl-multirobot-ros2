@@ -27,6 +27,7 @@ def generate_launch_description():
         ("stability_margin", "0.01"), ("scan_topic", "scan"),
         ("follower_radius", "0.15"), ("clearance", "0.10"),
         ("perception_margin", "0.15"), ("scan_timeout", "0.30"),
+        ("use_latest_tf_fallback", "true"),
         ("cluster_tolerance", "0.10"), ("min_cluster_points", "5"),
         ("max_obstacles", "10"), ("min_cylinder_radius", "0.03"),
         ("max_cylinder_radius", "0.60"), ("max_fit_residual", "0.03"),

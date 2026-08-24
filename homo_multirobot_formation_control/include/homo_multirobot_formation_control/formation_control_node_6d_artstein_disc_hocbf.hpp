@@ -35,6 +35,7 @@ private:
   std::string leader_ns_, follower_ns_;
   double rate_, tau_, tau_yaw_, Td_, vmax_, wmax_, amax_;
   double follower_radius_, clearance_, perception_margin_, scan_timeout_;
+  bool use_latest_tf_fallback_ = true;
   double cluster_tolerance_, max_fit_residual_, min_cylinder_radius_, max_cylinder_radius_;
   int min_cluster_points_, max_obstacles_;
   std::unique_ptr<formation_control::LpcController6DArtsteinDisc> ctrl_;

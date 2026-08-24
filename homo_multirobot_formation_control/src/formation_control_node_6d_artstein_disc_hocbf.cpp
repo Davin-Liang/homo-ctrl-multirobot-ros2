@@ -26,6 +26,7 @@ FormationController6DArtsteinDiscHocbf::FormationController6DArtsteinDiscHocbf()
   clearance_ = declare_parameter("clearance", 0.10);
   perception_margin_ = declare_parameter("perception_margin", 0.15);
   scan_timeout_ = declare_parameter("scan_timeout", 0.30);
+  use_latest_tf_fallback_ = declare_parameter("use_latest_tf_fallback", true);
   cluster_tolerance_ = declare_parameter("cluster_tolerance", 0.10);
   min_cluster_points_ = declare_parameter("min_cluster_points", 5);
   max_obstacles_ = declare_parameter("max_obstacles", 10);
@@ -190,9 +191,34 @@ void FormationController6DArtsteinDiscHocbf::scan_cb(
     clusters.push_back(current_cluster);
   }
 
+  geometry_msgs::msg::TransformStamped transform;
   try {
-    const auto transform = tf_->lookupTransform(
+    transform = tf_->lookupTransform(
         "map", msg->header.frame_id, rclcpp::Time(msg->header.stamp));
+  } catch (const tf2::TransformException& error) {
+    if (!use_latest_tf_fallback_) {
+      RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "HOCBF scan timestamp TF unavailable: %s", error.what());
+      return;
+    }
+    try {
+      transform = tf_->lookupTransform(
+          "map", msg->header.frame_id, tf2::TimePointZero);
+      RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "HOCBF scan timestamp TF unavailable; using latest TF: %s",
+          error.what());
+    } catch (const tf2::TransformException& fallback_error) {
+      RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000,
+          "HOCBF scan TF unavailable at timestamp and latest: %s",
+          fallback_error.what());
+      return;
+    }
+  }
+
+  try {
     const double yaw = yaw_from_quaternion(transform.transform.rotation);
     std::vector<Circle> detected;
     for (const auto& cluster : clusters) {
@@ -212,9 +238,9 @@ void FormationController6DArtsteinDiscHocbf::scan_cb(
     }
     obstacles_ = std::move(detected);
     last_scan_ = rclcpp::Time(msg->header.stamp);
-  } catch (const tf2::TransformException&) {
+  } catch (const std::exception& error) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
-                         "HOCBF scan TF unavailable");
+                         "HOCBF scan processing failed: %s", error.what());
   }
 }
 
