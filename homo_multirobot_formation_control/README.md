@@ -534,12 +534,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 控制器日志中的 `|v_raw|/|v_clamped|/|v_final|` 分别表示 6D Artstein 核心输出、速度分量限幅后、
 以及轮速/加速度约束后的线速度模长；`YAW_DIAG` 用于判断 yaw 通道是否正在主导轮速缩放或角速度饱和。
 
-### 启动（双 follower，4D 版）
-
-```bash
-ros2 launch homo_multirobot_formation_control formation_two_followers.launch.py
-```
-
 ## 领航者轨迹脚本
 
 本包提供两个领航者开环控制脚本，用于编队测试：
