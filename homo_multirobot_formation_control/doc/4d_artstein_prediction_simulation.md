@@ -86,7 +86,8 @@ measured follower [p, v_real]
 
 ### D. 预测位置 + 伪速度反馈消融
 
-为区分 Artstein 预测位置和预测速度各自的作用，数值脚本额外提供
+为区分 Artstein 预测位置和预测速度各自的作用，专用脚本
+`scripts/sim_4d_hpc_artstein_pseudo_velocity_feedback_compare.py` 提供
 `pseudo_velocity_feedback` 组。该组仍按完整 Artstein 流程构造预测位置 `p_pred`，
 但仅供 HPC 使用的反馈状态改为：
 
@@ -110,9 +111,9 @@ analysis/results/4d_artstein
 
 ```text
 paper_lpc_hpc_distance_square_reproduction.png
-delay_original_vs_artstein_prediction_with_pseudo_velocity_feedback.png
-circle_original_vs_artstein_with_pseudo_velocity_feedback_clean.png
-circle_original_vs_artstein_with_pseudo_velocity_feedback_noise.png
+delay_original_vs_artstein_prediction.png
+circle_original_vs_artstein_clean.png
+circle_original_vs_artstein_noise.png
 summary_metrics.csv
 ```
 

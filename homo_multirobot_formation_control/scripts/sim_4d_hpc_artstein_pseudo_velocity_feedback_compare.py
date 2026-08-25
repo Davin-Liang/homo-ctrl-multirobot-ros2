@@ -288,6 +288,13 @@ def predict_follower_state_from_artstein(z: np.ndarray, vcmd: np.ndarray, tau: f
     return np.r_[p_pred, v_pred]
 
 
+def pseudo_velocity_feedback_state(predicted: np.ndarray, last_cmd: np.ndarray) -> np.ndarray:
+    """Keep Artstein-predicted position but replace predicted velocity by last command."""
+    state = predicted.copy()
+    state[2:4] = last_cmd
+    return state
+
+
 def predict_leader_state(x: np.ndarray, tau: float, Td: float) -> np.ndarray:
     predicted = x.copy()
     predicted[0:2] += x[2:4] * (Td + tau)
@@ -343,10 +350,12 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float)
     cmd_history = deque([x2[2:4].copy() for _ in range(hist_len)], maxlen=hist_len)
     last_cmd = x2[2:4].copy()
 
-    x1_ctrl = predict_leader_state(x1, tau, Td) if kind == "compensated" else x1.copy()
-    if kind == "compensated":
+    x1_ctrl = predict_leader_state(x1, tau, Td) if kind in ("compensated", "pseudo_velocity_feedback") else x1.copy()
+    if kind in ("compensated", "pseudo_velocity_feedback"):
         z2 = x2 + artstein_integral(cmd_history, tau, Td, h)
         x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
+        if kind == "pseudo_velocity_feedback":
+            x2_ctrl = pseudo_velocity_feedback_state(x2_ctrl, last_cmd)
     else:
         x2_ctrl = x2.copy()
     ctrl.init(x1_ctrl, x2_ctrl)
@@ -357,9 +366,11 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float)
         u1 = matlab_leader_accel(t, x1)
         x1 = x1 + h * (A_di @ x1 + B_di @ u1)
 
-        if kind == "compensated":
+        if kind in ("compensated", "pseudo_velocity_feedback"):
             z2 = x2 + artstein_integral(cmd_history, tau, Td, h)
             x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
+            if kind == "pseudo_velocity_feedback":
+                x2_ctrl = pseudo_velocity_feedback_state(x2_ctrl, last_cmd)
             x1_ctrl = predict_leader_state(x1, tau, Td)
         else:
             x1_ctrl = x1.copy()
@@ -397,9 +408,11 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
 
     x1_meas = add_measurement_noise(x1, pos_noise, vel_noise, rng)
     x2_meas = add_measurement_noise(x2, pos_noise, vel_noise, rng)
-    if kind == "compensated":
+    if kind in ("compensated", "pseudo_velocity_feedback"):
         z2 = x2_meas + artstein_integral(cmd_history, tau, Td, h)
         x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
+        if kind == "pseudo_velocity_feedback":
+            x2_ctrl = pseudo_velocity_feedback_state(x2_ctrl, last_cmd)
         x1_ctrl = predict_leader_state(x1_meas, tau, Td)
     else:
         x1_ctrl = x1_meas
@@ -413,9 +426,11 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
         x1_meas = add_measurement_noise(x1, pos_noise, vel_noise, rng)
         x2_meas = add_measurement_noise(x2, pos_noise, vel_noise, rng)
 
-        if kind == "compensated":
+        if kind in ("compensated", "pseudo_velocity_feedback"):
             z2 = x2_meas + artstein_integral(cmd_history, tau, Td, h)
             x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
+            if kind == "pseudo_velocity_feedback":
+                x2_ctrl = pseudo_velocity_feedback_state(x2_ctrl, last_cmd)
             x1_ctrl = predict_leader_state(x1_meas, tau, Td)
         else:
             x1_ctrl = x1_meas
@@ -490,67 +505,81 @@ def plot_paper(rows, out_dir: Path):
     return path
 
 
-def plot_delay_compare(ideal_rows, original_rows, compensated_rows, out_dir: Path):
+def plot_delay_compare(ideal_rows, original_rows, compensated_rows, pseudo_rows, out_dir: Path):
     ti, x1i, x2i, _, _, dist_i = rows_to_arrays(ideal_rows)
     to, _, x2o, cmd_o, err_o, dist_o = rows_to_arrays(original_rows, delayed=True)
     tc, _, x2c, cmd_c, err_c, dist_c = rows_to_arrays(compensated_rows, delayed=True)
+    tp, _, x2p, cmd_p, err_p, dist_p = rows_to_arrays(pseudo_rows, delayed=True)
 
     fig, axs = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
     axs[0, 0].plot(x1i[0], x1i[1], "k--", label="leader")
     axs[0, 0].plot(x2i[0], x2i[1], "0.6", label="ideal 4D HPC")
     axs[0, 0].plot(x2o[0], x2o[1], "tab:red", label="original + delay")
     axs[0, 0].plot(x2c[0], x2c[1], "tab:blue", label="Artstein + prediction")
+    axs[0, 0].plot(x2p[0], x2p[1], "tab:purple", label="predicted position + pseudo velocity")
     axs[0, 0].set(xlabel="x", ylabel="y", title="MATLAB leader trajectory")
     axs[0, 1].plot(ti, dist_i, "0.6", label="ideal 4D HPC")
     axs[0, 1].plot(to, dist_o, "tab:red", label="original + delay")
     axs[0, 1].plot(tc, dist_c, "tab:blue", label="Artstein + prediction")
+    axs[0, 1].plot(tp, dist_p, "tab:purple", label="predicted position + pseudo velocity")
     axs[0, 1].set(xlabel="t (s)", ylabel="selected target error norm", title="formation error")
     axs[1, 0].plot(to, err_o[0], "tab:red", label="orig $e_x$")
     axs[1, 0].plot(to, err_o[1], "tab:orange", label="orig $e_y$")
     axs[1, 0].plot(tc, err_c[0], "tab:blue", label="comp $e_x$")
     axs[1, 0].plot(tc, err_c[1], "tab:cyan", label="comp $e_y$")
+    axs[1, 0].plot(tp, err_p[0], "tab:purple", label="pseudo $e_x$")
+    axs[1, 0].plot(tp, err_p[1], "tab:pink", label="pseudo $e_y$")
     axs[1, 0].set(xlabel="t (s)", ylabel="formation error", title="component error")
     axs[1, 1].plot(to, cmd_o[0], "tab:red", label="orig $v_x^{cmd}$")
     axs[1, 1].plot(to, cmd_o[1], "tab:orange", label="orig $v_y^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[0], "tab:blue", label="comp $v_x^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[1], "tab:cyan", label="comp $v_y^{cmd}$")
+    axs[1, 1].plot(tp, cmd_p[0], "tab:purple", label="pseudo $v_x^{cmd}$")
+    axs[1, 1].plot(tp, cmd_p[1], "tab:pink", label="pseudo $v_y^{cmd}$")
     axs[1, 1].set(xlabel="t (s)", ylabel="cmd_vel (m/s)", title="velocity command")
     for ax in axs.ravel():
         ax.grid(True)
         ax.legend(frameon=False)
-    path = out_dir / "delay_original_vs_artstein_prediction.png"
+    path = out_dir / "delay_original_vs_artstein_prediction_with_pseudo_velocity_feedback.png"
     fig.savefig(path, dpi=180)
     plt.close(fig)
     return path
 
 
-def plot_circle_compare(noise_label: str, original_rows, compensated_rows, out_dir: Path):
+def plot_circle_compare(noise_label: str, original_rows, compensated_rows, pseudo_rows, out_dir: Path):
     to, x1o, x2o, cmd_o, err_o, dist_o = rows_to_arrays(original_rows, delayed=True)
     tc, x1c, x2c, cmd_c, err_c, dist_c = rows_to_arrays(compensated_rows, delayed=True)
+    tp, _, x2p, cmd_p, err_p, dist_p = rows_to_arrays(pseudo_rows, delayed=True)
     fig, axs = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
     axs[0, 0].plot(x1o[0], x1o[1], "k--", label="leader circle")
     axs[0, 0].plot(x2o[0], x2o[1], "tab:red", label="original 4D + delay")
     axs[0, 0].plot(x2c[0], x2c[1], "tab:blue", label="Artstein + prediction")
+    axs[0, 0].plot(x2p[0], x2p[1], "tab:purple", label="predicted position + pseudo velocity")
     axs[0, 0].axis("equal")
     axs[0, 0].set(xlabel="x", ylabel="y", title=f"circle trajectory ({noise_label})")
     axs[0, 1].plot(to, dist_o, "tab:red", label="original 4D + delay")
     axs[0, 1].plot(tc, dist_c, "tab:blue", label="Artstein + prediction")
+    axs[0, 1].plot(tp, dist_p, "tab:purple", label="predicted position + pseudo velocity")
     axs[0, 1].set(xlabel="t (s)", ylabel="selected target error norm", title="formation error")
     axs[1, 0].plot(to, err_o[0], "tab:red", label="orig $e_x$")
     axs[1, 0].plot(to, err_o[1], "tab:orange", label="orig $e_y$")
     axs[1, 0].plot(tc, err_c[0], "tab:blue", label="comp $e_x$")
     axs[1, 0].plot(tc, err_c[1], "tab:cyan", label="comp $e_y$")
+    axs[1, 0].plot(tp, err_p[0], "tab:purple", label="pseudo $e_x$")
+    axs[1, 0].plot(tp, err_p[1], "tab:pink", label="pseudo $e_y$")
     axs[1, 0].set(xlabel="t (s)", ylabel="formation error", title="component error")
     axs[1, 1].plot(to, cmd_o[0], "tab:red", label="orig $v_x^{cmd}$")
     axs[1, 1].plot(to, cmd_o[1], "tab:orange", label="orig $v_y^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[0], "tab:blue", label="comp $v_x^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[1], "tab:cyan", label="comp $v_y^{cmd}$")
+    axs[1, 1].plot(tp, cmd_p[0], "tab:purple", label="pseudo $v_x^{cmd}$")
+    axs[1, 1].plot(tp, cmd_p[1], "tab:pink", label="pseudo $v_y^{cmd}$")
     axs[1, 1].set(xlabel="t (s)", ylabel="cmd_vel (m/s)", title="velocity command")
     for ax in axs.ravel():
         ax.grid(True)
         ax.legend(frameon=False)
     suffix = "noise" if noise_label != "no noise" else "clean"
-    path = out_dir / f"circle_original_vs_artstein_{suffix}.png"
+    path = out_dir / f"circle_original_vs_artstein_with_pseudo_velocity_feedback_{suffix}.png"
     fig.savefig(path, dpi=180)
     plt.close(fig)
     return path
@@ -583,28 +612,35 @@ def main():
     paper_rows = simulate_paper(args.tmax, args.dt)
     delay_orig = simulate_delay_case("original", args.tmax, args.dt, args.tau, args.Td)
     delay_comp = simulate_delay_case("compensated", args.tmax, args.dt, args.tau, args.Td)
+    delay_pseudo = simulate_delay_case("pseudo_velocity_feedback", args.tmax, args.dt, args.tau, args.Td)
 
     circle_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td)
     circle_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td)
+    circle_pseudo = simulate_circle_case("pseudo_velocity_feedback", args.circle_tmax, args.dt, args.tau, args.Td)
     circle_noise_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td,
                                              args.pos_noise, args.vel_noise, seed=11)
     circle_noise_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td,
                                              args.pos_noise, args.vel_noise, seed=11)
+    circle_noise_pseudo = simulate_circle_case("pseudo_velocity_feedback", args.circle_tmax, args.dt, args.tau, args.Td,
+                                                args.pos_noise, args.vel_noise, seed=11)
 
     outputs = [
         plot_paper(paper_rows, out_dir),
-        plot_delay_compare(paper_rows, delay_orig, delay_comp, out_dir),
-        plot_circle_compare("no noise", circle_orig, circle_comp, out_dir),
+        plot_delay_compare(paper_rows, delay_orig, delay_comp, delay_pseudo, out_dir),
+        plot_circle_compare("no noise", circle_orig, circle_comp, circle_pseudo, out_dir),
         plot_circle_compare(f"pos σ={args.pos_noise}m, vel σ={args.vel_noise}m/s",
-                            circle_noise_orig, circle_noise_comp, out_dir),
+                            circle_noise_orig, circle_noise_comp, circle_noise_pseudo, out_dir),
         write_summary(out_dir / "summary_metrics.csv", {
             "ideal_4d_hpc_matlab": paper_rows,
             "matlab_leader_original_delay": delay_orig,
             "matlab_leader_artstein_prediction": delay_comp,
+            "matlab_leader_pseudo_velocity_feedback": delay_pseudo,
             "circle_original_delay_clean": circle_orig,
             "circle_artstein_prediction_clean": circle_comp,
+            "circle_pseudo_velocity_feedback_clean": circle_pseudo,
             "circle_original_delay_noise": circle_noise_orig,
             "circle_artstein_prediction_noise": circle_noise_comp,
+            "circle_pseudo_velocity_feedback_noise": circle_noise_pseudo,
         }),
     ]
     for path in outputs:
