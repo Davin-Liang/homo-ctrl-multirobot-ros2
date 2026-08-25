@@ -308,15 +308,8 @@ z(t)=\exp(-A_aT_d)x_a(t+T_d).
 x_h=[\hat{p}^T,\hat{v}^T]^T.
 ```
 
-上层 HPC 使用该预测状态，并保持原始双积分控制律的计算形式。令 $u_{hpc,k}$ 为第 $k$ 个采样时刻计算出的 HPC 输出，则速度命令积分式中的基准速度为
-
-```math
-v_{\mathrm{base},k}=
-\begin{cases}
-\hat v_k, & \texttt{cmd\_integrator\_base:=pred},\\
-v_{\mathrm{cmd},k}, & \texttt{cmd\_integrator\_base:=cmd}.
-\end{cases}
-```
+上层 HPC 使用该预测状态，并保持原始双积分控制律的计算形式。当前实现固定由预测状态
+上的 HPC 直接生成当前周期的 map 系速度命令；不再提供基于上一帧命令的额外欧拉积分模式。
 
 其连续名义内部模型写为：
 
