@@ -214,3 +214,37 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
 - 严格消融“不使用延迟预测器”时，应同步设置 `transport_delay:=0.0`，必要时 `motor_tau` 也要对应设置。
 - 只比较漂亮轨迹不够，还要看 component error、speed magnitude、`cmd_vel_raw/cmd_vel/odom` 的速度链路图。
 - 20Hz 是贴近实车 STM32 `/odom` 频率的关键约束；高控制频率可能让仿真比实车更理想。
+
+## 9. 固定真实死区下的预测器死区敏感性
+
+为区分“关闭预测器”与“同时关闭真实 plant 死区”，补充进行分离的确定性数值实验。真实 plant 固定为：
+
+```text
+plant transport delay = 0.22 s
+plant first-order tau = 0.43 s
+controller period = 0.05 s (20 Hz)
+plant integration step = 0.01 s
+published-command slew limit = 0.5 m/s^2
+formation radius = 2.0 m
+```
+
+每个速度下只改变控制器预测器的 `Td`：匹配组使用 `Td=0.22 s`，失配组使用 `Td=0 s`；两组真实
+plant 延迟始终保持 0.22 s。Leader 在半径 2 m 的圆轨迹上匀速运动。误差为实际相对位置与所选
+编队偏移的二维范数，表中为 25--45 s 时间窗的均值。
+
+| Leader 速度 | 预测 `Td=0.22 s` | 预测 `Td=0 s` | 相对改善 |
+|---|---:|---:|---:|
+| 0.30 m/s | 0.0495 m | 0.0516 m | 4.1% |
+| 0.35 m/s | 0.0658 m | 0.0697 m | 5.6% |
+| 0.45 m/s | 0.1059 m | 0.1147 m | 7.7% |
+| 0.55 m/s | 0.2590 m | 0.6164 m | 58.0% |
+
+在 0.30--0.45 m/s 的低频圆轨迹中，匹配死区预测的收益只有数毫米到约 1 cm，轨迹图通常难以
+肉眼区分；主要差异表现为较小的二次瞬态峰值。0.55 m/s 时，失配组在约 20 s 后维持约 0.62 m
+的大误差，而匹配组误差仍持续下降，说明 220 ms 死区已成为主导误差来源。该组在 45 s 结束时尚
+未完全稳态，0.2590 m 应视为固定时间窗指标，不应表述为最终稳态误差。
+
+该敏感性实验是简化的 Python 数值模型：未包含 Gazebo 的 TF/EKF 误差、机器人 body yaw、轮速
+分配及离散编队点切换实现细节。因此它用于说明预测器参数失配的趋势，不能替代多次重复的
+Gazebo/实物统计实验。现有 `sim_4d_hpc_artstein_compare.py` 的单一 `--Td` 同时作用于 plant 与
+预测器，不能直接复现本节的“真实死区固定、预测死区失配”对照。
