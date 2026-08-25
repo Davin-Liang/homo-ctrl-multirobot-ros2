@@ -84,6 +84,20 @@ measured follower [p, v_real]
 - 预测层给 HPC 构造更接近未来执行状态的反馈状态 `x_h=[p_pred,v_pred]`。
 - HPC 输出仍按原始 4D double-integrator 解释为加速度/等效力，再积分成速度命令。
 
+### D. 预测位置 + 伪速度反馈消融
+
+为区分 Artstein 预测位置和预测速度各自的作用，数值脚本额外提供
+`pseudo_velocity_feedback` 组。该组仍按完整 Artstein 流程构造预测位置 `p_pred`，
+但仅供 HPC 使用的反馈状态改为：
+
+```math
+x_{\mathrm{fb}}=[p_{\mathrm{pred}}^T,v_{\mathrm{cmd,prev}}^T]^T,
+```
+
+其中，`v_cmd,prev` 是上一周期经速度限幅后的最终 map 系速度命令。真实 plant 不变：
+延迟队列和一阶执行器仍以真实状态速度 `x2[2:4]` 更新。因此，这一组不是理想执行器，
+也不是真实速度反馈；它是刻意检验“将命令速度误作已实现速度”会对 HPC 反馈产生何种影响的消融组。
+
 ## 4. 输出图怎么看
 
 脚本当前输出目录默认是：
@@ -96,9 +110,9 @@ analysis/results/4d_artstein
 
 ```text
 paper_lpc_hpc_distance_square_reproduction.png
-delay_original_vs_artstein_prediction.png
-circle_original_vs_artstein_clean.png
-circle_original_vs_artstein_noise.png
+delay_original_vs_artstein_prediction_with_pseudo_velocity_feedback.png
+circle_original_vs_artstein_with_pseudo_velocity_feedback_clean.png
+circle_original_vs_artstein_with_pseudo_velocity_feedback_noise.png
 summary_metrics.csv
 ```
 
