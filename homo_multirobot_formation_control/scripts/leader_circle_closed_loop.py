@@ -50,13 +50,14 @@ def circle_reference(
     omega: float,
     elapsed: float,
     start_side: str = 'right',
+    phase_offset: float = 0.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Return a circle reference starting at p0's selected horizontal endpoint."""
+    """Return a circle reference with p0 at the selected horizontal endpoint."""
     if start_side not in ('right', 'left'):
         raise ValueError("start_side must be 'right' or 'left'")
 
     initial_phase = 0.0 if start_side == 'right' else math.pi
-    phase = initial_phase + omega * elapsed
+    phase = initial_phase + phase_offset + omega * elapsed
     center = p0 - radius * np.array([
         math.cos(initial_phase), math.sin(initial_phase)])
     position = center + radius * np.array([math.cos(phase), math.sin(phase)])
@@ -263,7 +264,8 @@ class LeaderCircleClosedLoop(Node):
         lookahead = self.td + self.tau_v
         reference_position, reference_velocity = circle_reference(
             self.p0, self.radius, self.speed, self.omega_ref,
-            elapsed + lookahead, self.start_side)
+            elapsed + lookahead, self.start_side,
+            phase_offset=-self.omega_ref * lookahead)
 
         map_command = reference_velocity - self.kp * (
             predicted_position - reference_position) - self.kv * (

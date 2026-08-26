@@ -41,7 +41,7 @@ v_d(t)=\operatorname{sgn}(\omega_d)v[-\sin\phi(t),\cos\phi(t)]^T.
 T_{\mathrm{look}}=T_d+\tau_v.
 ```
 
-节点维护发布后的最终 map 系速度命令历史。采用当前测得 map 系速度 $v^m$、历史命令和一阶执行器模型构造预测状态 $\hat p,\hat v$，与前瞻参考 $p_d(t+T_{\mathrm{look}}),v_d(t+T_{\mathrm{look}})$ 比较：
+节点维护发布后的最终 map 系速度命令历史。为保证第一个前瞻目标仍位于指定的起点，参考相位预先回退 $\omega_dT_{\mathrm{look}}$；因此在 $t=0$ 时，$p_d(t+T_{\mathrm{look}})=p_0$。采用当前测得 map 系速度 $v^m$、历史命令和一阶执行器模型构造预测状态 $\hat p,\hat v$，并与前瞻参考 $p_d(t+T_{\mathrm{look}}),v_d(t+T_{\mathrm{look}})$ 比较：
 
 ```math
 v_{\mathrm{cmd}}^m=
