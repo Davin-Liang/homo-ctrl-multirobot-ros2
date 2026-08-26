@@ -292,6 +292,7 @@ install(DIRECTORY include/
 
 install(PROGRAMS
   scripts/leader_circle.py
+  scripts/leader_circle_closed_loop.py
   scripts/leader_eight.py
   scripts/record_trajectory.py
   scripts/record_velocity_diagnostics.py
