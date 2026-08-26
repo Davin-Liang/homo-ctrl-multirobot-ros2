@@ -49,14 +49,14 @@ def circle_reference(
     speed: float,
     omega: float,
     elapsed: float,
-    start_side: str = 'right',
+    start_side: str = 'top',
     phase_offset: float = 0.0,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Return a circle reference with p0 at the selected horizontal endpoint."""
-    if start_side not in ('right', 'left'):
-        raise ValueError("start_side must be 'right' or 'left'")
+    """Return a circle reference with p0 at the selected vertical endpoint."""
+    if start_side not in ('top', 'bottom'):
+        raise ValueError("start_side must be 'top' or 'bottom'")
 
-    initial_phase = 0.0 if start_side == 'right' else math.pi
+    initial_phase = math.pi / 2.0 if start_side == 'top' else 3.0 * math.pi / 2.0
     phase = initial_phase + phase_offset + omega * elapsed
     center = p0 - radius * np.array([
         math.cos(initial_phase), math.sin(initial_phase)])
@@ -147,7 +147,7 @@ class LeaderCircleClosedLoop(Node):
         self.declare_parameter('speed', 0.2)
         self.declare_parameter('heading', 0.0)
         self.declare_parameter('direction', 'ccw')
-        self.declare_parameter('start_side', 'right')
+        self.declare_parameter('start_side', 'top')
         self.declare_parameter('rate', 20.0)
         self.declare_parameter('odom_topic', 'odometry/filtered')
         self.declare_parameter('Td', 0.22)
@@ -183,8 +183,8 @@ class LeaderCircleClosedLoop(Node):
             raise ValueError('radius and rate must be positive; speed must be non-negative')
         if self.td < 0.0 or self.tau_v <= 0.0:
             raise ValueError('Td must be non-negative and tau_v must be positive')
-        if self.start_side not in ('right', 'left'):
-            raise ValueError("start_side must be 'right' or 'left'")
+        if self.start_side not in ('top', 'bottom'):
+            raise ValueError("start_side must be 'top' or 'bottom'")
 
         direction_sign = 1.0 if self.direction == 'ccw' else -1.0
         if self.direction not in ('ccw', 'cw'):
