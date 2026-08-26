@@ -12,6 +12,7 @@
 - 参考轨迹坐标与 odometry 消息的 `header.frame_id` 相同；节点不混用 `map` 与 `odom`。
 - `heading` 表示固定目标 yaw，单位为度。
 - `start_side` 指定第一帧 odometry 位姿作为圆最上端（`top`）或最下端（`bottom`）。
+- launch 文件 `leader_circle_closed_loop_with_delay.launch.py` 同时启动闭环 Leader 和 `sim_motor_delay.py`，形成 `cmd_vel_raw → cmd_vel` 延迟链路。
 
 ## 参考轨迹
 
