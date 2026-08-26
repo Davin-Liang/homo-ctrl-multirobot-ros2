@@ -11,26 +11,27 @@
 - 输出：同一命名空间下的 `cmd_vel`。
 - 参考轨迹坐标与 odometry 消息的 `header.frame_id` 相同；节点不混用 `map` 与 `odom`。
 - `heading` 表示固定目标 yaw，单位为度。
+- `start_side` 指定第一帧 odometry 位姿作为圆最右端（`right`）或最左端（`left`）。
 
 ## 参考轨迹
 
-收到第一帧有效 odometry 时记录 $p_0$，令圆心：
+收到第一帧有效 odometry 时记录 $p_0$。令初始相位 $\phi_0=0$ 对应 `right`，$\phi_0=\pi$ 对应 `left`，圆心为：
 
 ```math
-c=p_0+[-R,0]^T.
+c=p_0-R[\cos\phi_0,\sin\phi_0]^T.
 ```
 
-取 $\omega_d=\pm v/R$、$\phi(t)=\omega_dt$，则：
+取 $\omega_d=\pm v/R$、$\phi(t)=\phi_0+\omega_dt$，则：
 
 ```math
 p_d(t)=c+R[\cos\phi(t),\sin\phi(t)]^T,
 ```
 
 ```math
-v_d(t)=v[-\sin\phi(t),\cos\phi(t)]^T.
+v_d(t)=\operatorname{sgn}(\omega_d)v[-\sin\phi(t),\cos\phi(t)]^T.
 ```
 
-参考轨迹从 $p_0$ 连续起步，初始切向速度沿正/负 y 方向。
+参考轨迹从 $p_0$ 连续起步；起始切向方向由 `direction` 与 `start_side` 共同确定。
 
 ## 延迟感知外环
 
@@ -76,6 +77,7 @@ v_{\mathrm{cmd}}^b=R(-\theta)v_{\mathrm{cmd}}^m.
 | `speed` | 0.2 m/s | 切向参考速度 |
 | `heading` | 0.0 deg | 固定目标航向 |
 | `direction` | `ccw` | 圆周方向 |
+| `start_side` | `right` | `right`=圆最右端，`left`=圆最左端 |
 | `rate` | 20 Hz | 控制频率 |
 | `odom_topic` | `odometry/filtered` | 反馈里程计话题 |
 | `Td` | 0.22 s | 等效纯输入死区 |

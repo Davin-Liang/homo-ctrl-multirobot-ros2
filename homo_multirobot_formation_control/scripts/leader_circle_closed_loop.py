@@ -49,12 +49,20 @@ def circle_reference(
     speed: float,
     omega: float,
     elapsed: float,
+    start_side: str = 'right',
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Return map-frame position and tangent velocity of a circle from p0."""
-    phase = omega * elapsed
-    center = p0 + np.array([-radius, 0.0])
+    """Return a circle reference starting at p0's selected horizontal endpoint."""
+    if start_side not in ('right', 'left'):
+        raise ValueError("start_side must be 'right' or 'left'")
+
+    initial_phase = 0.0 if start_side == 'right' else math.pi
+    phase = initial_phase + omega * elapsed
+    center = p0 - radius * np.array([
+        math.cos(initial_phase), math.sin(initial_phase)])
     position = center + radius * np.array([math.cos(phase), math.sin(phase)])
-    velocity = speed * np.array([-math.sin(phase), math.cos(phase)])
+    direction_sign = 1.0 if omega >= 0.0 else -1.0
+    velocity = direction_sign * speed * np.array([
+        -math.sin(phase), math.cos(phase)])
     return position, velocity
 
 
@@ -138,6 +146,7 @@ class LeaderCircleClosedLoop(Node):
         self.declare_parameter('speed', 0.2)
         self.declare_parameter('heading', 0.0)
         self.declare_parameter('direction', 'ccw')
+        self.declare_parameter('start_side', 'right')
         self.declare_parameter('rate', 20.0)
         self.declare_parameter('odom_topic', 'odometry/filtered')
         self.declare_parameter('Td', 0.22)
@@ -154,6 +163,7 @@ class LeaderCircleClosedLoop(Node):
         self.speed = float(self.get_parameter('speed').value)
         self.heading = math.radians(float(self.get_parameter('heading').value))
         self.direction = str(self.get_parameter('direction').value)
+        self.start_side = str(self.get_parameter('start_side').value)
         self.rate = float(self.get_parameter('rate').value)
         self.td = float(self.get_parameter('Td').value)
         self.tau_v = float(self.get_parameter('tau_v').value)
@@ -172,6 +182,8 @@ class LeaderCircleClosedLoop(Node):
             raise ValueError('radius and rate must be positive; speed must be non-negative')
         if self.td < 0.0 or self.tau_v <= 0.0:
             raise ValueError('Td must be non-negative and tau_v must be positive')
+        if self.start_side not in ('right', 'left'):
+            raise ValueError("start_side must be 'right' or 'left'")
 
         direction_sign = 1.0 if self.direction == 'ccw' else -1.0
         if self.direction not in ('ccw', 'cw'):
@@ -202,6 +214,7 @@ class LeaderCircleClosedLoop(Node):
             f'R={self.radius:.2f} m v={self.speed:.2f} m/s '
             f'omega={self.omega_ref:.3f} rad/s heading='
             f'{math.degrees(self.heading):.1f} deg '
+            f'start_side={self.start_side} '
             f'Td={self.td:.2f} s tau_v={self.tau_v:.2f} s')
 
     def now_seconds(self) -> float:
@@ -250,7 +263,7 @@ class LeaderCircleClosedLoop(Node):
         lookahead = self.td + self.tau_v
         reference_position, reference_velocity = circle_reference(
             self.p0, self.radius, self.speed, self.omega_ref,
-            elapsed + lookahead)
+            elapsed + lookahead, self.start_side)
 
         map_command = reference_velocity - self.kp * (
             predicted_position - reference_position) - self.kv * (
