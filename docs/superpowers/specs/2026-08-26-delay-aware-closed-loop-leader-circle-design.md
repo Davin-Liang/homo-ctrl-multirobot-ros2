@@ -9,14 +9,15 @@
 - 新节点：`leader_circle_closed_loop.py`。
 - 输入：同一命名空间下的 `odometry/filtered`，默认相对话题名为 `odometry/filtered`。
 - 输出：同一命名空间下的 `cmd_vel`。
-- 参考轨迹坐标与 odometry 消息的 `header.frame_id` 相同；节点不混用 `map` 与 `odom`。
+- 节点查询 `map → <robot>_odom` TF，将 odometry pose、body twist 和 yaw 转换到 `map_frame`；TF 不可用时保持零命令。
+- 圆轨迹、预测状态和反馈误差统一在 `map_frame`（默认 `map`）中计算。
 - `heading` 表示固定目标 yaw，单位为度。
 - `start_side` 指定第一帧 odometry 位姿作为圆最上端（`top`）或最下端（`bottom`）。
 - launch 文件 `leader_circle_closed_loop_with_delay.launch.py` 同时启动闭环 Leader 和 `sim_motor_delay.py`，形成 `cmd_vel_raw → cmd_vel` 延迟链路。
 
 ## 参考轨迹
 
-收到第一帧有效 odometry 时记录 $p_0$。令初始相位 $\phi_0=\pi/2$ 对应 `top`，$\phi_0=3\pi/2$ 对应 `bottom`，圆心为：
+收到第一帧经 TF 转换后的有效 map 位姿时记录 $p_0^m$。令初始相位 $\phi_0=\pi/2$ 对应 `top`，$\phi_0=3\pi/2$ 对应 `bottom`，圆心为：
 
 ```math
 c=p_0-R[\cos\phi_0,\sin\phi_0]^T.

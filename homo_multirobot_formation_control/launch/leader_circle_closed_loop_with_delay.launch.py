@@ -32,6 +32,7 @@ def generate_launch_description():
             'start_side': LaunchConfiguration('start_side'),
             'rate': LaunchConfiguration('rate'),
             'odom_topic': LaunchConfiguration('odom_topic'),
+            'map_frame': LaunchConfiguration('map_frame'),
             'Td': LaunchConfiguration('Td'),
             'tau_v': LaunchConfiguration('tau_v'),
             'kp': LaunchConfiguration('kp'),
@@ -81,6 +82,9 @@ def generate_launch_description():
             description='Circle start endpoint: top or bottom'),
         DeclareLaunchArgument('rate', default_value='20.0'),
         DeclareLaunchArgument('odom_topic', default_value='odometry/filtered'),
+        DeclareLaunchArgument(
+            'map_frame', default_value='map',
+            description='Global frame used for the closed-loop circle reference'),
         DeclareLaunchArgument(
             'Td', default_value='0.22',
             description='Leader predictor pure input dead time (s)'),
