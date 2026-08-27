@@ -588,9 +588,10 @@ ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/
 
 ### leader_circle_closed_loop — 延迟感知闭环圆轨迹
 
-该节点以 `odometry/filtered` 为反馈，在其第一帧有效位姿处开始生成圆轨迹。它使用
-`Td + tau_v` 前瞻参考、已发布速度命令历史与一阶速度响应预测抑制底盘延迟引起的相位滞后；
-`heading` 为固定目标航向，节点使用实际测得 yaw 进行 map/body 速度转换和 yaw 闭环。
+该节点以 `odometry/filtered` 为反馈，并通过纯定位发布的 `map → <robot>_odom` TF
+将状态转换到 map 后闭环；第一帧有效 map 位姿用于锁定圆心。它使用 `Td + tau_v` 前瞻参考、
+已发布速度命令历史与一阶速度响应预测抑制底盘延迟引起的相位滞后；`heading` 为固定目标航向，
+节点使用 map 系实际 yaw 进行 map/body 速度转换和 yaw 闭环。
 `start_side` 指定第一帧 odometry 位姿在参考圆上的竖直起点：最上端或最下端。节点会补偿
 `Td + tau_v` 前瞻带来的初始相位偏移，因此第一个闭环目标也位于所选端点。
 
@@ -610,6 +611,7 @@ ros2 run homo_multirobot_formation_control leader_circle_closed_loop.py \
 | `direction` | `ccw` | `ccw`=逆时针，`cw`=顺时针 |
 | `start_side` | `top` | `top`=从圆最上端起步，`bottom`=从圆最下端起步 |
 | `odom_topic` | `odometry/filtered` | 相对反馈里程计话题 |
+| `map_frame` | `map` | 闭环参考与圆心锁定使用的全局坐标系 |
 | `Td` | 0.22 | 等效纯输入死区 (s) |
 | `tau_v` | 0.43 | 等效平移速度响应时间常数 (s) |
 | `kp` / `kv` | 0.8 / 0.2 | map 系位置/速度反馈增益 |
@@ -617,7 +619,7 @@ ros2 run homo_multirobot_formation_control leader_circle_closed_loop.py \
 | `max_linear_vel` | 0.4 | map 系线速度模长上限 (m/s) |
 | `max_linear_accel` | 0.25 | map 系速度变化率上限 (m/s²) |
 
-> 参考轨迹与 `odometry/filtered` 必须在同一坐标系内；该节点不做 `map` 与 `odom` 的 TF 变换。
+> 节点要求纯定位/AMCL/slam_toolbox 提供 `map → <robot>_odom` TF；该 TF 不可用时节点保持零命令等待定位。
 > 实物首次测试建议使用默认的低速、大半径参数，并记录实际轨迹和 yaw 误差后再提高速度。
 
 使用 Gazebo 延迟仿真时，可由以下 launch 一次启动闭环 Leader 与延迟节点：
