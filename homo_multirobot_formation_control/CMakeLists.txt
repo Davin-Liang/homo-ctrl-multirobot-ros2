@@ -102,6 +102,9 @@ install(TARGETS formation_control_node_4d_artstein
   DESTINATION lib/${PROJECT_NAME}
 )
 
+# ---- 以下目标暂不编译，降低实物 ARM 的内存占用；需要时改为 if(TRUE)。--------
+if(FALSE)
+
 # ---- 4D Artstein-LQR 对照控制器（同一预测层 + DARE-LQR）------------------
 add_executable(formation_control_node_4d_artstein_lqr
   src/main_4d_artstein_lqr.cpp
@@ -170,6 +173,8 @@ target_include_directories(formation_control_node_6d_artstein_disc_hocbf PUBLIC
 ament_target_dependencies(formation_control_node_6d_artstein_disc_hocbf rclcpp geometry_msgs nav_msgs sensor_msgs tf2 tf2_ros tf2_geometry_msgs)
 target_link_libraries(formation_control_node_6d_artstein_disc_hocbf Eigen3::Eigen)
 install(TARGETS formation_control_node_6d_artstein_disc_hocbf DESTINATION lib/${PROJECT_NAME})
+
+endif()
 
 # ---- 4D 杩炵画杈圭晫鎶曞奖鎺у埗鍣?----------------------------------------------------
 # add_executable(formation_control_node_4d_cont
