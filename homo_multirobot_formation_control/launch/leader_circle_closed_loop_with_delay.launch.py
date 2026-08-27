@@ -2,13 +2,19 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
     namespace = LaunchConfiguration('namespace')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    use_motor_delay = LaunchConfiguration('use_motor_delay')
+    cmd_output_topic = PythonExpression([
+        "'cmd_vel_raw' if '", use_motor_delay,
+        "' == 'true' else 'cmd_vel'",
+    ])
 
     leader_node = Node(
         package='homo_multirobot_formation_control',
@@ -16,7 +22,7 @@ def generate_launch_description():
         name='leader_circle_closed_loop',
         namespace=namespace,
         output='screen',
-        remappings=[('cmd_vel', 'cmd_vel_raw')],
+        remappings=[('cmd_vel', cmd_output_topic)],
         parameters=[{
             'use_sim_time': use_sim_time,
             'radius': LaunchConfiguration('radius'),
@@ -44,6 +50,7 @@ def generate_launch_description():
         name='sim_motor_delay',
         namespace=namespace,
         output='screen',
+        condition=IfCondition(use_motor_delay),
         parameters=[{
             'use_sim_time': use_sim_time,
             'input_topic': 'cmd_vel_raw',
@@ -62,6 +69,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_time', default_value='true',
             description='Use simulation clock'),
+        DeclareLaunchArgument(
+            'use_motor_delay', default_value='true',
+            description='Inject sim_motor_delay between cmd_vel_raw and cmd_vel'),
         DeclareLaunchArgument('radius', default_value='2.0'),
         DeclareLaunchArgument('speed', default_value='0.2'),
         DeclareLaunchArgument('heading', default_value='0.0'),
