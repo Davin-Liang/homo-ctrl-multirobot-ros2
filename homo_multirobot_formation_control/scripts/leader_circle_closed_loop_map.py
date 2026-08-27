@@ -17,6 +17,7 @@ import rclpy
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+import tf2_ros
 
 
 def wrap_angle(angle: float) -> float:
@@ -41,6 +42,21 @@ def map_to_body(vector: np.ndarray, yaw: float) -> np.ndarray:
     s = math.sin(yaw)
     return np.array([c * vector[0] + s * vector[1],
                      -s * vector[0] + c * vector[1]])
+
+
+def odom_state_to_map(
+    position_odom: np.ndarray,
+    yaw_odom: float,
+    velocity_body: np.ndarray,
+    map_translation: np.ndarray,
+    map_to_odom_yaw: float,
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    """Transform a planar odometry pose and body twist into the map frame."""
+    position_map = map_translation + body_to_map(
+        position_odom, map_to_odom_yaw)
+    yaw_map = wrap_angle(map_to_odom_yaw + yaw_odom)
+    velocity_map = body_to_map(velocity_body, yaw_map)
+    return position_map, velocity_map, yaw_map
 
 
 def circle_reference(
@@ -141,7 +157,7 @@ def limit_delta(
 
 class LeaderCircleClosedLoop(Node):
     def __init__(self) -> None:
-        super().__init__('leader_circle_closed_loop')
+        super().__init__('leader_circle_closed_loop_map')
 
         self.declare_parameter('radius', 2.0)
         self.declare_parameter('speed', 0.2)
@@ -150,6 +166,7 @@ class LeaderCircleClosedLoop(Node):
         self.declare_parameter('start_side', 'top')
         self.declare_parameter('rate', 20.0)
         self.declare_parameter('odom_topic', 'odometry/filtered')
+        self.declare_parameter('map_frame', 'map')
         self.declare_parameter('Td', 0.22)
         self.declare_parameter('tau_v', 0.43)
         self.declare_parameter('kp', 0.8)
@@ -166,6 +183,7 @@ class LeaderCircleClosedLoop(Node):
         self.direction = str(self.get_parameter('direction').value)
         self.start_side = str(self.get_parameter('start_side').value)
         self.rate = float(self.get_parameter('rate').value)
+        self.map_frame = str(self.get_parameter('map_frame').value)
         self.td = float(self.get_parameter('Td').value)
         self.tau_v = float(self.get_parameter('tau_v').value)
         self.kp = float(self.get_parameter('kp').value)
@@ -201,10 +219,14 @@ class LeaderCircleClosedLoop(Node):
         self.p0: np.ndarray | None = None
         self.start_time: float | None = None
         self.frame_id = ''
+        self.localization_valid = False
+        self.tf_warning_emitted = False
         self.last_command_map = np.zeros(2)
         self.last_omega_command = 0.0
 
         self.publisher = self.create_publisher(Twist, 'cmd_vel', 10)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         odom_topic = str(self.get_parameter('odom_topic').value)
         self.subscription = self.create_subscription(
             Odometry, odom_topic, self.odom_callback, 10)
@@ -216,6 +238,7 @@ class LeaderCircleClosedLoop(Node):
             f'omega={self.omega_ref:.3f} rad/s heading='
             f'{math.degrees(self.heading):.1f} deg '
             f'start_side={self.start_side} '
+            f'map_frame={self.map_frame} '
             f'Td={self.td:.2f} s tau_v={self.tau_v:.2f} s')
 
     def now_seconds(self) -> float:
@@ -223,28 +246,53 @@ class LeaderCircleClosedLoop(Node):
 
     def odom_callback(self, message: Odometry) -> None:
         orientation = message.pose.pose.orientation
-        yaw = yaw_from_quaternion(
+        yaw_odom = yaw_from_quaternion(
             orientation.x, orientation.y, orientation.z, orientation.w)
         body_velocity = np.array([
             message.twist.twist.linear.x,
             message.twist.twist.linear.y,
         ])
-        self.position = np.array([
+        position_odom = np.array([
             message.pose.pose.position.x,
             message.pose.pose.position.y,
         ])
-        self.velocity_map = body_to_map(body_velocity, yaw)
-        self.yaw = yaw
+        odom_frame = message.header.frame_id
+
+        try:
+            if odom_frame == self.map_frame:
+                map_translation = np.zeros(2)
+                map_to_odom_yaw = 0.0
+            else:
+                transform = self.tf_buffer.lookup_transform(
+                    self.map_frame, odom_frame, rclpy.time.Time())
+                translation = transform.transform.translation
+                rotation = transform.transform.rotation
+                map_translation = np.array([translation.x, translation.y])
+                map_to_odom_yaw = yaw_from_quaternion(
+                    rotation.x, rotation.y, rotation.z, rotation.w)
+        except tf2_ros.TransformException as error:
+            self.localization_valid = False
+            if not self.tf_warning_emitted:
+                self.get_logger().warn(
+                    f'waiting for {self.map_frame} -> {odom_frame} TF: {error}')
+                self.tf_warning_emitted = True
+            return
+
+        self.position, self.velocity_map, self.yaw = odom_state_to_map(
+            position_odom, yaw_odom, body_velocity, map_translation,
+            map_to_odom_yaw)
+        self.localization_valid = True
+        self.tf_warning_emitted = False
 
         if self.p0 is None:
             self.p0 = self.position.copy()
             self.start_time = self.now_seconds()
-            self.frame_id = message.header.frame_id
+            self.frame_id = self.map_frame
             self.command_history.extend(
                 [self.velocity_map.copy()] * self.command_history.maxlen)
             self.last_command_map = self.velocity_map.copy()
             self.get_logger().info(
-                f'reference initialized in frame {self.frame_id!r} at '
+                f'map reference initialized in frame {self.frame_id!r} at '
                 f'({self.p0[0]:.3f}, {self.p0[1]:.3f})')
 
     def publish_zero(self) -> None:
@@ -253,7 +301,7 @@ class LeaderCircleClosedLoop(Node):
     def timer_callback(self) -> None:
         if (self.position is None or self.velocity_map is None or
                 self.yaw is None or self.p0 is None or
-                self.start_time is None):
+                self.start_time is None or not self.localization_valid):
             self.publish_zero()
             return
 
@@ -313,3 +361,4 @@ def main(args=None) -> None:
 
 if __name__ == '__main__':
     main()
+
