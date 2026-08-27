@@ -29,18 +29,18 @@
 
 ## 控制器版本
 
-| 版本 | Launch 文件 | 可执行文件 | 状态模型 | 编队策略 | yaw 控制 |
-|------|------------|-----------|---------|---------|---------|
-| **4D (原版)** | `formation_single_follower.launch.py` | `formation_control_node` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系) | 离散多边形 + tol 切换 | 独立 P+前馈 |
-| **4D Artstein (预测补偿)** | `formation_single_follower_4d_artstein.launch.py` | `formation_control_node_4d_artstein` | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换 | 独立 P+前馈 |
-| **4D Artstein-LQR (对照组)** | `formation_single_follower_4d_artstein_lqr.launch.py` | `formation_control_node_4d_artstein_lqr` | 同 4D Artstein，预测补偿后进入 4D DARE-LQR | 离散多边形 + tol 切换 | 独立 P+前馈 |
-| **4D Cont (连续边界投影)** | `formation_single_follower_4d_cont.launch.py` | `formation_control_node_4d_cont` | 同 4D | 连续边界投影（无 tol/m_p） | 独立 P+前馈 |
-| **6D (运动学, 边界投影)** | `formation_single_follower_6d.launch.py` | `formation_control_node_6d` | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]` | 连续边界投影 | 集成于 6D 主回路 |
-| **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py` | `formation_control_node_6d_disc` | 同 6D | 离散多边形 + tol 切换 | 集成于 6D 主回路 |
-| **6D Artstein Disc (预测补偿)** | `formation_single_follower_6d_artstein_disc.launch.py` | `formation_control_node_6d_artstein_disc` | 同 6D，进入 HPC 前做平移/yaw 预测 | 离散多边形 + tol 切换 | 2D Artstein 预测后集成于 6D 主回路 |
-| **6D Artstein Disc + HOCBF** | `formation_single_follower_6d_artstein_disc_hocbf.launch.py` | `formation_control_node_6d_artstein_disc_hocbf` | 同 6D Artstein Disc；预测 map 平移状态进入多圆柱 HOCBF-QP | 离散多边形 + 局部切向通行偏置 | 保留 Artstein yaw 输出 |
-| **6D Motor (电机感知模型)** | `formation_single_follower_6d_motor.launch.py` | `formation_control_node_6d_motor` | `[p_x,p_y,v_x^c,v_y^c,v_x^r,v_y^r]` (map 系, cmd/real 拆分) | 离散多边形 + tol 切换 | 独立 P+前馈 |
-| **6D+OA (运动学+避障)** | `formation_single_follower_6d_oa.launch.py` | `formation_control_node_6d_oa` | 同 6D | 同 6D | 同 6D |
+| 版本                                   | Launch 文件                                                    | 可执行文件                                        | 状态模型                                                           | 编队策略                      | yaw 控制                           |
+| -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------- | ---------------------------------- |
+| **4D (原版)**                    | `formation_single_follower.launch.py`                        | `formation_control_node`                        | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)                            | 离散多边形 + tol 切换         | 独立 P+前馈                        |
+| **4D Artstein (预测补偿)**       | `formation_single_follower_4d_artstein.launch.py`            | `formation_control_node_4d_artstein`            | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换         | 独立 P+前馈                        |
+| **4D Artstein-LQR (对照组)**     | `formation_single_follower_4d_artstein_lqr.launch.py`        | `formation_control_node_4d_artstein_lqr`        | 同 4D Artstein，预测补偿后进入 4D DARE-LQR                         | 离散多边形 + tol 切换         | 独立 P+前馈                        |
+| **4D Cont (连续边界投影)**       | `formation_single_follower_4d_cont.launch.py`                | `formation_control_node_4d_cont`                | 同 4D                                                              | 连续边界投影（无 tol/m_p）    | 独立 P+前馈                        |
+| **6D (运动学, 边界投影)**        | `formation_single_follower_6d.launch.py`                     | `formation_control_node_6d`                     | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]`                             | 连续边界投影                  | 集成于 6D 主回路                   |
+| **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py`                | `formation_control_node_6d_disc`                | 同 6D                                                              | 离散多边形 + tol 切换         | 集成于 6D 主回路                   |
+| **6D Artstein Disc (预测补偿)**  | `formation_single_follower_6d_artstein_disc.launch.py`       | `formation_control_node_6d_artstein_disc`       | 同 6D，进入 HPC 前做平移/yaw 预测                                  | 离散多边形 + tol 切换         | 2D Artstein 预测后集成于 6D 主回路 |
+| **6D Artstein Disc + HOCBF**     | `formation_single_follower_6d_artstein_disc_hocbf.launch.py` | `formation_control_node_6d_artstein_disc_hocbf` | 同 6D Artstein Disc；预测 map 平移状态进入多圆柱 HOCBF-QP          | 离散多边形 + 局部切向通行偏置 | 保留 Artstein yaw 输出             |
+| **6D Motor (电机感知模型)**      | `formation_single_follower_6d_motor.launch.py`               | `formation_control_node_6d_motor`               | `[p_x,p_y,v_x^c,v_y^c,v_x^r,v_y^r]` (map 系, cmd/real 拆分)      | 离散多边形 + tol 切换         | 独立 P+前馈                        |
+| **6D+OA (运动学+避障)**          | `formation_single_follower_6d_oa.launch.py`                  | `formation_control_node_6d_oa`                  | 同 6D                                                              | 同 6D                         | 同 6D                              |
 
 **4D Artstein-LQR 对照** 复用同一预测补偿层，只把上层控制律替换为基于 DARE 的离散 LQR；
 可用于 ROS/Gazebo 对照实验，数值仿真说明见 `doc/4d_artstein_lqr_simulation.md`。
@@ -60,6 +60,7 @@
 
 **6D Artstein Disc** 是方向 A 的 6D 延迟补偿实现。它不把 `R(theta)` 引入一个全局常值 6x3 Artstein kernel，
 而是在进入 6D Disc HPC 前分别做：
+
 - map 系平移通道 4D Artstein 预测；
 - yaw 通道 2D Artstein 预测；
 - 预测后的 map 速度再按预测 yaw 转回 body 系，组成 `[p_x,p_y,theta,v_x^b,v_y^b,omega]`。
@@ -112,10 +113,12 @@ ros2 launch homo_multirobot_formation_control \
 
 约束和齐次控制基础模块：
 三套控制器共享以下模块（不修改原 4D/6D 代码）：
+
 - `kinematic_constraint.hpp` — 全向轮轮速/加速度约束
 - `types_nd.hpp`, `hnorm_nd.hpp`, `lpc2hpc_nd.hpp` — N-D 泛化齐次控制工具库
 
 论文写作与课题规划参考：
+
 - `doc/thesis_structure_recommendation.md` — 硕士论文推荐章节结构、参考文献、创新性定位、算法对比矩阵和风险表述。
 
 ## 算法原理 (4D)
@@ -174,6 +177,7 @@ Leader 侧按当前 body twist 做常 twist 外推到 `Td + tau`，用于和预�
 Gazebo 或实物中如果 `max_linear_vel/max_angular_vel/max_linear_accel/max_angular_accel` 设得过低，轨迹误差会主要由物理约束决定。
 `delay_max_accel` 只作用于 `sim_motor_delay.py` 延迟注入节点，不是控制器侧加速度上限；控制器侧上限必须单独设置 `max_linear_accel/max_angular_accel`。
 当前控制器和延迟注入节点的限幅均为分量限幅，不是二维速度/加速度模长限幅。
+
 ## 算法原理 (6D)
 
 详细的数学推导见 `doc/kinematic_homogeneous_control.md`。核心要点：
@@ -226,15 +230,20 @@ HPC 期望力 → 坐标系旋转 → 前向欧拉积分 → 候选速度 v_hpc
 
 决策变量 $v = [v_x, v_y, \omega] \in \mathbb{R}^3$（车体系速度指令）：
 
-$$\min_v \quad \|v - v_{\text{hpc}}\|^2 + \sum_i w_i \cdot \phi_{\text{smooth}}(v \cdot n_i - v_{\text{safe},i})^2$$
+$$
+\min_v \quad \|v - v_{\text{hpc}}\|^2 + \sum_i w_i \cdot \phi_{\text{smooth}}(v \cdot n_i - v_{\text{safe},i})^2
+$$
 
-$$\text{s.t.} \quad v_{\min} \le v \le v_{\max}, \quad |v - v_{\text{prev}}| \le a_{\max} \cdot dt$$
+$$
+\text{s.t.} \quad v_{\min} \le v \le v_{\max}, \quad |v - v_{\text{prev}}| \le a_{\max} \cdot dt
+$$
 
 其中 $\phi_{\text{smooth}}(x) = \frac{1}{2}(x + \sqrt{x^2 + \varepsilon^2})$ 为光滑 max(0,x) 近似，
 $n_i$ 为机器人指向障碍物表面的单位向量，
 $w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
 
 安全速度 $v_{\text{safe},i}$：
+
 - 障碍物在安全距离外：$v_{\text{safe}} = \max(0, \text{clearance}/T)$，限制靠近速度
 - 进入安全距离内：$v_{\text{safe}} < 0$（负值），要求机器人主动后退
 
@@ -242,15 +251,15 @@ $w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
 
 ### 避障参数（launch 可改）
 
-| 参数 | 类型 | 默认值 | 作用 |
-|------|------|--------|------|
-| `scan_topic` | string | `scan` | 激光雷达话题（相对 follower 命名空间） |
-| `safety_distance` | double | 0.5 | 安全距离阈值 (m)，进入该范围触发后退 |
-| `obstacle_weight` | double | 1.0 | 避障代价权重，越大越保守 |
-| `time_horizon` | double | 0.5 | 碰撞预测时域 (s) |
-| `max_obstacles` | int | 10 | 最大考虑障碍物数量 |
-| `cluster_tolerance` | double | 0.1 | 聚类距离阈值 (m) |
-| `min_cluster_size` | int | 5 | 聚类最少点数 |
+| 参数                  | 类型   | 默认值   | 作用                                   |
+| --------------------- | ------ | -------- | -------------------------------------- |
+| `scan_topic`        | string | `scan` | 激光雷达话题（相对 follower 命名空间） |
+| `safety_distance`   | double | 0.5      | 安全距离阈值 (m)，进入该范围触发后退   |
+| `obstacle_weight`   | double | 1.0      | 避障代价权重，越大越保守               |
+| `time_horizon`      | double | 0.5      | 碰撞预测时域 (s)                       |
+| `max_obstacles`     | int    | 10       | 最大考虑障碍物数量                     |
+| `cluster_tolerance` | double | 0.1      | 聚类距离阈值 (m)                       |
+| `min_cluster_size`  | int    | 5        | 聚类最少点数                           |
 
 ### 已知局限
 
@@ -261,12 +270,12 @@ $w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
 
 本包通过以下通道获取机器人状态：
 
-| 数据 | 来源 | 4D 坐标系 | 6D 坐标系 |
-|------|------|----------|----------|
-| 位置 | TF `map → <prefix>_base_footprint` | map | map |
-| 偏航角 | TF `map → <prefix>_base_footprint` 旋转 | map | map |
-| 线速度 | EKF `odometry/filtered` | 旋转到 map | 车体系（不旋转） |
-| 角速度 | EKF `odometry/filtered` | body | body |
+| 数据   | 来源                                       | 4D 坐标系  | 6D 坐标系        |
+| ------ | ------------------------------------------ | ---------- | ---------------- |
+| 位置   | TF `map → <prefix>_base_footprint`      | map        | map              |
+| 偏航角 | TF `map → <prefix>_base_footprint` 旋转 | map        | map              |
+| 线速度 | EKF `odometry/filtered`                  | 旋转到 map | 车体系（不旋转） |
+| 角速度 | EKF `odometry/filtered`                  | body       | body             |
 
 > 6D 版本中车体系速度直接取自 EKF 消息 `twist.twist.linear.x/y`，不做旋转，
 > 消除了 4D 版本中 map 系速度与 `cmd_vel` 车体系语义不匹配的问题。
@@ -275,17 +284,17 @@ $w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
 
 ### 4D 控制器模型参数（launch 可改）
 
-| 参数 | 类型 | 默认值 | 作用 | 调大效果 | 调小效果 |
-|------|------|--------|------|----------|----------|
-| `mass` | double | 2.0 | 双重积分器模型的等效质量 | 增益增大，响应更快 | 增益减小，响应更慢 |
-| `omega_d` | double | 0.7 | 期望阻尼带宽，决定最小收敛速度 | 响应更快但可能震荡 | 更平滑但跟踪滞后 |
-| `m_p` | int | 4 | 安全编队点数量 | 更多编队位置可选 | 编队选择少 |
-| `radius` | double | 2.0 | 编队圆半径 (m) | 跟随距离增大 | 跟随更近 |
-| `tol` | double | 0.1 | 编队点切换容差 (m) | 不易频繁切换 | 切换更灵敏 |
-| `hpc_c_min` | double | 0.1 | HPC 齐次范数下界 | 减弱近目标区域的 warp 放大 | 增强齐次变形，可能放大噪声 |
-| `initial_min_lambda` | double | 1.0 | 初始反馈极点尺度下界 | 初始响应更快 | 初始响应更平缓 |
-| `switch_min_lambda` | double | 4.0 | 编队点切换后反馈极点尺度下界 | 切换后恢复更快 | 切换后响应更平缓 |
-| `enable_radial_safety` | bool | true | 4D Artstein 径向制动安全层 | 开启基于实际相对速度的提前制动 | 关闭后可用于裸控制器对照，但延迟底盘可能跨过编队圆 |
+| 参数                     | 类型   | 默认值 | 作用                           | 调大效果                       | 调小效果                                           |
+| ------------------------ | ------ | ------ | ------------------------------ | ------------------------------ | -------------------------------------------------- |
+| `mass`                 | double | 2.0    | 双重积分器模型的等效质量       | 增益增大，响应更快             | 增益减小，响应更慢                                 |
+| `omega_d`              | double | 0.7    | 期望阻尼带宽，决定最小收敛速度 | 响应更快但可能震荡             | 更平滑但跟踪滞后                                   |
+| `m_p`                  | int    | 4      | 安全编队点数量                 | 更多编队位置可选               | 编队选择少                                         |
+| `radius`               | double | 2.0    | 编队圆半径 (m)                 | 跟随距离增大                   | 跟随更近                                           |
+| `tol`                  | double | 0.1    | 编队点切换容差 (m)             | 不易频繁切换                   | 切换更灵敏                                         |
+| `hpc_c_min`            | double | 0.1    | HPC 齐次范数下界               | 减弱近目标区域的 warp 放大     | 增强齐次变形，可能放大噪声                         |
+| `initial_min_lambda`   | double | 1.0    | 初始反馈极点尺度下界           | 初始响应更快                   | 初始响应更平缓                                     |
+| `switch_min_lambda`    | double | 4.0    | 编队点切换后反馈极点尺度下界   | 切换后恢复更快                 | 切换后响应更平缓                                   |
+| `enable_radial_safety` | bool   | true   | 4D Artstein 径向制动安全层     | 开启基于实际相对速度的提前制动 | 关闭后可用于裸控制器对照，但延迟底盘可能跨过编队圆 |
 
 原始 4D 节点的三个参数也可以通过 launch 命令配置。进行原始 4D HPC 与
 Artstein-HPC 的公平对比时，应在两条命令中显式指定相同的值：
@@ -423,17 +432,17 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor
 
 关键参数：
 
-| 参数 | 默认 | 含义 |
-|------|------|------|
-| `tau` | 0.43 | 电机时间常数（模型），越小响应越快 |
-| `mass` | 2.0 | 控制力→加速度增益（6D Motor 专用，4D 用 8.0） |
-| `omega_d` | 0.7 | 闭环带宽（须 ≤ 物理可达值，0.25 accel 时上限 ~1.0） |
-| `hpc_c_min` | 0.9 | HPC warp clamp 下界（6D 三阶链须高于 4D 的 0.5） |
-| `max_linear_accel` | 0.25 | 控制器侧加速度约束（对齐实物） |
-| `motor_tau` | 0.43 | 仿真注入延迟的时间常数（实物不启 `use_motor_delay`） |
-| `transport_delay` | 0.0 | 纯传输延迟 (s)，0=关断（v1 不建模死区） |
-| `delay_max_accel` | 0.25 | 仿真注入延迟的加速度限幅 |
-| `leader_vel_lpf_tau` | 0.0 | leader 速度低通 (s)，0=关断，噪声大时设 0.2–0.3 |
+| 参数                   | 默认 | 含义                                                   |
+| ---------------------- | ---- | ------------------------------------------------------ |
+| `tau`                | 0.43 | 电机时间常数（模型），越小响应越快                     |
+| `mass`               | 2.0  | 控制力→加速度增益（6D Motor 专用，4D 用 8.0）         |
+| `omega_d`            | 0.7  | 闭环带宽（须 ≤ 物理可达值，0.25 accel 时上限 ~1.0）   |
+| `hpc_c_min`          | 0.9  | HPC warp clamp 下界（6D 三阶链须高于 4D 的 0.5）       |
+| `max_linear_accel`   | 0.25 | 控制器侧加速度约束（对齐实物）                         |
+| `motor_tau`          | 0.43 | 仿真注入延迟的时间常数（实物不启 `use_motor_delay`） |
+| `transport_delay`    | 0.0  | 纯传输延迟 (s)，0=关断（v1 不建模死区）                |
+| `delay_max_accel`    | 0.25 | 仿真注入延迟的加速度限幅                               |
+| `leader_vel_lpf_tau` | 0.0  | leader 速度低通 (s)，0=关断，噪声大时设 0.2–0.3       |
 
 LPC 消融对照（关闭齐次升级）：
 
@@ -494,14 +503,14 @@ Gazebo 双车仿真，开启延迟注入并让预测参数与注入参数对齐�
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artstein_disc.launch.py \
   leader_ns:=/robot1 follower_ns:=/robot2 \
   use_motor_delay:=true \
-  motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.3 \
+  motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.5 \
   radius:=2.5 mass:=2.0 I:=1.0 \
   m_p:=4 tol:=0.1 \
   tau:=0.43 tau_yaw:=0.43 Td:=0.22 \
   control_rate:=20.0 hpc_c_min:=0.7 \
   initial_min_lambda:=1.0 switch_min_lambda:=2.5 \
-  max_linear_vel:=0.45 max_angular_vel:=0.3 \
-  max_linear_accel:=0.3 max_angular_accel:=0.5
+  max_linear_vel:=0.5 max_angular_vel:=0.3 \
+  max_linear_accel:=0.5 max_angular_accel:=0.5
 ```
 
 LPC 消融对照（关闭齐次升级，仍保留 Artstein 预测层）：
@@ -513,20 +522,20 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 
 关键参数：
 
-| 参数 | 默认 | 含义 |
-|------|------|------|
-| `tau` | 0.43 | 平移通道一阶执行器预测时间常数 |
-| `tau_yaw` | 0.43 | yaw 通道一阶执行器预测时间常数 |
-| `Td` | 0.22 | 纯输入/传输延迟补偿时间 |
-| `hpc_c_min` | 0.5 | HPC 齐次范数下界，调大可减弱近目标 warp 放大 |
-| `initial_min_lambda` | 1.0 | 初始目标点的最小线性闭环带宽 |
-| `switch_min_lambda` | 4.0 | 编队点切换后的临时最小闭环带宽 |
-| `hpc_vel_threshold` | 0.3 | leader twist 变化超过该阈值才重算 HPC |
-| `hpc_yaw_threshold` | 0.3 | leader/follower 相对 yaw 变化超过该阈值才重算 HPC |
-| `stability_margin` | 0.01 | `A+B*K` Hurwitz 检查裕度，不满足则复用上一组稳定 HPC 或退回线性控制 |
-| `max_linear_accel` | 2.0 | 控制器侧 body x/y 分量加速度约束 |
-| `max_angular_accel` | 4.0 | 控制器侧 yaw 加速度约束 |
-| `delay_max_accel` | 2.0 | 仿真延迟节点侧分量加速度约束，仅 `use_motor_delay:=true` 时生效 |
+| 参数                   | 默认 | 含义                                                                  |
+| ---------------------- | ---- | --------------------------------------------------------------------- |
+| `tau`                | 0.43 | 平移通道一阶执行器预测时间常数                                        |
+| `tau_yaw`            | 0.43 | yaw 通道一阶执行器预测时间常数                                        |
+| `Td`                 | 0.22 | 纯输入/传输延迟补偿时间                                               |
+| `hpc_c_min`          | 0.5  | HPC 齐次范数下界，调大可减弱近目标 warp 放大                          |
+| `initial_min_lambda` | 1.0  | 初始目标点的最小线性闭环带宽                                          |
+| `switch_min_lambda`  | 4.0  | 编队点切换后的临时最小闭环带宽                                        |
+| `hpc_vel_threshold`  | 0.3  | leader twist 变化超过该阈值才重算 HPC                                 |
+| `hpc_yaw_threshold`  | 0.3  | leader/follower 相对 yaw 变化超过该阈值才重算 HPC                     |
+| `stability_margin`   | 0.01 | `A+B*K` Hurwitz 检查裕度，不满足则复用上一组稳定 HPC 或退回线性控制 |
+| `max_linear_accel`   | 2.0  | 控制器侧 body x/y 分量加速度约束                                      |
+| `max_angular_accel`  | 4.0  | 控制器侧 yaw 加速度约束                                               |
+| `delay_max_accel`    | 2.0  | 仿真延迟节点侧分量加速度约束，仅 `use_motor_delay:=true` 时生效     |
 
 调参时先让 `max_linear_vel/max_angular_vel` 满足 leader 速度和目标圆半径所需的稳态速度，再用
 `max_linear_accel/max_angular_accel` 对齐实物能力；`delay_max_accel` 只用于模拟底盘响应，不会限制控制器内部命令。
@@ -548,13 +557,13 @@ ros2 run homo_multirobot_formation_control leader_circle.py --ros-args -r __ns:=
   -p radius:=2.0 -p speed:=0.5 -p direction:=cw
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `radius` | 1.0 | 圆半径 (m) |
-| `speed` | 0.3 | 切向线速度 (m/s) |
-| `heading` | 0.0 | 车体航向角 (度) |
-| `direction` | ccw | ccw=逆时针, cw=顺时针 |
-| `rate` | 20.0 | 发布频率 (Hz) |
+| 参数          | 默认值 | 说明                  |
+| ------------- | ------ | --------------------- |
+| `radius`    | 1.0    | 圆半径 (m)            |
+| `speed`     | 0.3    | 切向线速度 (m/s)      |
+| `heading`   | 0.0    | 车体航向角 (度)       |
+| `direction` | ccw    | ccw=逆时针, cw=顺时针 |
+| `rate`      | 20.0   | 发布频率 (Hz)         |
 
 ### leader_eight — 8 字轨迹
 
@@ -566,16 +575,65 @@ ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/
   -p amplitude_x:=3.0 -p amplitude_y:=1.5 -p period:=15.0
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `amplitude_x` | 2.0 | X 方向半幅 (m) |
-| `amplitude_y` | 1.0 | Y 方向半幅 (m) |
-| `period` | 10.0 | 一个 8 字周期 (s) |
-| `heading` | 0.0 | 车体航向角 (度) |
-| `rate` | 20.0 | 发布频率 (Hz) |
+| 参数            | 默认值 | 说明              |
+| --------------- | ------ | ----------------- |
+| `amplitude_x` | 2.0    | X 方向半幅 (m)    |
+| `amplitude_y` | 1.0    | Y 方向半幅 (m)    |
+| `period`      | 10.0   | 一个 8 字周期 (s) |
+| `heading`     | 0.0    | 车体航向角 (度)   |
+| `rate`        | 20.0   | 发布频率 (Hz)     |
 
 > 两个脚本均为纯开环速度指令，无位置反馈。`period` 控制指令频率而非实际轨迹周期。
 > Y 通道频率为 2ω（X 通道的 2 倍），对控制器带宽要求更高，需适当提高 `omega_d`。
+
+### leader_circle_closed_loop — 延迟感知闭环圆轨迹
+
+该节点以 `odometry/filtered` 为反馈，在其第一帧有效位姿处开始生成圆轨迹。它使用
+`Td + tau_v` 前瞻参考、已发布速度命令历史与一阶速度响应预测抑制底盘延迟引起的相位滞后；
+`heading` 为固定目标航向，节点使用实际测得 yaw 进行 map/body 速度转换和 yaw 闭环。
+`start_side` 指定第一帧 odometry 位姿在参考圆上的竖直起点：最上端或最下端。节点会补偿
+`Td + tau_v` 前瞻带来的初始相位偏移，因此第一个闭环目标也位于所选端点。
+
+```bash
+ros2 run homo_multirobot_formation_control leader_circle_closed_loop.py \
+  --ros-args -r __ns:=/robot1 \
+  -p radius:=2.0 -p speed:=0.2 -p heading:=0.0 \
+  -p start_side:=top -p direction:=ccw \
+  -p Td:=0.22 -p tau_v:=0.43
+```
+
+| 参数 | 默认值 | 说明 |
+| --- | ---: | --- |
+| `radius` | 2.0 | 圆半径 (m) |
+| `speed` | 0.2 | 切向参考速度 (m/s) |
+| `heading` | 0.0 | 固定目标航向 (deg) |
+| `direction` | `ccw` | `ccw`=逆时针，`cw`=顺时针 |
+| `start_side` | `top` | `top`=从圆最上端起步，`bottom`=从圆最下端起步 |
+| `odom_topic` | `odometry/filtered` | 相对反馈里程计话题 |
+| `Td` | 0.22 | 等效纯输入死区 (s) |
+| `tau_v` | 0.43 | 等效平移速度响应时间常数 (s) |
+| `kp` / `kv` | 0.8 / 0.2 | map 系位置/速度反馈增益 |
+| `k_yaw` | 1.5 | 固定 yaw 反馈增益 |
+| `max_linear_vel` | 0.4 | map 系线速度模长上限 (m/s) |
+| `max_linear_accel` | 0.25 | map 系速度变化率上限 (m/s²) |
+
+> 参考轨迹与 `odometry/filtered` 必须在同一坐标系内；该节点不做 `map` 与 `odom` 的 TF 变换。
+> 实物首次测试建议使用默认的低速、大半径参数，并记录实际轨迹和 yaw 误差后再提高速度。
+
+使用 Gazebo 延迟仿真时，可由以下 launch 一次启动闭环 Leader 与延迟节点：
+
+```bash
+ros2 launch homo_multirobot_formation_control leader_circle_closed_loop_with_delay.launch.py \
+  namespace:=robot1 \
+  start_side:=bottom direction:=ccw \
+  radius:=1.0 speed:=0.35 \
+  Td:=0.22 tau_v:=0.43 \
+  motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=0.5
+```
+
+> 该 launch 不启动 Gazebo 或定位链路；应先启动对应的机器人仿真与 `odometry/filtered` 发布节点。
+
+
 
 ### virtual_leader_circle — 虚拟 Leader 绕圈
 
@@ -591,14 +649,14 @@ ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
   -p center_x:=0.0 -p center_y:=0.0 -p radius:=2.0 -p speed:=0.5 -p direction:=ccw
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `center_x` | 0.0 | 圆心 X (map 系) |
-| `center_y` | 0.0 | 圆心 Y (map 系) |
-| `radius` | 2.0 | 圆半径 (m) |
-| `speed` | 0.5 | 切向线速度 (m/s) |
-| `direction` | ccw | ccw=逆时针, cw=顺时针 |
-| `rate` | 50.0 | 发布频率 (Hz) |
+| 参数          | 默认值 | 说明                  |
+| ------------- | ------ | --------------------- |
+| `center_x`  | 0.0    | 圆心 X (map 系)       |
+| `center_y`  | 0.0    | 圆心 Y (map 系)       |
+| `radius`    | 2.0    | 圆半径 (m)            |
+| `speed`     | 0.5    | 切向线速度 (m/s)      |
+| `direction` | ccw    | ccw=逆时针, cw=顺时针 |
+| `rate`      | 50.0   | 发布频率 (Hz)         |
 
 与 `leader_circle.py`（开环 cmd_vel，依赖 Gazebo 提供里程计）不同，
 `virtual_leader_circle.py` 直接发布 `<ns>/odometry/filtered` 和 `map → <prefix>_odom` 静态 TF，
@@ -620,22 +678,23 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
   -p radius:=2.0 -p duration:=30.0
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `leader_ns` | /robot1 | Leader 命名空间 |
-| `follower_ns` | /robot2 | Follower 命名空间 |
-| `duration` | 30.0 | 记录时长 (s) |
-| `mode` | sim | `sim` 或 `real`，决定输出子目录 |
-| `tag` | 自动生成 | 文件名标签，留空则从控制器参数自动生成 |
-| `radius` | 0.0 | 编队理想半径，>0 时在距离图上画参考虚线 |
-| `out_dir` | 包内 robot_traj/ | 输出根目录 |
-| `experiment_id` | 自动使用 `tag` | 实验组编号 |
-| `trial_id` | `trial_01` | 重复实验编号 |
-| `platform` | 使用 `mode` | 实验平台，如 `numerical`、`gazebo`、`real` |
-| `controller` | 控制器节点名 | 控制器标签，如 `original_4d_hpc`、`artstein_hpc` |
+| 参数              | 默认值           | 说明                                                 |
+| ----------------- | ---------------- | ---------------------------------------------------- |
+| `leader_ns`     | /robot1          | Leader 命名空间                                      |
+| `follower_ns`   | /robot2          | Follower 命名空间                                    |
+| `duration`      | 30.0             | 记录时长 (s)                                         |
+| `mode`          | sim              | `sim` 或 `real`，决定输出子目录                  |
+| `tag`           | 自动生成         | 文件名标签，留空则从控制器参数自动生成               |
+| `radius`        | 0.0              | 编队理想半径，>0 时在距离图上画参考虚线              |
+| `out_dir`       | 包内 robot_traj/ | 输出根目录                                           |
+| `experiment_id` | 自动使用 `tag` | 实验组编号                                           |
+| `trial_id`      | `trial_01`     | 重复实验编号                                         |
+| `platform`      | 使用 `mode`    | 实验平台，如 `numerical`、`gazebo`、`real`     |
+| `controller`    | 控制器节点名     | 控制器标签，如 `original_4d_hpc`、`artstein_hpc` |
 
 **输出**：
 每次运行创建一个独立目录 `{out_dir}/{mode}/{tag}_{timestamp}/`，其中包括：
+
 - `check.png` — 六子图（XY轨迹、Leader-Follower距离、Vx/Vy、速度模长、X-t、Y-t）
 - `raw.csv` — MATLAB 可直接 `readtable` 的原始数据
 - `metadata.yaml` — 与本次数据对应的实验元数据
@@ -643,6 +702,7 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 **自动参数读取**：如果不指定 `tag`，脚本从 follower 命名空间下的控制器节点
 自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, tol`，
 以及适用时的 `hpc_c_min, initial_min_lambda, switch_min_lambda`，并：
+
 - 生成实验目录标签（如 `m8_r2_od1.5_f35_20260818_143000/`）
 - 在图上方黄框中显示完整参数组合
 
@@ -672,6 +732,7 @@ ros2 run homo_multirobot_formation_control record_velocity_diagnostics.py \
 ```
 
 输出图中：
+
 - `cmd_vel_raw |V|` = 控制器原始速度指令模长
 - `cmd_vel |V|` = 约束/限幅后的最终速度指令模长
 - `follower odom |V|` = Follower EKF 实际速度模长
@@ -718,12 +779,12 @@ Leader: .../odometry/filtered → DDS → WiFi → follower 回调 → timer 取
                                                     ↑ avg_leader_age
 ```
 
-| 延迟段 | 测量工具 | 仿真典型值 | 实物待测 |
-|--------|---------|-----------|---------|
-| 网络（Leader→Follower） | `ros2 topic delay` + DIAGavg_leader_age | ~7ms | 待测 |
-| 电机响应（cmd_vel→轮转） | `measure_motor_latency.py` | ~80-100ms(rf2o) | 待测 |
-| EKF 滤波 | raw - ekf 差值 | ~14ms | 待测 |
-| 数据源频率上限 | `ros2 topic hz /odom` | ~10Hz(rf2o) | 20Hz(STM32固件) |
+| 延迟段                    | 测量工具                                  | 仿真典型值      | 实物待测        |
+| ------------------------- | ----------------------------------------- | --------------- | --------------- |
+| 网络（Leader→Follower）  | `ros2 topic delay` + DIAGavg_leader_age | ~7ms            | 待测            |
+| 电机响应（cmd_vel→轮转） | `measure_motor_latency.py`              | ~80-100ms(rf2o) | 待测            |
+| EKF 滤波                  | raw - ekf 差值                            | ~14ms           | 待测            |
+| 数据源频率上限            | `ros2 topic hz /odom`                   | ~10Hz(rf2o)     | 20Hz(STM32固件) |
 
 > **实物 /odom = 20Hz 来自 STM32 固件**，`wheeltec_robot` 驱动无频率设置。
 > EKF 与控制频率不应超过此硬件上限，否则纯预测无测量更新。

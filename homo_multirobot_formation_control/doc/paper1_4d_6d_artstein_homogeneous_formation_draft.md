@@ -54,13 +54,60 @@ e=x_f-x_l-d.
 
 ### 2.2 齐次比例控制器
 
-选取线性反馈矩阵 $K$，使闭环矩阵 $A_d+B_dK$ 为 Hurwitz 矩阵，即其全部特征值的实部均小于零。利用广义齐次构造得到生成元 $G_0$、正定矩阵 $P$ 和负齐次度 $\nu$。定义
+选取线性反馈矩阵 $K$，使闭环矩阵 $A_d+B_dK$ 为 Hurwitz 矩阵，即其全部特征值的实部均小于零。
+
+#### 广义齐次升级原理
+
+本文采用广义齐次控制中的线性反馈升级方法 [3]。对可控对 $\left(A_d,B_d\right)$，若存在使 $A_d+B_dK$ 为 Hurwitz 的线性反馈 $K$，则可先求取正定 Lyapunov 矩阵 $P$，使
 
 ```math
-G_d=I+\nu G_0.
+P(A_d+B_dK)+(A_d+B_dK)^T P<0.
 ```
 
-对误差 $e$ 定义齐次范数 $n_e=\operatorname{hnorm}(e,G_d,P)$，并取
+随后通过块可控分解构造齐次生成元 $G_0$，选择可行的负齐次度 $\nu<0$，并定义膨胀
+
+```math
+G_d=I+\nu G_0,\qquad d(s)=e^{sG_d}.
+```
+
+原始齐次控制构造中，$G_0,Y_0$ 由线性代数方程确定：
+
+```math
+A_dG_0-G_0A_d+B_dY_0=A_d,\qquad G_0B_d=0.
+```
+
+据此定义
+
+```math
+K_0=Y_0(G_0-I)^{-1}.
+```
+
+当前实现不直接求解上述方程，而是采用块可控分解。若变换矩阵 $T$ 将可控对转换为块结构，块尺寸为 $(n_1,\ldots,n_k)$，则等价地取
+
+```math
+G_0=-T^{-1}\operatorname{diag}\left(
+(k-1)I_{n_1},(k-2)I_{n_2},\ldots,0I_{n_k}\right)T.
+```
+
+对于当前 6D 三输入双积分链，$(n_1,n_2)=(3,3)$，故 $\widetilde G_0=-\operatorname{diag}(I_3,0_3)$，并有 $G_0=T^{-1}\widetilde G_0T$。
+
+齐次范数 $n_e=\lVert e\rVert_d$ 定义为唯一满足下式的 $e^s$：
+
+```math
+n_e=e^s,\qquad
+(\exp(-sG_d)e)^T P\exp(-sG_d)e=1.
+```
+
+原始理论控制律为
+
+```math
+u_{\mathrm{th}}=K_0e+n_e^{1+\nu}
+(K-K_0)\exp(-\ln n_e\,G_d)e.
+```
+
+该式与原论文 [4] 一致；当名义系统满足相应的矩阵不等式时，其闭环向量场满足广义齐次关系，并可据此得到有限时间稳定结论 [3,4]。
+
+当前项目实现通过块可控分解计算 $G_0$、$P$ 与 $\nu$，但运行时采用带有数值正则化的计算形式。首先以数值迭代求得 $\operatorname{hnorm}(e,G_d,P)$，再构造
 
 ```math
 c=\begin{cases}
@@ -70,15 +117,15 @@ n_e, & c_{\min}\le n_e\le 1,\\
 \end{cases}
 ```
 
-其中，$c$ 为用于调节齐次反馈尺度的有界系数；$c_{\min}\in(0,1]$ 为其下限，用于避免误差接近零时尺度系数过小，从而改善离散实现中的数值稳定性。
-
-则名义齐次控制律写为
+其中，$c$ 为用于调节齐次反馈尺度的有界系数；$c_{\min}\in(0,1]$ 为其下限，用于避免误差接近零时尺度系数过小，从而改善离散实现中的数值稳定性。当前实现的反馈为
 
 ```math
-u_h=c^{1+\nu}K\exp\left(G_d(1-\ln c)\right)e.
+u_{\mathrm{impl}}=c^{1+\nu}K\exp\left(G_d(1-\ln c)\right)e.
 ```
 
-无扰动、无约束且 $\nu<0$ 时，该构造对应的名义闭环具有有限时间收敛性质 [3]。离散控制周期 $h$ 内，控制器把 $u_h$ 映射为速度命令；例如 map 系平移命令可由 $v_{cmd,k+1}=v_{base,k}+hu_{h,k}/m$ 生成。其中，map 坐标系为固定于环境的全局坐标系，$v_{cmd,k+1}$ 和 $v_{base,k}$ 分别为第 $k+1$ 与第 $k$ 个控制周期的 map 系速度命令。最终的 ROS 2 速度命令话题 `cmd_vel`（包含车体线速度与角速度命令）还需经速度、加速度与轮速约束处理，以保证命令可由底盘执行；这些约束属于工程实现层，不包含在连续时间名义有限时间稳定性分析中。
+该实现式使用 $K$ 而非 $K_0$，并引入 $c$ 截断与额外的矩阵指数平移，因此它与上述原始理论控制律不代数等价。本文对 $u_{\mathrm{impl}}$ 的采样、限幅和预测误差采用实用稳定性及实验结果评价；不将原始理论的严格有限时间定理直接外推到完整实现。
+
+离散控制周期 $h$ 内，控制器把 $u_{\mathrm{impl}}$ 映射为速度命令；例如 map 系平移命令可由 $v_{cmd,k+1}=v_{base,k}+hu_{h,k}/m$ 生成。其中，map 坐标系为固定于环境的全局坐标系，$v_{cmd,k+1}$ 和 $v_{base,k}$ 分别为第 $k+1$ 与第 $k$ 个控制周期的 map 系速度命令。最终的 ROS 2 速度命令话题 `cmd_vel`（包含车体线速度与角速度命令）还需经速度、加速度与轮速约束处理，以保证命令可由底盘执行；这些约束属于工程实现层，不包含在连续时间名义有限时间稳定性分析中。
 
 ## 3 4D Artstein 预测补偿齐次编队控制
 
@@ -199,11 +246,14 @@ x=[p_x,p_y,\theta,v_x^b,v_y^b,\omega]^T.
 其中位置和偏航角位于 map 系，$v_x^b,v_y^b,\omega$ 为车体系速度。控制器内部将广义力/力矩 $u=[F_x,F_y,M_z]^T$ 用于二阶近似：
 
 ```math
-\dot p=R(\theta)\begin{bmatrix}v_x^b\\v_y^b\end{bmatrix},\quad
-\dot\theta=\omega,\quad
-\dot v_x^b=F_x/m,\quad
-\dot v_y^b=F_y/m,\quad
+\begin{cases}
+\dot p_x=\cos\theta\,v_x^b-\sin\theta\,v_y^b,\\
+\dot p_y=\sin\theta\,v_x^b+\cos\theta\,v_y^b,\\
+\dot\theta=\omega,\\
+\dot v_x^b=F_x/m,\\
+\dot v_y^b=F_y/m,\\
 \dot\omega=M_z/I.
+\end{cases}
 ```
 
 离散实现将其积分为 $v_{x,cmd}^b$、$v_{y,cmd}^b$ 和 $\omega_{cmd}$，并在输出端施加速度、加速度和三轮全向底盘轮速约束。本文不引入轮级动力学状态：实际控制边界是 `cmd_vel`，底层驱动负责轮速分配和电机闭环。
@@ -265,20 +315,175 @@ A_\theta=\begin{bmatrix}0&1\\0&-1/\tau_\omega\end{bmatrix},
 
 ### 4.3 6D Disc 齐次反馈与名义结论
 
-当 $(A_L,B_6)$ 可控，且存在 $K_{lin}$ 使 $A_L+B_6K_{lin}$ Hurwitz 时，可对冻结局部系统应用广义齐次升级，得到
+#### 4.3.1 Leader 车体系误差与冻结参数模型
+
+固定离散编队点 $d_i=[d_p^T,d_\theta,d_v^T,d_\omega]^T$ 后，在 Leader 车体系定义误差
 
 ```math
-u_h=c^{1+\nu}K_{lin}\exp\left(G_d(1-\ln c)\right)e,
-\quad c=\operatorname{clamp}(\lVert e\rVert_d,c_{\min},1).
+e=[\left(e_p^L\right)^T,e_\theta,\left(e_v^L\right)^T,e_\omega]^T,
 ```
 
-在固定 $A_L$、固定编队点、参数匹配、完整历史、无饱和和无扰动的名义条件下，若 $\nu<0$，可得到
+其中
 
 ```math
-\dot V\le-\rho V^{1+\nu},
+e_p^L=R(-\theta_l)(p_f-p_l)-d_p,
 ```
 
-从而局部误差有限时间收敛。实际系统中，预测参数误差、采样、速度/加速度/轮速约束、Leader twist 慢变化、离散编队点切换、传感器噪声及 map/body 转换误差均破坏上述理想前提。因此，6D 方法的合理结论是：它在局部冻结的名义条件下继承齐次收敛性质；在实际系统中按 ISS/实用稳定框架解释，误差最终进入与扰动上界相关的邻域。
+```math
+e_\theta=\operatorname{wrap}(\theta_f-\theta_l-d_\theta),
+```
+
+```math
+e_v^L=R(e_\theta)v_f^b-v_l^b-d_v,\qquad
+e_\omega=\omega_f-\omega_l-d_\omega.
+```
+
+这里 $\operatorname{wrap}(\cdot)$ 将角度误差归一化至 $[-\pi,\pi]$。由于 $R(-\theta_l)$ 随 Leader 偏航变化，旋转 Leader 系中的非零编队偏移还会引入与 $\omega_l d_i$ 有关的附加项，完整 6D 误差系统并非全局常值线性系统。
+
+在一个控制周期或一次 HPC 参数重建区间内，冻结当前 Leader twist
+
+```math
+v_{x,l}^b,v_{y,l}^b,\omega_l=\operatorname{const}.
+```
+
+将 twist 慢变化、旋转编队偏移项及剩余坐标耦合归入扰动 $w$ 后，第 4.1 节的误差方程写为
+
+```math
+\dot e=A_L(t_k)e+B_6u+w(t).
+```
+
+无扰动名义部分为 $\dot e=A_L(t_k)e+B_6u$。其中 $A_L(t_k)$ 由冻结的 $\left(v_{x,l}^b,v_{y,l}^b,\omega_l\right)$ 决定；因此它是冻结参数的局部线性近似，不是完整 6D 非线性系统的全局精确模型。
+
+#### 4.3.2 齐次升级与 6D Disc 反馈
+
+对于 $m>0,I>0$，冻结局部对 $\left(A_L(t_k),B_6\right)$ 可控。具体地，$B_6$ 直接覆盖 $e_{v_x},e_{v_y},e_\omega$ 三个速度/角速度误差方向；$A_LB_6$ 进一步覆盖 $e_x,e_y,e_\theta$ 两个位置误差和一个姿态误差方向。
+
+因此，定义两阶可控性矩阵
+
+```math
+\mathcal{C}_2=\begin{bmatrix}B_6&A_LB_6\end{bmatrix},
+```
+
+有
+
+```math
+\operatorname{rank}(\mathcal{C}_2)=6.
+```
+
+进一步定义完整 Kalman 可控性矩阵
+
+```math
+\mathcal{C}=\begin{bmatrix}B_6&A_LB_6&\cdots&A_L^5B_6\end{bmatrix},
+```
+
+则
+
+```math
+\operatorname{rank}(\mathcal{C})=6.
+```
+
+该结论不依赖于冻结的 $v_{x,l}^b,v_{y,l}^b,\omega_l$ 的具体数值；它们改变 $A_L$ 中的耦合项，但不破坏上述六个独立状态方向。实现中构造 $\mathcal{C}$ 并以 SVD 秩检验进行数值确认；若 $\operatorname{rank}(\mathcal{C})<6$，则不执行齐次升级。
+
+线性反馈矩阵采用三个二阶通道的分块结构：
+
+```math
+K_{\mathrm{lin}}=\begin{bmatrix}
+k_{1x}&0&0&k_{2x}&0&0\\
+0&k_{1y}&0&0&k_{2y}&0\\
+0&0&k_{1\theta}&0&0&k_{2\theta}
+\end{bmatrix}.
+```
+
+对 $q\in\left\{x,y,\theta\right\}$，令 $M_x=M_y=m$、$M_\theta=I$。三个通道采用正增益尺度 $a_q=\lambda_{\min}$，其中
+
+```math
+\lambda_{\min}=\begin{cases}
+\lambda_{\min}^{(0)},& \text{控制器初始化时},\\
+\lambda_{\min}^{(\mathrm{sw})},& \text{编队点切换后}.
+\end{cases}
+```
+
+这里 $\lambda_{\min}^{(0)}>0$ 与 $\lambda_{\min}^{(\mathrm{sw})}>0$ 分别表示初始化和编队点切换后的最小增益尺度。因此，在一次初始化或编队点切换后的固定参数区间内，各通道采用相同的固定增益尺度。最终增益为
+
+```math
+k_{2q}=-2a_q,\qquad
+k_{1q}=-\frac{a_q^2}{M_q}.
+```
+
+对忽略 Leader twist 耦合的单个二阶通道，代入 $\dot e_{v_q}=(k_{1q}e_{p_q}+k_{2q}e_{v_q})/M_q$ 后，其特征多项式为 $\left(s+a_q/M_q\right)^2$，对应双重极点 $-a_q/M_q$。但 6D 冻结模型仍包含 Leader twist 耦合项，因此该分块结构不自动保证完整 $A_L+B_6K_{\mathrm{lin}}$ 为 Hurwitz；还需进行如下特征值检查。
+
+由上述构造得到的线性反馈 $K_{\mathrm{lin}}$ 还应满足
+
+```math
+\max_{1\le i\le 6}
+\operatorname{Re}\left\{\lambda_i\!\left(A_L+B_6K_{\mathrm{lin}}\right)\right\}
+<-\varepsilon,
+```
+
+其中，$\lambda_i(\cdot)$ 表示矩阵的第 $i$ 个特征值，$\operatorname{Re}(\cdot)$ 表示复数实部，$\varepsilon>0$ 为预设稳定裕度。该条件等价于 $A_L+B_6K_{\mathrm{lin}}$ 为 Hurwitz 矩阵。工程实现中，若该检查失败，应复用上一组稳定 HPC 参数或退回线性反馈。
+
+在上述条件下，对 $\left(A_L,B_6,K_{lin}\right)$ 进行广义齐次升级：经块可控分解得到齐次生成元 $G_0$，对线性闭环求 Lyapunov 方程得到正定矩阵 $P$，并计算齐次度 $\nu<0$。定义
+
+```math
+G_d=I+\nu G_0,
+```
+
+并由齐次范数构造尺度系数
+
+```math
+c=\operatorname{clamp}(\lVert e\rVert_d,c_{\min},1).
+```
+
+若采用第 2.2 节的原始理论构造，则 6D 的理论齐次广义力/力矩反馈为
+
+```math
+u_{\mathrm{th},6}=K_0e+\lVert e\rVert_d^{1+\nu}
+(K_{\mathrm{lin}}-K_0)\exp(-\ln\lVert e\rVert_d\,G_d)e.
+```
+
+其中 $K_0$、$G_0$、$P$ 和 $\nu$ 按第 2.2 节的理论条件构造。
+
+当前 6D Artstein Disc 实现采用带有截断的数值反馈形式
+
+```math
+u_{\mathrm{impl},6}=c^{1+\nu}K_{\mathrm{lin}}\exp\left(G_d(1-\ln c)\right)e.
+```
+
+该式使用 $K_{\mathrm{lin}}$ 而非 $K_0$，并含 $c$ 截断与额外矩阵指数平移，故不与理论式代数等价。$u_{\mathrm{impl},6}=[F_x^L,F_y^L,M_z]^T$ 在 Leader 车体系计算；平移控制经坐标旋转后再转换为 Follower 车体系的速度命令。控制律使用第 4.2 节的预测重组状态形成误差，而非未经补偿的当前测量状态。
+
+#### 4.3.3 名义局部有限时间结论
+
+**命题 1：** 假设：(i) 平移和偏航执行器分别满足已知常值死区和一阶响应的名义 LTI 模型；(ii) 命令历史完整、采样足够快，预测窗内命令近似常值；(iii) 当前离散编队点固定，Leader twist 在本次 HPC 参数计算内冻结；(iv) $\left(A_L,B_6\right)$ 可控，且 $A_L+B_6K_{lin}$ Hurwitz；(v) 不考虑速度、加速度和轮速约束，以及传感器噪声、参数失配和目标点切换。
+
+则平移/偏航 Artstein 预测层提供等效无显式输入死区的预测反馈状态。若对该状态构成的冻结名义误差系统应用第 2.2 节的理论齐次反馈 $u_{\mathrm{th},6}$，其闭环向量场关于膨胀
+
+```math
+d(s)=\exp(sG_d)
+```
+
+满足广义齐次关系
+
+```math
+f_h(d(s)e)=e^{\nu s}d(s)f_h(e).
+```
+
+因此，存在 Lyapunov 函数 $V(e)$ 与常数 $\rho>0$，使
+
+```math
+\dot V\le-\rho V^{1+\nu}.
+```
+
+当 $\nu<0$ 时，冻结名义局部误差系统有限时间收敛。
+
+#### 4.3.4 实际闭环的适用边界
+
+实际系统还受到 $\tau_v,\tau_\omega,T_d$ 失配、采样和离散积分误差、预测窗内命令非恒定、速度/加速度/轮速约束、Leader twist 慢变化、离散编队点切换、传感器噪声以及 map/body 坐标转换误差影响。将其合并为有界扰动 $\delta(t)$，可写成
+
+```math
+\dot e=A_L(t_k)e+B_6u_{\mathrm{impl},6}+\delta(t).
+```
+
+因此，本文不宣称完整 6D 离散闭环的全局严格有限时间收敛。更准确的结论是：在模型匹配、无约束的局部冻结名义条件下，采用理论反馈 $u_{\mathrm{th},6}$ 的系统继承广义齐次控制的有限时间性质；当前实现反馈 $u_{\mathrm{impl},6}$ 以及存在采样、饱和、切换和失配时，按实用稳定性解释，编队误差最终进入与扰动上界相关的有界邻域。数值、Gazebo 与实物实验用于验证该实用稳定运行范围及其性能边界。
 
 ## 5 统一实现架构与实验方法
 
