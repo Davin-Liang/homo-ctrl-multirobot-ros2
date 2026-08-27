@@ -13,7 +13,7 @@
 - 圆轨迹、预测状态和反馈误差统一在 `map_frame`（默认 `map`）中计算。
 - `heading` 表示固定目标 yaw，单位为度。
 - `start_side` 指定第一帧 odometry 位姿作为圆最上端（`top`）或最下端（`bottom`）。
-- map launch 文件 `leader_circle_closed_loop_map_with_delay.launch.py` 同时启动 map 闭环 Leader 和 `sim_motor_delay.py`，形成 `cmd_vel_raw → cmd_vel` 延迟链路。
+- map launch 文件 `leader_circle_closed_loop_map.launch.py` 仅启动 map 闭环 Leader，直接发布 `cmd_vel`，不注入仿真延迟。
 
 ## 参考轨迹
 
