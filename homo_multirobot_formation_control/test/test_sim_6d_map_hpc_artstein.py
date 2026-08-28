@@ -4,6 +4,7 @@ import sys
 import unittest
 from collections import deque
 import tempfile
+from unittest import mock
 
 import numpy as np
 
@@ -63,6 +64,27 @@ class MapFrameModelTest(unittest.TestCase):
         np.testing.assert_allclose(delayed.initial_follower, artstein.initial_follower)
         self.assertEqual(delayed.td, artstein.td)
         self.assertEqual(delayed.td, config.td)
+
+    def test_recorded_error_uses_leader_at_the_same_timestamp(self):
+        config = MODULE.SimulationConfig(tmax=0.05)
+        result = MODULE.simulate_case("ideal", config)
+        leader_at_sample = MODULE.circle_leader_state(
+            result.time[0], config.leader_radius, config.leader_speed
+        )
+        expected = MODULE.map_error(leader_at_sample, result.follower[0], np.asarray(config.offset_map))
+        np.testing.assert_allclose(result.error[0], expected, atol=1e-12)
+
+    def test_artstein_integrates_force_from_predicted_follower_state(self):
+        predicted = np.array([3.8, -0.5, 0.0, 0.7, -0.1, 0.3])
+
+        class ZeroController:
+            def command(self, _error):
+                return np.zeros(3)
+
+        with mock.patch.object(MODULE, "RegularizedMapHpc", return_value=ZeroController()), \
+             mock.patch.object(MODULE, "predict_map_state", return_value=predicted):
+            result = MODULE.simulate_case("artstein", MODULE.SimulationConfig(tmax=0.05))
+        np.testing.assert_allclose(result.command_map[0], np.array([0.7, -0.1, 0.3]), atol=1e-12)
 
     def test_run_writes_the_four_required_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:

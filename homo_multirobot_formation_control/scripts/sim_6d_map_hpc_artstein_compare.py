@@ -317,7 +317,7 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
         else:
             leader_ctrl, follower_ctrl = leader, x2
         error = map_error(leader_ctrl, follower_ctrl, np.asarray(config.offset_map))
-        command = _command_from_force(x2, controller.command(error), config)
+        command = _command_from_force(follower_ctrl, controller.command(error), config)
         for _ in range(substeps):
             if kind == "ideal":
                 x2 = step_ideal_plant(x2, command, config.plant_dt)
@@ -326,8 +326,12 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
                     x2, _advance_delay(delay, command), config.plant_dt, config.tau
                 )
         history.appendleft(command.copy())
-        actual_error = map_error(leader, x2, np.asarray(config.offset_map))
-        rows.append((t + config.control_dt, leader, x2.copy(), command.copy(), actual_error))
+        sample_time = t + config.control_dt
+        leader_at_sample = circle_leader_state(
+            sample_time, config.leader_radius, config.leader_speed
+        )
+        actual_error = map_error(leader_at_sample, x2, np.asarray(config.offset_map))
+        rows.append((sample_time, leader_at_sample, x2.copy(), command.copy(), actual_error))
         t += config.control_dt
     return SimulationResult(
         kind, 0.0 if kind == "ideal" else config.td, initial_follower,
