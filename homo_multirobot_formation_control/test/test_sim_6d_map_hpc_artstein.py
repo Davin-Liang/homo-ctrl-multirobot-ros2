@@ -17,6 +17,23 @@ SPEC.loader.exec_module(MODULE)
 
 
 class MapFrameModelTest(unittest.TestCase):
+    def test_constant_accel_yaw_keeps_map_translation_and_caps_rate(self):
+        state = MODULE.constant_accel_yaw_leader_state(60.0, 2.0, 0.45)
+        nominal = MODULE.circle_leader_state(60.0, 2.0, 0.45)
+        np.testing.assert_allclose(state[:2], nominal[:2], atol=1e-12)
+        np.testing.assert_allclose(
+            MODULE.rot(state[2]) @ state[3:5],
+            MODULE.rot(nominal[2]) @ nominal[3:5],
+            atol=1e-12,
+        )
+        self.assertAlmostEqual(state[5], 0.8, places=12)
+
+    def test_periodic_accel_yaw_has_expected_rate_offset(self):
+        time = np.pi / 0.8
+        state = MODULE.periodic_accel_yaw_leader_state(time, 2.0, 0.45)
+        nominal = MODULE.circle_leader_state(time, 2.0, 0.45)
+        self.assertAlmostEqual(state[5] - nominal[5], 0.2, places=12)
+
     def test_yaw_step_changes_only_leader_yaw_reference(self):
         before = MODULE.yaw_step_leader_state(29.999, 2.0, 0.45)
         after = MODULE.yaw_step_leader_state(30.001, 2.0, 0.45)
@@ -139,6 +156,15 @@ class MapFrameModelTest(unittest.TestCase):
             ))
             header = (Path(directory) / "summary_metrics.csv").read_text().splitlines()[0]
         self.assertIn("post_step_peak_yaw_error", header)
+
+    def test_continuous_yaw_runner_writes_two_scenario_summaries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            outputs = MODULE.run_continuous_yaw_experiments(Path(directory))
+            self.assertEqual(set(outputs), {"constant_yaw_accel", "periodic_yaw_accel"})
+            self.assertTrue(all(
+                (Path(directory) / name / "summary_metrics.csv").exists()
+                for name in outputs
+            ))
 
 
 if __name__ == "__main__":

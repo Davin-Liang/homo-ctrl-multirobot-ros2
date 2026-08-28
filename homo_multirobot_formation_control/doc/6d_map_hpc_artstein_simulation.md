@@ -31,6 +31,15 @@ python3 homo_multirobot_formation_control/scripts/sim_6d_map_hpc_artstein_compar
 
 `summary_metrics.csv` 还包含阶跃后的峰值位置误差和峰值 yaw 误差；图中虚线标出 `30 s` 阶跃时刻。
 
+## 连续 yaw 动态场景
+
+```bash
+python3 homo_multirobot_formation_control/scripts/sim_6d_map_hpc_artstein_compare.py \
+  --continuous-yaw --out-dir /tmp/6d_map_continuous_yaw
+```
+
+该命令分别生成 `constant_yaw_accel/` 与 `periodic_yaw_accel/`：前者以 `0.05 rad/s²` 加速并将总 yaw rate 限制为 `0.8 rad/s`，后者采用 `0.08 cos(0.4t) rad/s²` 的周期角加速度。两者保持 Leader map 位置和 map 平移速度不变；Artstein 使用连续轨迹模型预测其未来状态。
+
 ## 结论边界
 
 该脚本只评估正则化工程控制律在指定延迟 plant 下的数值表现。它不构成理论 `u_th` 的有限时间稳定性证明，也不覆盖 ROS 2 的实际 body-input 映射、离散选点、HOCBF、饱和后严格稳定性或实车鲁棒性。

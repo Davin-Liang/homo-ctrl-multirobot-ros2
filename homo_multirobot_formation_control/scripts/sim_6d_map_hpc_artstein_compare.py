@@ -211,6 +211,7 @@ class SimulationConfig:
     leader_speed: float = 0.45
     yaw_step_time: float = 30.0
     yaw_step_angle: float = np.pi / 2.0
+    leader_mode: str = "yaw_step"
     output_dir: Path = Path(
         "homo_multirobot_formation_control/analysis/results/6d_map_hpc_artstein"
     )
@@ -250,6 +251,43 @@ def yaw_step_leader_state(t: float, radius: float, speed: float,
     return state
 
 
+def _leader_with_yaw_offset(t: float, radius: float, speed: float,
+                            yaw_offset: float, yaw_rate_offset: float) -> np.ndarray:
+    state = circle_leader_state(t, radius, speed)
+    velocity_map = rot(state[2]) @ state[3:5]
+    state[2] = wrap_angle(state[2] + yaw_offset)
+    state[3:5] = map_to_body(state[2], velocity_map)
+    state[5] += yaw_rate_offset
+    return state
+
+
+def constant_accel_yaw_leader_state(t: float, radius: float, speed: float,
+                                    accel: float = 0.05,
+                                    max_yaw_rate: float = 0.8) -> np.ndarray:
+    base_rate = speed / radius
+    offset_limit = max_yaw_rate - base_rate
+    if offset_limit <= 0.0:
+        raise ValueError("max_yaw_rate must exceed the circle yaw rate")
+    ramp_time = offset_limit / accel
+    if t <= ramp_time:
+        yaw_rate_offset = accel * t
+        yaw_offset = 0.5 * accel * t * t
+    else:
+        yaw_rate_offset = offset_limit
+        yaw_offset = 0.5 * accel * ramp_time * ramp_time + offset_limit * (t - ramp_time)
+    return _leader_with_yaw_offset(t, radius, speed, yaw_offset, yaw_rate_offset)
+
+
+def periodic_accel_yaw_leader_state(t: float, radius: float, speed: float,
+                                    accel_amplitude: float = 0.08,
+                                    frequency: float = 0.4) -> np.ndarray:
+    if frequency <= 0.0:
+        raise ValueError("frequency must be positive")
+    yaw_rate_offset = accel_amplitude / frequency * np.sin(frequency * t)
+    yaw_offset = accel_amplitude / (frequency * frequency) * (1.0 - np.cos(frequency * t))
+    return _leader_with_yaw_offset(t, radius, speed, yaw_offset, yaw_rate_offset)
+
+
 def predict_leader_from_observation(leader: np.ndarray, time: float, horizon: float,
                                     radius: float, speed: float) -> np.ndarray:
     """Predict a planned circle without non-causally seeing a future yaw step."""
@@ -260,6 +298,19 @@ def predict_leader_from_observation(leader: np.ndarray, time: float, horizon: fl
     future[2] = wrap_angle(future[2] + yaw_offset)
     future[3:5] = map_to_body(future[2], velocity_map)
     return future
+
+
+def leader_state(t: float, config: SimulationConfig) -> np.ndarray:
+    if config.leader_mode == "yaw_step":
+        return yaw_step_leader_state(
+            t, config.leader_radius, config.leader_speed,
+            config.yaw_step_time, config.yaw_step_angle,
+        )
+    if config.leader_mode == "constant_accel":
+        return constant_accel_yaw_leader_state(t, config.leader_radius, config.leader_speed)
+    if config.leader_mode == "periodic_accel":
+        return periodic_accel_yaw_leader_state(t, config.leader_radius, config.leader_speed)
+    raise ValueError(f"unsupported leader_mode: {config.leader_mode}")
 
 
 def _state_with_map_velocity(state: np.ndarray, velocity_map: np.ndarray,
@@ -335,15 +386,15 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
     rows = []
     t = 0.0
     while t < config.tmax - 1e-12:
-        leader = yaw_step_leader_state(
-            t, config.leader_radius, config.leader_speed,
-            config.yaw_step_time, config.yaw_step_angle,
-        )
+        leader = leader_state(t, config)
         if kind == "artstein":
             horizon = config.td + config.tau
-            leader_ctrl = predict_leader_from_observation(
-                leader, t, horizon, config.leader_radius, config.leader_speed,
-            )
+            if config.leader_mode == "yaw_step":
+                leader_ctrl = predict_leader_from_observation(
+                    leader, t, horizon, config.leader_radius, config.leader_speed,
+                )
+            else:
+                leader_ctrl = leader_state(t + horizon, config)
             follower_ctrl = predict_map_state(x2, history, config.td, config.tau, config.control_dt)
         else:
             leader_ctrl, follower_ctrl = leader, x2
@@ -358,10 +409,7 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
                 )
         history.appendleft(command.copy())
         sample_time = t + config.control_dt
-        leader_at_sample = yaw_step_leader_state(
-            sample_time, config.leader_radius, config.leader_speed,
-            config.yaw_step_time, config.yaw_step_angle,
-        )
+        leader_at_sample = leader_state(sample_time, config)
         actual_error = map_error(leader_at_sample, x2, np.asarray(config.offset_map))
         rows.append((sample_time, leader_at_sample, x2.copy(), command.copy(), actual_error))
         t += config.control_dt
@@ -382,8 +430,9 @@ def _write_outputs(results: list[SimulationResult], config: SimulationConfig) ->
         axes[0, 1].plot(result.time, np.linalg.norm(result.error[:, :2], axis=1), label=result.name)
         axes[1, 0].plot(result.time, np.abs(result.error[:, 2]), label=result.name)
         axes[1, 1].plot(result.time, result.command_map[:, 0], label=f"{result.name} vx")
-    for axis in (axes[0, 1], axes[1, 0], axes[1, 1]):
-        axis.axvline(config.yaw_step_time, color="0.35", linestyle="--", linewidth=1.0)
+    if config.leader_mode == "yaw_step":
+        for axis in (axes[0, 1], axes[1, 0], axes[1, 1]):
+            axis.axvline(config.yaw_step_time, color="0.35", linestyle="--", linewidth=1.0)
     axes[0, 0].plot(results[0].leader[:, 0], results[0].leader[:, 1], "k--", label="leader")
     for axis, title, ylabel in zip(
         axes.ravel(), ("trajectory", "position error", "yaw error", "map vx command"),
@@ -395,7 +444,7 @@ def _write_outputs(results: list[SimulationResult], config: SimulationConfig) ->
     fig.savefig(plot_path, dpi=180); plt.close(fig)
 
     summary_path = config.output_dir / "summary_metrics.csv"
-    lines = ["case,max_position_error,tail_mean_position_error,final_position_error,tail_mean_yaw_error,final_yaw_error,post_step_peak_position_error,post_step_peak_yaw_error"]
+    lines = ["case,max_position_error,tail_mean_position_error,final_position_error,max_yaw_error,tail_mean_yaw_error,final_yaw_error,post_step_peak_position_error,post_step_peak_yaw_error"]
     timeseries = ["case,t,leader_x,leader_y,follower_x,follower_y,follower_yaw,cmd_vx_map,cmd_vy_map,cmd_w,ex,ey,etheta,evx,evy,eomega"]
     for result in results:
         position = np.linalg.norm(result.error[:, :2], axis=1); yaw = np.abs(result.error[:, 2])
@@ -405,7 +454,7 @@ def _write_outputs(results: list[SimulationResult], config: SimulationConfig) ->
         post_yaw = yaw[post_step]
         post_peak_position = post_position.max() if post_position.size else float("nan")
         post_peak_yaw = post_yaw.max() if post_yaw.size else float("nan")
-        lines.append(f"{result.name},{position.max():.6f},{position[tail].mean():.6f},{position[-1]:.6f},{yaw[tail].mean():.6f},{yaw[-1]:.6f},{post_peak_position:.6f},{post_peak_yaw:.6f}")
+        lines.append(f"{result.name},{position.max():.6f},{position[tail].mean():.6f},{position[-1]:.6f},{yaw.max():.6f},{yaw[tail].mean():.6f},{yaw[-1]:.6f},{post_peak_position:.6f},{post_peak_yaw:.6f}")
         for index, time in enumerate(result.time):
             row = np.r_[result.leader[index, :2], result.follower[index, :3], result.command_map[index], result.error[index]]
             timeseries.append(result.name + "," + f"{time:.6f}," + ",".join(f"{value:.6f}" for value in row))
@@ -422,13 +471,30 @@ def run_experiment(config: SimulationConfig) -> list[Path]:
     return _write_outputs([simulate_case(name, config) for name in ("ideal", "delayed", "artstein")], config)
 
 
+def run_continuous_yaw_experiments(base_output_dir: Path) -> dict[str, list[Path]]:
+    return {
+        "constant_yaw_accel": run_experiment(SimulationConfig(
+            leader_mode="constant_accel", output_dir=base_output_dir / "constant_yaw_accel"
+        )),
+        "periodic_yaw_accel": run_experiment(SimulationConfig(
+            leader_mode="periodic_accel", output_dir=base_output_dir / "periodic_yaw_accel"
+        )),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, default=SimulationConfig.output_dir)
     parser.add_argument("--tmax", type=float, default=SimulationConfig.tmax)
+    parser.add_argument("--continuous-yaw", action="store_true")
     args = parser.parse_args()
-    for path in run_experiment(SimulationConfig(tmax=args.tmax, output_dir=args.out_dir)):
-        print(path)
+    if args.continuous_yaw:
+        for scenario, paths in run_continuous_yaw_experiments(args.out_dir).items():
+            for path in paths:
+                print(f"{scenario}: {path}")
+    else:
+        for path in run_experiment(SimulationConfig(tmax=args.tmax, output_dir=args.out_dir)):
+            print(path)
 
 
 if __name__ == "__main__":
