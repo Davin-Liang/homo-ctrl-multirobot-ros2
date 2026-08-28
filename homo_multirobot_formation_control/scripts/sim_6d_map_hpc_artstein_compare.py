@@ -209,6 +209,8 @@ class SimulationConfig:
     offset_map: tuple[float, float] = (-1.0, 0.0)
     leader_radius: float = 2.0
     leader_speed: float = 0.45
+    yaw_step_time: float = 30.0
+    yaw_step_angle: float = np.pi / 2.0
     output_dir: Path = Path(
         "homo_multirobot_formation_control/analysis/results/6d_map_hpc_artstein"
     )
@@ -234,6 +236,18 @@ def circle_leader_state(t: float, radius: float, speed: float) -> np.ndarray:
         radius * np.cos(phase), radius * np.sin(phase), theta,
         speed, 0.0, path_rate,
     ])
+
+
+def yaw_step_leader_state(t: float, radius: float, speed: float,
+                          step_time: float = 30.0,
+                          step_angle: float = np.pi / 2.0) -> np.ndarray:
+    """Circle leader with a yaw-reference step and continuous map translation."""
+    state = circle_leader_state(t, radius, speed)
+    if t >= step_time:
+        velocity_map = rot(state[2]) @ state[3:5]
+        state[2] = wrap_angle(state[2] + step_angle)
+        state[3:5] = map_to_body(state[2], velocity_map)
+    return state
 
 
 def _state_with_map_velocity(state: np.ndarray, velocity_map: np.ndarray,
@@ -309,10 +323,16 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
     rows = []
     t = 0.0
     while t < config.tmax - 1e-12:
-        leader = circle_leader_state(t, config.leader_radius, config.leader_speed)
+        leader = yaw_step_leader_state(
+            t, config.leader_radius, config.leader_speed,
+            config.yaw_step_time, config.yaw_step_angle,
+        )
         if kind == "artstein":
             horizon = config.td + config.tau
-            leader_ctrl = circle_leader_state(t + horizon, config.leader_radius, config.leader_speed)
+            leader_ctrl = yaw_step_leader_state(
+                t + horizon, config.leader_radius, config.leader_speed,
+                config.yaw_step_time, config.yaw_step_angle,
+            )
             follower_ctrl = predict_map_state(x2, history, config.td, config.tau, config.control_dt)
         else:
             leader_ctrl, follower_ctrl = leader, x2
@@ -327,8 +347,9 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
                 )
         history.appendleft(command.copy())
         sample_time = t + config.control_dt
-        leader_at_sample = circle_leader_state(
-            sample_time, config.leader_radius, config.leader_speed
+        leader_at_sample = yaw_step_leader_state(
+            sample_time, config.leader_radius, config.leader_speed,
+            config.yaw_step_time, config.yaw_step_angle,
         )
         actual_error = map_error(leader_at_sample, x2, np.asarray(config.offset_map))
         rows.append((sample_time, leader_at_sample, x2.copy(), command.copy(), actual_error))

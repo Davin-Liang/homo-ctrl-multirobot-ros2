@@ -17,6 +17,21 @@ SPEC.loader.exec_module(MODULE)
 
 
 class MapFrameModelTest(unittest.TestCase):
+    def test_yaw_step_changes_only_leader_yaw_reference(self):
+        before = MODULE.yaw_step_leader_state(29.999, 2.0, 0.45)
+        after = MODULE.yaw_step_leader_state(30.001, 2.0, 0.45)
+        nominal_after = MODULE.circle_leader_state(30.001, 2.0, 0.45)
+        np.testing.assert_allclose(after[:2], nominal_after[:2], atol=1e-12)
+        np.testing.assert_allclose(
+            MODULE.rot(after[2]) @ after[3:5],
+            MODULE.rot(nominal_after[2]) @ nominal_after[3:5],
+            atol=1e-12,
+        )
+        self.assertAlmostEqual(
+            MODULE.wrap_angle(after[2] - nominal_after[2]), np.pi / 2.0, places=12
+        )
+        self.assertLess(abs(MODULE.wrap_angle(before[2] - MODULE.circle_leader_state(29.999, 2.0, 0.45)[2])), 1e-12)
+
     def test_map_error_is_zero_at_fixed_map_offset(self):
         leader = np.array([1.0, -2.0, 0.4, 0.2, -0.1, 0.3])
         offset = np.array([-1.0, 0.5])
