@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.linalg import solve_continuous_lyapunov
+from scipy.linalg import expm, solve_continuous_lyapunov
 
 
 def wrap_angle(angle: float) -> float:
@@ -41,6 +41,77 @@ def map_error(
         rot(follower[2]) @ follower[3:5] - rot(leader[2]) @ leader[3:5],
         follower[5] - leader[5],
     ]
+
+
+def hnorm(error: np.ndarray, gd: np.ndarray, p: np.ndarray, nmax: int = 40) -> float:
+    if np.linalg.norm(error) < 1e-14:
+        return 0.0
+    lower, upper = -1.0, 1.0
+    while float((expm(-gd * lower) @ error).T @ p @ (expm(-gd * lower) @ error)) < 1.0:
+        lower *= 2.0
+    while float((expm(-gd * upper) @ error).T @ p @ (expm(-gd * upper) @ error)) > 1.0:
+        upper *= 2.0
+    for _ in range(nmax):
+        midpoint = 0.5 * (lower + upper)
+        scaled = expm(-gd * midpoint) @ error
+        if float(scaled.T @ p @ scaled) > 1.0:
+            lower = midpoint
+        else:
+            upper = midpoint
+    return float(np.exp(0.5 * (lower + upper)))
+
+
+class RegularizedMapHpc:
+    """Existing project's regularized engineering HPC, in map-frame error coordinates."""
+
+    def __init__(self, mass: float, inertia: float, mu: float, kp: float, kv: float,
+                 c_min: float):
+        if not 0.0 < c_min <= 1.0:
+            raise ValueError("c_min must be in (0, 1]")
+        self.a, self.b, g0, scale = build_nominal_model(mass, inertia)
+        self.mu = mu
+        self.gd = np.eye(6) + mu * g0
+        self.k = -scale @ np.hstack([kp * np.eye(3), kv * np.eye(3)])
+        self.p = solve_continuous_lyapunov((self.a + self.b @ self.k).T, -2.0 * np.eye(6))
+        self.c_min = c_min
+
+    def command(self, error: np.ndarray) -> np.ndarray:
+        if np.linalg.norm(error) < 1e-14:
+            return np.zeros(3)
+        c = np.clip(hnorm(error, self.gd, self.p), self.c_min, 1.0)
+        return c ** (1.0 + self.mu) * self.k @ expm(
+            self.gd * (1.0 - np.log(c))
+        ) @ error
+
+
+def map_to_body(theta: float, velocity_map: np.ndarray) -> np.ndarray:
+    return rot(theta).T @ velocity_map
+
+
+def predict_map_state(state: np.ndarray, history, td: float, tau: float,
+                      control_dt: float) -> np.ndarray:
+    """Predict with the map-frame first-order command model used by the plant."""
+    if td == 0.0 and tau == 0.0:
+        return state.copy()
+    if td < 0.0 or tau < 0.0 or control_dt <= 0.0:
+        raise ValueError("td/tau must be non-negative and control_dt positive")
+    predicted = state.copy()
+    velocity_map = rot(state[2]) @ state[3:5]
+    command = np.asarray(history[-1], dtype=float) if history else np.r_[velocity_map, state[5]]
+    horizon = td + tau
+    if tau > 0.0:
+        decay = np.exp(-horizon / tau)
+        predicted_velocity = command[:2] + decay * (velocity_map - command[:2])
+        predicted_rate = command[2] + decay * (state[5] - command[2])
+        predicted[:2] += horizon * command[:2] + tau * (1.0 - decay) * (velocity_map - command[:2])
+        predicted[2] = wrap_angle(state[2] + horizon * command[2] + tau * (1.0 - decay) * (state[5] - command[2]))
+    else:
+        predicted_velocity, predicted_rate = velocity_map, state[5]
+        predicted[:2] += horizon * velocity_map
+        predicted[2] = wrap_angle(state[2] + horizon * state[5])
+    predicted[3:5] = map_to_body(predicted[2], predicted_velocity)
+    predicted[5] = predicted_rate
+    return predicted
 
 
 def verify_nominal_identities(
