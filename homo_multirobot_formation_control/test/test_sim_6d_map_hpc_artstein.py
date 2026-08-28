@@ -47,6 +47,15 @@ class MapFrameModelTest(unittest.TestCase):
             atol=1e-12,
         )
 
+    def test_artstein_predictor_uses_full_delay_window_history(self):
+        state = np.array([0.2, -0.1, 0.3, 0.4, -0.2, 0.1])
+        recent = np.array([0.3, -0.1, 0.2])
+        history_a = deque([recent, np.zeros(3), np.zeros(3), np.zeros(3), np.zeros(3)])
+        history_b = deque([recent, np.array([0.8, 0.0, 0.0]), np.zeros(3), np.zeros(3), np.zeros(3)])
+        prediction_a = MODULE.predict_map_state(state, history_a, 0.22, 0.43, 0.05)
+        prediction_b = MODULE.predict_map_state(state, history_b, 0.22, 0.43, 0.05)
+        self.assertGreater(np.linalg.norm(prediction_a - prediction_b), 1e-4)
+
     def test_cases_share_initial_state_and_delayed_plant(self):
         config = MODULE.SimulationConfig(tmax=0.10)
         delayed = MODULE.simulate_case("delayed", config)

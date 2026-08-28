@@ -96,30 +96,73 @@ def map_to_body(theta: float, velocity_map: np.ndarray) -> np.ndarray:
     return rot(theta).T @ velocity_map
 
 
+def actuator_matrices_4d(tau: float) -> tuple[np.ndarray, np.ndarray]:
+    return np.array([
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, -1.0 / tau, 0.0],
+        [0.0, 0.0, 0.0, -1.0 / tau],
+    ]), np.array([
+        [0.0, 0.0], [0.0, 0.0], [1.0 / tau, 0.0], [0.0, 1.0 / tau],
+    ])
+
+
+def actuator_matrices_2d(tau: float) -> tuple[np.ndarray, np.ndarray]:
+    return np.array([[0.0, 1.0], [0.0, -1.0 / tau]]), np.array([[0.0], [1.0 / tau]])
+
+
+def artstein_integral(history, a: np.ndarray, b: np.ndarray, td: float,
+                      control_dt: float) -> np.ndarray:
+    samples = max(1, int(np.ceil(td / control_dt)))
+    integral = np.zeros(a.shape[0])
+    for index in range(min(samples, len(history))):
+        weight = control_dt if index < samples - 1 else td - (samples - 1) * control_dt
+        integral += expm(a * (index * control_dt - td)) @ b @ np.atleast_1d(history[index]) * weight
+    return integral
+
+
+def predict_from_artstein(z: np.ndarray, current_command: np.ndarray, a: np.ndarray,
+                          tau: float, td: float) -> np.ndarray:
+    delay_free = expm(a * td) @ z
+    decay = np.exp(-1.0)
+    channels = delay_free.shape[0] // 2
+    position = delay_free[:channels] + current_command * tau + tau * (1.0 - decay) * (
+        delay_free[channels:] - current_command
+    )
+    velocity = current_command + decay * (delay_free[channels:] - current_command)
+    return np.r_[position, velocity]
+
+
 def predict_map_state(state: np.ndarray, history, td: float, tau: float,
                       control_dt: float) -> np.ndarray:
-    """Predict with the map-frame first-order command model used by the plant."""
+    """Direction-A Artstein integral plus one-tau forward prediction.
+
+    The discrete integral is intentionally identical to the established
+    ``sim_6d_disc_artstein_compare.py`` implementation; history[0] is newest.
+    """
     if td == 0.0 and tau == 0.0:
         return state.copy()
     if td < 0.0 or tau < 0.0 or control_dt <= 0.0:
         raise ValueError("td/tau must be non-negative and control_dt positive")
-    predicted = state.copy()
+    if tau == 0.0:
+        raise ValueError("Artstein predictor requires positive tau when td is non-zero")
     velocity_map = rot(state[2]) @ state[3:5]
-    command = np.asarray(history[-1], dtype=float) if history else np.r_[velocity_map, state[5]]
-    horizon = td + tau
-    if tau > 0.0:
-        decay = np.exp(-horizon / tau)
-        predicted_velocity = command[:2] + decay * (velocity_map - command[:2])
-        predicted_rate = command[2] + decay * (state[5] - command[2])
-        predicted[:2] += horizon * command[:2] + tau * (1.0 - decay) * (velocity_map - command[:2])
-        predicted[2] = wrap_angle(state[2] + horizon * command[2] + tau * (1.0 - decay) * (state[5] - command[2]))
-    else:
-        predicted_velocity, predicted_rate = velocity_map, state[5]
-        predicted[:2] += horizon * velocity_map
-        predicted[2] = wrap_angle(state[2] + horizon * state[5])
-    predicted[3:5] = map_to_body(predicted[2], predicted_velocity)
-    predicted[5] = predicted_rate
-    return predicted
+    current_command = np.asarray(history[0], dtype=float) if history else np.r_[velocity_map, state[5]]
+    a4, b4 = actuator_matrices_4d(tau)
+    z4 = np.r_[state[:2], velocity_map] + artstein_integral(
+        deque(command[:2] for command in history), a4, b4, td, control_dt
+    )
+    predicted4 = predict_from_artstein(z4, current_command[:2], a4, tau, td)
+    a2, b2 = actuator_matrices_2d(tau)
+    z2 = np.array([state[2], state[5]]) + artstein_integral(
+        deque(np.array([command[2]]) for command in history), a2, b2, td, control_dt
+    )
+    predicted2 = predict_from_artstein(z2, np.array([current_command[2]]), a2, tau, td)
+    theta = wrap_angle(predicted2[0])
+    return np.array([
+        predicted4[0], predicted4[1], theta,
+        *map_to_body(theta, predicted4[2:4]), predicted2[1],
+    ])
 
 
 def verify_nominal_identities(
@@ -262,7 +305,7 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
     command = np.zeros(3)
     delay = _delay_line(command, 0.0 if kind == "ideal" else config.td, config.plant_dt)
     history: deque[np.ndarray] = deque(maxlen=max(2, int(np.ceil(config.td / config.control_dt)) + 2))
-    history.append(command.copy())
+    history.appendleft(command.copy())
     rows = []
     t = 0.0
     while t < config.tmax - 1e-12:
@@ -282,7 +325,7 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
                 x2 = step_delayed_plant(
                     x2, _advance_delay(delay, command), config.plant_dt, config.tau
                 )
-        history.append(command.copy())
+        history.appendleft(command.copy())
         actual_error = map_error(leader, x2, np.asarray(config.offset_map))
         rows.append((t + config.control_dt, leader, x2.copy(), command.copy(), actual_error))
         t += config.control_dt
