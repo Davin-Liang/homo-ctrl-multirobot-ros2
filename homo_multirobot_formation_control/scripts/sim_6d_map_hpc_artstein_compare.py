@@ -3,6 +3,14 @@
 
 from __future__ import annotations
 
+import argparse
+from collections import deque
+from dataclasses import dataclass
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.linalg import expm, solve_continuous_lyapunov
 
@@ -140,3 +148,202 @@ def verify_nominal_identities(
         "agd_commutator": float(np.linalg.norm(a @ gd - gd @ a - mu * a)),
         "gd_b": float(np.linalg.norm(gd @ b - b)),
     }
+
+
+@dataclass(frozen=True)
+class SimulationConfig:
+    tmax: float = 60.0
+    control_dt: float = 0.05
+    plant_dt: float = 0.01
+    td: float = 0.22
+    tau: float = 0.43
+    mass: float = 2.0
+    inertia: float = 1.0
+    mu: float = -0.25
+    kp: float = 1.2
+    kv: float = 2.0
+    c_min: float = 0.5
+    offset_map: tuple[float, float] = (-1.0, 0.0)
+    leader_radius: float = 2.0
+    leader_speed: float = 0.45
+    output_dir: Path = Path(
+        "homo_multirobot_formation_control/analysis/results/6d_map_hpc_artstein"
+    )
+
+
+@dataclass
+class SimulationResult:
+    name: str
+    td: float
+    initial_follower: np.ndarray
+    time: np.ndarray
+    leader: np.ndarray
+    follower: np.ndarray
+    command_map: np.ndarray
+    error: np.ndarray
+
+
+def circle_leader_state(t: float, radius: float, speed: float) -> np.ndarray:
+    path_rate = speed / radius
+    phase = path_rate * t
+    theta = wrap_angle(phase + np.pi / 2.0)
+    return np.array([
+        radius * np.cos(phase), radius * np.sin(phase), theta,
+        speed, 0.0, path_rate,
+    ])
+
+
+def _state_with_map_velocity(state: np.ndarray, velocity_map: np.ndarray,
+                             yaw_rate: float) -> np.ndarray:
+    result = state.copy()
+    result[3:5] = map_to_body(result[2], velocity_map)
+    result[5] = yaw_rate
+    return result
+
+
+def step_delayed_plant(state: np.ndarray, command_map: np.ndarray, dt: float,
+                       tau: float) -> np.ndarray:
+    velocity_map = rot(state[2]) @ state[3:5]
+    yaw_rate = state[5]
+    next_velocity = velocity_map + dt * (command_map[:2] - velocity_map) / tau
+    next_rate = yaw_rate + dt * (command_map[2] - yaw_rate) / tau
+    result = state.copy()
+    result[:2] += dt * next_velocity
+    result[2] = wrap_angle(result[2] + dt * next_rate)
+    return _state_with_map_velocity(result, next_velocity, next_rate)
+
+
+def step_ideal_plant(state: np.ndarray, command_map: np.ndarray, dt: float) -> np.ndarray:
+    result = state.copy()
+    result[:2] += dt * command_map[:2]
+    result[2] = wrap_angle(result[2] + dt * command_map[2])
+    return _state_with_map_velocity(result, command_map[:2], command_map[2])
+
+
+def _delay_line(initial: np.ndarray, delay: float, dt: float) -> deque[np.ndarray]:
+    steps = delay / dt
+    if not np.isclose(steps, round(steps), atol=1e-12):
+        raise ValueError("td must be an integer multiple of plant_dt")
+    return deque([initial.copy() for _ in range(int(round(steps)))])
+
+
+def _advance_delay(line: deque[np.ndarray], command: np.ndarray) -> np.ndarray:
+    if not line:
+        return command.copy()
+    delayed = line.popleft()
+    line.append(command.copy())
+    return delayed
+
+
+def _command_from_force(state: np.ndarray, force_moment: np.ndarray,
+                        config: SimulationConfig) -> np.ndarray:
+    velocity_map = rot(state[2]) @ state[3:5]
+    command = np.r_[
+        velocity_map + config.control_dt * force_moment[:2] / config.mass,
+        state[5] + config.control_dt * force_moment[2] / config.inertia,
+    ]
+    command[:2] = np.clip(command[:2], -1.0, 1.0)
+    command[2] = np.clip(command[2], -0.8, 0.8)
+    return command
+
+
+def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
+    if kind not in {"ideal", "delayed", "artstein"}:
+        raise ValueError(f"unsupported case: {kind}")
+    substeps = config.control_dt / config.plant_dt
+    if not np.isclose(substeps, round(substeps), atol=1e-12):
+        raise ValueError("control_dt must be an integer multiple of plant_dt")
+    substeps = int(round(substeps))
+    controller = RegularizedMapHpc(
+        config.mass, config.inertia, config.mu, config.kp, config.kv, config.c_min
+    )
+    x2 = np.array([3.8, -0.5, -0.5, 0.0, 0.0, 0.0])
+    initial_follower = x2.copy()
+    command = np.zeros(3)
+    delay = _delay_line(command, 0.0 if kind == "ideal" else config.td, config.plant_dt)
+    history: deque[np.ndarray] = deque(maxlen=max(2, int(np.ceil(config.td / config.control_dt)) + 2))
+    history.append(command.copy())
+    rows = []
+    t = 0.0
+    while t < config.tmax - 1e-12:
+        leader = circle_leader_state(t, config.leader_radius, config.leader_speed)
+        if kind == "artstein":
+            horizon = config.td + config.tau
+            leader_ctrl = circle_leader_state(t + horizon, config.leader_radius, config.leader_speed)
+            follower_ctrl = predict_map_state(x2, history, config.td, config.tau, config.control_dt)
+        else:
+            leader_ctrl, follower_ctrl = leader, x2
+        error = map_error(leader_ctrl, follower_ctrl, np.asarray(config.offset_map))
+        command = _command_from_force(x2, controller.command(error), config)
+        for _ in range(substeps):
+            if kind == "ideal":
+                x2 = step_ideal_plant(x2, command, config.plant_dt)
+            else:
+                x2 = step_delayed_plant(
+                    x2, _advance_delay(delay, command), config.plant_dt, config.tau
+                )
+        history.append(command.copy())
+        actual_error = map_error(leader, x2, np.asarray(config.offset_map))
+        rows.append((t + config.control_dt, leader, x2.copy(), command.copy(), actual_error))
+        t += config.control_dt
+    return SimulationResult(
+        kind, 0.0 if kind == "ideal" else config.td, initial_follower,
+        np.array([row[0] for row in rows]), np.array([row[1] for row in rows]),
+        np.array([row[2] for row in rows]), np.array([row[3] for row in rows]),
+        np.array([row[4] for row in rows]),
+    )
+
+
+def _write_outputs(results: list[SimulationResult], config: SimulationConfig) -> list[Path]:
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    plot_path = config.output_dir / "comparison.png"
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
+    for result in results:
+        axes[0, 0].plot(result.follower[:, 0], result.follower[:, 1], label=result.name)
+        axes[0, 1].plot(result.time, np.linalg.norm(result.error[:, :2], axis=1), label=result.name)
+        axes[1, 0].plot(result.time, np.abs(result.error[:, 2]), label=result.name)
+        axes[1, 1].plot(result.time, result.command_map[:, 0], label=f"{result.name} vx")
+    axes[0, 0].plot(results[0].leader[:, 0], results[0].leader[:, 1], "k--", label="leader")
+    for axis, title, ylabel in zip(
+        axes.ravel(), ("trajectory", "position error", "yaw error", "map vx command"),
+        ("y (m)", "m", "rad", "m/s"),
+    ):
+        axis.set(title=title, xlabel="t (s)" if axis is not axes[0, 0] else "x (m)", ylabel=ylabel)
+        axis.grid(True); axis.legend(frameon=False)
+    axes[0, 0].axis("equal")
+    fig.savefig(plot_path, dpi=180); plt.close(fig)
+
+    summary_path = config.output_dir / "summary_metrics.csv"
+    lines = ["case,max_position_error,tail_mean_position_error,final_position_error,tail_mean_yaw_error,final_yaw_error"]
+    timeseries = ["case,t,leader_x,leader_y,follower_x,follower_y,follower_yaw,cmd_vx_map,cmd_vy_map,cmd_w,ex,ey,etheta,evx,evy,eomega"]
+    for result in results:
+        position = np.linalg.norm(result.error[:, :2], axis=1); yaw = np.abs(result.error[:, 2])
+        tail = slice(int(.7 * len(position)), None)
+        lines.append(f"{result.name},{position.max():.6f},{position[tail].mean():.6f},{position[-1]:.6f},{yaw[tail].mean():.6f},{yaw[-1]:.6f}")
+        for index, time in enumerate(result.time):
+            row = np.r_[result.leader[index, :2], result.follower[index, :3], result.command_map[index], result.error[index]]
+            timeseries.append(result.name + "," + f"{time:.6f}," + ",".join(f"{value:.6f}" for value in row))
+    summary_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    timeseries_path = config.output_dir / "timeseries.csv"
+    timeseries_path.write_text("\n".join(timeseries) + "\n", encoding="utf-8")
+    diagnostics_path = config.output_dir / "diagnostics.txt"
+    diagnostics = verify_nominal_identities(config.mass, config.inertia, config.mu, config.kp, config.kv)
+    diagnostics_path.write_text("\n".join(f"{key}={value}" for key, value in diagnostics.items()) + "\n", encoding="utf-8")
+    return [plot_path, summary_path, timeseries_path, diagnostics_path]
+
+
+def run_experiment(config: SimulationConfig) -> list[Path]:
+    return _write_outputs([simulate_case(name, config) for name in ("ideal", "delayed", "artstein")], config)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--out-dir", type=Path, default=SimulationConfig.output_dir)
+    parser.add_argument("--tmax", type=float, default=SimulationConfig.tmax)
+    args = parser.parse_args()
+    for path in run_experiment(SimulationConfig(tmax=args.tmax, output_dir=args.out_dir)):
+        print(path)
+
+
+if __name__ == "__main__":
+    main()

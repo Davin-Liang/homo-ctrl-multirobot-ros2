@@ -1,7 +1,9 @@
 import importlib.util
 from pathlib import Path
+import sys
 import unittest
 from collections import deque
+import tempfile
 
 import numpy as np
 
@@ -9,6 +11,7 @@ import numpy as np
 SCRIPT_PATH = Path(__file__).parents[1] / "scripts" / "sim_6d_map_hpc_artstein_compare.py"
 SPEC = importlib.util.spec_from_file_location("sim_6d_map_hpc_artstein_compare", SCRIPT_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 
@@ -43,6 +46,25 @@ class MapFrameModelTest(unittest.TestCase):
             state,
             atol=1e-12,
         )
+
+    def test_cases_share_initial_state_and_delayed_plant(self):
+        config = MODULE.SimulationConfig(tmax=0.10)
+        delayed = MODULE.simulate_case("delayed", config)
+        artstein = MODULE.simulate_case("artstein", config)
+        np.testing.assert_allclose(delayed.initial_follower, artstein.initial_follower)
+        self.assertEqual(delayed.td, artstein.td)
+        self.assertEqual(delayed.td, config.td)
+
+    def test_run_writes_the_four_required_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = MODULE.run_experiment(MODULE.SimulationConfig(
+                tmax=0.10, output_dir=Path(directory)
+            ))
+            self.assertEqual(
+                {path.name for path in paths},
+                {"comparison.png", "summary_metrics.csv", "timeseries.csv", "diagnostics.txt"},
+            )
+            self.assertTrue(all(path.exists() for path in paths))
 
 
 if __name__ == "__main__":
