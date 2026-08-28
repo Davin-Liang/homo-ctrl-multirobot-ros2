@@ -250,6 +250,18 @@ def yaw_step_leader_state(t: float, radius: float, speed: float,
     return state
 
 
+def predict_leader_from_observation(leader: np.ndarray, time: float, horizon: float,
+                                    radius: float, speed: float) -> np.ndarray:
+    """Predict a planned circle without non-causally seeing a future yaw step."""
+    nominal_now = circle_leader_state(time, radius, speed)
+    future = circle_leader_state(time + horizon, radius, speed)
+    yaw_offset = wrap_angle(leader[2] - nominal_now[2])
+    velocity_map = rot(future[2]) @ future[3:5]
+    future[2] = wrap_angle(future[2] + yaw_offset)
+    future[3:5] = map_to_body(future[2], velocity_map)
+    return future
+
+
 def _state_with_map_velocity(state: np.ndarray, velocity_map: np.ndarray,
                              yaw_rate: float) -> np.ndarray:
     result = state.copy()
@@ -329,9 +341,8 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
         )
         if kind == "artstein":
             horizon = config.td + config.tau
-            leader_ctrl = yaw_step_leader_state(
-                t + horizon, config.leader_radius, config.leader_speed,
-                config.yaw_step_time, config.yaw_step_angle,
+            leader_ctrl = predict_leader_from_observation(
+                leader, t, horizon, config.leader_radius, config.leader_speed,
             )
             follower_ctrl = predict_map_state(x2, history, config.td, config.tau, config.control_dt)
         else:
@@ -371,6 +382,8 @@ def _write_outputs(results: list[SimulationResult], config: SimulationConfig) ->
         axes[0, 1].plot(result.time, np.linalg.norm(result.error[:, :2], axis=1), label=result.name)
         axes[1, 0].plot(result.time, np.abs(result.error[:, 2]), label=result.name)
         axes[1, 1].plot(result.time, result.command_map[:, 0], label=f"{result.name} vx")
+    for axis in (axes[0, 1], axes[1, 0], axes[1, 1]):
+        axis.axvline(config.yaw_step_time, color="0.35", linestyle="--", linewidth=1.0)
     axes[0, 0].plot(results[0].leader[:, 0], results[0].leader[:, 1], "k--", label="leader")
     for axis, title, ylabel in zip(
         axes.ravel(), ("trajectory", "position error", "yaw error", "map vx command"),
@@ -382,12 +395,17 @@ def _write_outputs(results: list[SimulationResult], config: SimulationConfig) ->
     fig.savefig(plot_path, dpi=180); plt.close(fig)
 
     summary_path = config.output_dir / "summary_metrics.csv"
-    lines = ["case,max_position_error,tail_mean_position_error,final_position_error,tail_mean_yaw_error,final_yaw_error"]
+    lines = ["case,max_position_error,tail_mean_position_error,final_position_error,tail_mean_yaw_error,final_yaw_error,post_step_peak_position_error,post_step_peak_yaw_error"]
     timeseries = ["case,t,leader_x,leader_y,follower_x,follower_y,follower_yaw,cmd_vx_map,cmd_vy_map,cmd_w,ex,ey,etheta,evx,evy,eomega"]
     for result in results:
         position = np.linalg.norm(result.error[:, :2], axis=1); yaw = np.abs(result.error[:, 2])
         tail = slice(int(.7 * len(position)), None)
-        lines.append(f"{result.name},{position.max():.6f},{position[tail].mean():.6f},{position[-1]:.6f},{yaw[tail].mean():.6f},{yaw[-1]:.6f}")
+        post_step = result.time >= config.yaw_step_time
+        post_position = position[post_step]
+        post_yaw = yaw[post_step]
+        post_peak_position = post_position.max() if post_position.size else float("nan")
+        post_peak_yaw = post_yaw.max() if post_yaw.size else float("nan")
+        lines.append(f"{result.name},{position.max():.6f},{position[tail].mean():.6f},{position[-1]:.6f},{yaw[tail].mean():.6f},{yaw[-1]:.6f},{post_peak_position:.6f},{post_peak_yaw:.6f}")
         for index, time in enumerate(result.time):
             row = np.r_[result.leader[index, :2], result.follower[index, :3], result.command_map[index], result.error[index]]
             timeseries.append(result.name + "," + f"{time:.6f}," + ",".join(f"{value:.6f}" for value in row))

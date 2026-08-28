@@ -13,6 +13,8 @@
 
 三个组共享 Leader 圆轨迹、Follower 初值、HPC 参数、命令限幅和随机种子。
 
+默认还包含一个未知的 Leader yaw 阶跃：`t=30 s` 时，Leader yaw 在当前切线航向基础上增加 `+90°`，位置与 map-frame 平移速度连续。Artstein 组在阶跃发生前不会预知它；发生后才将观测到的 yaw 偏置带入未来状态预测。
+
 ## 运行
 
 ```bash
@@ -26,6 +28,8 @@ python3 homo_multirobot_formation_control/scripts/sim_6d_map_hpc_artstein_compar
 - `summary_metrics.csv`：峰值、尾段均值和最终误差；
 - `timeseries.csv`：完整时序；
 - `diagnostics.txt`：可控性和齐次代数恒等式残差。
+
+`summary_metrics.csv` 还包含阶跃后的峰值位置误差和峰值 yaw 误差；图中虚线标出 `30 s` 阶跃时刻。
 
 ## 结论边界
 

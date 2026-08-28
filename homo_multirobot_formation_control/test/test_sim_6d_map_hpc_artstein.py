@@ -32,6 +32,26 @@ class MapFrameModelTest(unittest.TestCase):
         )
         self.assertLess(abs(MODULE.wrap_angle(before[2] - MODULE.circle_leader_state(29.999, 2.0, 0.45)[2])), 1e-12)
 
+    def test_unknown_yaw_step_is_not_visible_before_it_happens(self):
+        horizon = 0.65
+        before_time = 29.5
+        before = MODULE.yaw_step_leader_state(before_time, 2.0, 0.45)
+        before_prediction = MODULE.predict_leader_from_observation(
+            before, before_time, horizon, 2.0, 0.45
+        )
+        nominal_future = MODULE.circle_leader_state(before_time + horizon, 2.0, 0.45)
+        self.assertLess(abs(MODULE.wrap_angle(before_prediction[2] - nominal_future[2])), 1e-12)
+
+        after_time = 30.05
+        after = MODULE.yaw_step_leader_state(after_time, 2.0, 0.45)
+        after_prediction = MODULE.predict_leader_from_observation(
+            after, after_time, horizon, 2.0, 0.45
+        )
+        nominal_future = MODULE.circle_leader_state(after_time + horizon, 2.0, 0.45)
+        self.assertAlmostEqual(
+            MODULE.wrap_angle(after_prediction[2] - nominal_future[2]), np.pi / 2.0, places=12
+        )
+
     def test_map_error_is_zero_at_fixed_map_offset(self):
         leader = np.array([1.0, -2.0, 0.4, 0.2, -0.1, 0.3])
         offset = np.array([-1.0, 0.5])
@@ -111,6 +131,14 @@ class MapFrameModelTest(unittest.TestCase):
                 {"comparison.png", "summary_metrics.csv", "timeseries.csv", "diagnostics.txt"},
             )
             self.assertTrue(all(path.exists() for path in paths))
+
+    def test_yaw_step_run_reports_post_step_metrics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            MODULE.run_experiment(MODULE.SimulationConfig(
+                tmax=31.0, output_dir=Path(directory)
+            ))
+            header = (Path(directory) / "summary_metrics.csv").read_text().splitlines()[0]
+        self.assertIn("post_step_peak_yaw_error", header)
 
 
 if __name__ == "__main__":
