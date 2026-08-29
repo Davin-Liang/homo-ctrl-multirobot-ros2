@@ -10,6 +10,7 @@
 - `ideal`：无延迟、无一阶滞后。
 - `delayed`：含相同 plant，仅使用测量状态反馈。
 - `artstein`：含相同 plant，使用 map-frame 状态预测后再进入同一 HPC。
+- `artstein_linear`：与 `artstein` 使用完全相同的预测和 plant，但直接使用基础线性反馈 `u=Ke`，关闭齐次范数、截断和误差翘曲。
 
 三个组共享 Leader 圆轨迹、Follower 初值、HPC 参数、命令限幅和随机种子。
 

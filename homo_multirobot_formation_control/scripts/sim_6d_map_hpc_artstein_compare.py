@@ -73,7 +73,7 @@ class RegularizedMapHpc:
     """Existing project's regularized engineering HPC, in map-frame error coordinates."""
 
     def __init__(self, mass: float, inertia: float, mu: float, kp: float, kv: float,
-                 c_min: float):
+                 c_min: float, use_hpc: bool = True):
         if not 0.0 < c_min <= 1.0:
             raise ValueError("c_min must be in (0, 1]")
         self.a, self.b, g0, scale = build_nominal_model(mass, inertia)
@@ -82,8 +82,11 @@ class RegularizedMapHpc:
         self.k = -scale @ np.hstack([kp * np.eye(3), kv * np.eye(3)])
         self.p = solve_continuous_lyapunov((self.a + self.b @ self.k).T, -2.0 * np.eye(6))
         self.c_min = c_min
+        self.use_hpc = use_hpc
 
     def command(self, error: np.ndarray) -> np.ndarray:
+        if not self.use_hpc:
+            return self.k @ error
         if np.linalg.norm(error) < 1e-14:
             return np.zeros(3)
         c = np.clip(hnorm(error, self.gd, self.p), self.c_min, 1.0)
@@ -368,14 +371,15 @@ def _command_from_force(state: np.ndarray, force_moment: np.ndarray,
 
 
 def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
-    if kind not in {"ideal", "delayed", "artstein"}:
+    if kind not in {"ideal", "delayed", "artstein", "artstein_linear"}:
         raise ValueError(f"unsupported case: {kind}")
     substeps = config.control_dt / config.plant_dt
     if not np.isclose(substeps, round(substeps), atol=1e-12):
         raise ValueError("control_dt must be an integer multiple of plant_dt")
     substeps = int(round(substeps))
     controller = RegularizedMapHpc(
-        config.mass, config.inertia, config.mu, config.kp, config.kv, config.c_min
+        config.mass, config.inertia, config.mu, config.kp, config.kv, config.c_min,
+        use_hpc=(kind != "artstein_linear"),
     )
     x2 = np.array([3.8, -0.5, -0.5, 0.0, 0.0, 0.0])
     initial_follower = x2.copy()
@@ -387,7 +391,7 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
     t = 0.0
     while t < config.tmax - 1e-12:
         leader = leader_state(t, config)
-        if kind == "artstein":
+        if kind in {"artstein", "artstein_linear"}:
             horizon = config.td + config.tau
             if config.leader_mode == "yaw_step":
                 leader_ctrl = predict_leader_from_observation(
@@ -468,7 +472,10 @@ def _write_outputs(results: list[SimulationResult], config: SimulationConfig) ->
 
 
 def run_experiment(config: SimulationConfig) -> list[Path]:
-    return _write_outputs([simulate_case(name, config) for name in ("ideal", "delayed", "artstein")], config)
+    return _write_outputs(
+        [simulate_case(name, config) for name in ("ideal", "delayed", "artstein", "artstein_linear")],
+        config,
+    )
 
 
 def run_continuous_yaw_experiments(base_output_dir: Path) -> dict[str, list[Path]]:

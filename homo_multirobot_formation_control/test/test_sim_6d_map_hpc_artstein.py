@@ -92,6 +92,11 @@ class MapFrameModelTest(unittest.TestCase):
         ctrl = MODULE.RegularizedMapHpc(2.0, 1.0, -0.25, 1.2, 2.0, 0.5)
         np.testing.assert_allclose(ctrl.command(np.zeros(6)), np.zeros(3), atol=1e-12)
 
+    def test_linear_controller_returns_base_linear_feedback(self):
+        ctrl = MODULE.RegularizedMapHpc(2.0, 1.0, -0.25, 1.2, 2.0, 0.5, use_hpc=False)
+        error = np.array([0.3, -0.2, 0.1, 0.4, -0.5, 0.2])
+        np.testing.assert_allclose(ctrl.command(error), ctrl.k @ error)
+
     def test_predictor_matches_measurement_without_delay_or_lag(self):
         state = np.array([0.2, -0.1, 0.3, 0.4, -0.2, 0.1])
         np.testing.assert_allclose(
@@ -116,6 +121,14 @@ class MapFrameModelTest(unittest.TestCase):
         np.testing.assert_allclose(delayed.initial_follower, artstein.initial_follower)
         self.assertEqual(delayed.td, artstein.td)
         self.assertEqual(delayed.td, config.td)
+
+    def test_artstein_linear_shares_delayed_plant_and_initial_state(self):
+        config = MODULE.SimulationConfig(tmax=0.10)
+        hpc = MODULE.simulate_case("artstein", config)
+        linear = MODULE.simulate_case("artstein_linear", config)
+        self.assertEqual(linear.td, hpc.td)
+        self.assertEqual(linear.td, config.td)
+        np.testing.assert_allclose(linear.initial_follower, hpc.initial_follower)
 
     def test_recorded_error_uses_leader_at_the_same_timestamp(self):
         config = MODULE.SimulationConfig(tmax=0.05)
