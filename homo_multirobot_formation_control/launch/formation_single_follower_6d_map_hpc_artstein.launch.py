@@ -26,9 +26,7 @@ def generate_launch_description():
     use_hpc = LaunchConfiguration("use_hpc")
     control_rate = LaunchConfiguration("control_rate")
     hpc_c_min = LaunchConfiguration("hpc_c_min")
-    mu = LaunchConfiguration("mu")
-    kp = LaunchConfiguration("kp")
-    kv = LaunchConfiguration("kv")
+    initial_min_lambda = LaunchConfiguration("initial_min_lambda")
 
     tau = LaunchConfiguration("tau")
     tau_yaw = LaunchConfiguration("tau_yaw")
@@ -71,7 +69,7 @@ def generate_launch_description():
                 "use_hpc": use_hpc,
                 "control_rate": control_rate,
                 "hpc_c_min": hpc_c_min,
-                "mu": mu, "kp": kp, "kv": kv,
+                "initial_min_lambda": initial_min_lambda,
                 "tau": tau,
                 "tau_yaw": tau_yaw,
                 "Td": Td,
@@ -118,9 +116,7 @@ def generate_launch_description():
             DeclareLaunchArgument("use_hpc", default_value="true"),
             DeclareLaunchArgument("control_rate", default_value="20.0"),
             DeclareLaunchArgument("hpc_c_min", default_value="0.5"),
-            DeclareLaunchArgument("mu", default_value="-0.25"),
-            DeclareLaunchArgument("kp", default_value="1.2"),
-            DeclareLaunchArgument("kv", default_value="2.0"),
+            DeclareLaunchArgument("initial_min_lambda", default_value="1.0"),
             DeclareLaunchArgument("tau", default_value="0.43"),
             DeclareLaunchArgument("tau_yaw", default_value="0.43"),
             DeclareLaunchArgument("Td", default_value="0.22"),

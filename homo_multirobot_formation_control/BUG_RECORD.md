@@ -9,6 +9,7 @@
 
 | # | 问题 | 分类 | 处理 |
 |---|------|------|------|
+| 44 | Map 6D Artstein 初始零误差时 `k_lin` 出现 NaN，且固定 K 与数值模型结构不一致 | 控制/数值 | 零分母保护；初始化时 `k_lin → lpc2hpc_nd` 同步构建 HPC |
 | 43 | 4D Artstein 静止 Leader 接近编队圆时约 0.15m 径向过冲 | 控制/执行器延迟 | 增加基于实际相对速度的径向制动安全层 |
 | 42 | 4D Artstein-LQR 文档中 MPC 段落被插入内容打断 | 文档 | 调整 README 段落顺序 |
 | 41 | 非 MPC 图没有求解时间曲线却调用 legend | Python | 仅在存在 handles 时调用 legend |
@@ -41,6 +42,25 @@
 | 25 | omega_d·mass 下限过高 → 边界极限环震荡 | 控制 | 调低 mass 或 omega_d |
 | 26 | 连续边界投影切线方向无恢复力 → 单轴漂移 | 控制 | 结构特性，非 bug |
 | 27 | 8 字轨迹 Y 通道频率 2ω > ω_d → Y 轴跟踪差 | 控制 | 提高 omega_d 或放慢 8 字 |
+
+---
+
+## 44) Map 6D Artstein 固定偏移模型的增益与 HPC 参数不一致
+
+**现象**：首帧误差恰为零时直接计算 `-M*e_v/e_p` 会得到 NaN，`lpc2hpc_nd` 随后报
+闭环稳定性裕度不足；早期实现还以固定 `kp/kv` 构造 HPC，和 4D Artstein 的
+`k_lin → P/Gd/nu` 链路不一致。
+
+**原因**：map 固定偏移模型没有离散选点切换，不能直接沿用旧 6D Disc 的 Leader-frame
+选点和冻结更新策略；但其 Artstein predictor 可复用。零位置误差也必须显式回退到
+`min_lambda`，不能做除法。
+
+**处理**：新 `MapHpcController6DArtstein` 在首次获得预测 Leader/Follower 状态时计算
+三通道 `k_lin`，调用 `lpc2hpc_nd` 同步保存 `P/Gd/nu`；`abs(e_p) <= 1e-6` 时将速度比值
+设为零。launch 改用 `initial_min_lambda`，移除固定 `kp/kv/mu` 主路径。
+
+**验证**：带 `BUILD_6D_MAP_HPC_ARTSTEIN=ON` 的包构建、CTest 6/6 和
+`test_sim_6d_map_hpc_artstein` Python 回归均通过。
 
 ---
 

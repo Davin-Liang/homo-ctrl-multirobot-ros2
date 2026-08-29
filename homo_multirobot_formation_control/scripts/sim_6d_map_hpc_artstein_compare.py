@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.linalg import expm, solve_continuous_lyapunov
+from scipy.linalg import expm, null_space, solve, solve_continuous_lyapunov, sqrtm
 
 
 def wrap_angle(angle: float) -> float:
@@ -51,6 +51,58 @@ def map_error(
     ]
 
 
+def _rank(matrix: np.ndarray) -> int:
+    return int(np.linalg.matrix_rank(matrix, tol=1e-10))
+
+
+def _block_con(A: np.ndarray, B: np.ndarray) -> tuple[np.ndarray, list[int]]:
+    """4D Artstein script's controllability-block transformation."""
+    n = A.shape[0]
+    if _rank(np.hstack([np.linalg.matrix_power(A, i) @ B for i in range(n)])) < n:
+        raise ValueError("uncontrollable pair")
+    T, Ak, Bk, nt = np.eye(n), A.copy(), B.copy(), []
+    while _rank(Bk) < Ak.shape[0]:
+        nt.insert(0, _rank(Bk))
+        B_ort = null_space(Bk.T).T
+        B_p = null_space(B_ort).T
+        T_block = np.vstack([B_ort, B_p])
+        if Ak.shape[0] < n:
+            T_temp = np.eye(n); T_temp[:Ak.shape[0], :Ak.shape[0]] = T_block; T = T_temp @ T
+        else:
+            T = T_block
+        Ak_old = Ak; Bk = B_ort @ Ak_old @ B_p.T; Ak = B_ort @ Ak_old @ B_ort.T
+    nt.insert(0, _rank(Bk))
+    indices = np.cumsum([0, *nt])
+    Acur, Phi = T @ A @ np.linalg.inv(T), np.eye(n)
+    for i in range(len(nt) - 1):
+        r0, r1, c0, c1 = indices[i], indices[i + 1], indices[i + 1], indices[i + 2]
+        temp = Acur[r0:r1, c0:c1]
+        left = temp.T @ np.linalg.inv(temp @ temp.T) @ Acur[r0:r1, :c0]
+        transform = np.eye(n)
+        transform[c0:c1, :] = np.hstack([left, np.eye(nt[i + 1]), np.zeros((nt[i + 1], n - c1))])
+        Phi = transform @ Phi; Acur = transform @ Acur @ np.linalg.inv(transform)
+    return Phi @ T, nt
+
+
+def lpc2hpc_6d(A: np.ndarray, B: np.ndarray, K: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    """Same LPC-to-HPC synthesis used by the 4D numerical reference."""
+    Acl = A + B @ K
+    if -np.max(np.real(np.linalg.eigvals(Acl))) * 0.001 < 1e-5:
+        raise ValueError("insufficient stability margin")
+    T, nt = _block_con(A, B)
+    n, indices = A.shape[0], np.cumsum([0, *nt])
+    Anew, Bnew = T @ A @ np.linalg.inv(T), T @ B
+    B0, A0 = Bnew[indices[-2]:n], Anew[indices[-2]:n]
+    K0 = -np.linalg.pinv(B0) @ A0 @ T
+    G0 = -np.linalg.inv(T) @ np.diag([v for i, size in enumerate(nt) for v in [float(len(nt) - 1 - i)] * size]) @ T
+    P = solve(np.kron(np.eye(n), Acl.T) + np.kron(Acl.T, np.eye(n)),
+              -(2.0 * np.eye(n)).reshape(-1, order="F")).reshape((n, n), order="F")
+    root = sqrtm(P).real
+    values = np.real(np.linalg.eigvals(root @ G0 @ np.linalg.inv(root) + (root @ G0 @ np.linalg.inv(root)).T))
+    mu = max(-1.0, -1.0 / np.max(values) + 1e-5) if np.max(values) > 1e-5 else -1.0
+    return K0, G0, P, mu
+
+
 def hnorm(error: np.ndarray, gd: np.ndarray, p: np.ndarray, nmax: int = 40) -> float:
     if np.linalg.norm(error) < 1e-14:
         return 0.0
@@ -81,10 +133,18 @@ class RegularizedMapHpc:
         self.gd = np.eye(6) + mu * g0
         self.k = -scale @ np.hstack([kp * np.eye(3), kv * np.eye(3)])
         self.p = solve_continuous_lyapunov((self.a + self.b @ self.k).T, -2.0 * np.eye(6))
+        self.mass = mass
+        self.inertia = inertia
+        self.initialized = False
         self.c_min = c_min
         self.use_hpc = use_hpc
 
     def command(self, error: np.ndarray) -> np.ndarray:
+        if not self.initialized:
+            self.k = calculate_klin_6d(error, self.mass, self.inertia, 1.0)
+            _, g0, self.p, self.mu = lpc2hpc_6d(self.a, self.b, self.k)
+            self.gd = np.eye(6) + self.mu * g0
+            self.initialized = True
         if not self.use_hpc:
             return self.k @ error
         if np.linalg.norm(error) < 1e-14:
@@ -93,6 +153,21 @@ class RegularizedMapHpc:
         return c ** (1.0 + self.mu) * self.k @ expm(
             self.gd * (1.0 - np.log(c))
         ) @ error
+
+
+def calculate_klin_6d(error: np.ndarray, mass: float, inertia: float,
+                      min_lambda: float) -> np.ndarray:
+    """Same per-channel gain synthesis as the existing 6D Artstein Disc core."""
+    def channel(ep: float, ev: float, scale: float) -> tuple[float, float]:
+        ratio = -scale * ev / ep if abs(ep) > 1e-6 else 0.0
+        a = max(ratio, min_lambda)
+        return -a * a / scale, -2.0 * a
+    k = np.zeros((3, 6))
+    for index, scale in enumerate((mass, mass, inertia)):
+        k1, k2 = channel(error[index], error[index + 3], scale)
+        k[index, index] = k1
+        k[index, index + 3] = k2
+    return k
 
 
 def map_to_body(theta: float, velocity_map: np.ndarray) -> np.ndarray:
@@ -242,6 +317,16 @@ def circle_leader_state(t: float, radius: float, speed: float) -> np.ndarray:
     ])
 
 
+def fixed_yaw_leader_state(t: float, radius: float, speed: float) -> np.ndarray:
+    """Circle translation while Leader yaw remains fixed at zero."""
+    state = circle_leader_state(t, radius, speed)
+    velocity_map = rot(state[2]) @ state[3:5]
+    state[2] = 0.0
+    state[3:5] = velocity_map
+    state[5] = 0.0
+    return state
+
+
 def yaw_step_leader_state(t: float, radius: float, speed: float,
                           step_time: float = 30.0,
                           step_angle: float = np.pi / 2.0) -> np.ndarray:
@@ -347,6 +432,8 @@ def leader_state(t: float, config: SimulationConfig) -> np.ndarray:
         return periodic_accel_yaw_leader_state(t, config.leader_radius, config.leader_speed)
     if config.leader_mode == "unknown_yaw_jitter":
         return unknown_yaw_jitter_leader_state(t, config.leader_radius, config.leader_speed)
+    if config.leader_mode == "fixed_yaw":
+        return fixed_yaw_leader_state(t, config.leader_radius, config.leader_speed)
     raise ValueError(f"unsupported leader_mode: {config.leader_mode}")
 
 
@@ -533,12 +620,17 @@ def run_unknown_yaw_jitter_experiment(output_dir: Path) -> list[Path]:
     ))
 
 
+def run_fixed_yaw_experiment(output_dir: Path) -> list[Path]:
+    return run_experiment(SimulationConfig(leader_mode="fixed_yaw", output_dir=output_dir))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, default=SimulationConfig.output_dir)
     parser.add_argument("--tmax", type=float, default=SimulationConfig.tmax)
     parser.add_argument("--continuous-yaw", action="store_true")
     parser.add_argument("--unknown-yaw-jitter", action="store_true")
+    parser.add_argument("--fixed-yaw", action="store_true")
     args = parser.parse_args()
     if args.continuous_yaw:
         for scenario, paths in run_continuous_yaw_experiments(args.out_dir).items():
@@ -546,6 +638,9 @@ def main() -> None:
                 print(f"{scenario}: {path}")
     elif args.unknown_yaw_jitter:
         for path in run_unknown_yaw_jitter_experiment(args.out_dir):
+            print(path)
+    elif args.fixed_yaw:
+        for path in run_fixed_yaw_experiment(args.out_dir):
             print(path)
     else:
         for path in run_experiment(SimulationConfig(tmax=args.tmax, output_dir=args.out_dir)):

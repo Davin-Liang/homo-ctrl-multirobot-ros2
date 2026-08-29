@@ -41,9 +41,7 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   bool use_hpc = declare_parameter("use_hpc", true);
   control_rate_ = declare_parameter("control_rate", 20.0);
   double hpc_c_min = declare_parameter("hpc_c_min", 0.5);
-  double mu = declare_parameter("mu", -0.25);
-  double kp = declare_parameter("kp", 1.2);
-  double kv = declare_parameter("kv", 2.0);
+  double initial_min_lambda = declare_parameter("initial_min_lambda", 1.0);
 
   tau_v_ = declare_parameter("tau", 0.43);
   tau_w_ = declare_parameter("tau_yaw", tau_v_);
@@ -75,7 +73,7 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   build_predictors(tau_v_, tau_w_, Td_, dt);
 
   ctrl_ = std::make_unique<MapHpcController6DArtstein>(
-      Eigen::Vector2d(offset_map_x, offset_map_y), mass, inertia, mu, kp, kv, hpc_c_min, use_hpc, dt);
+      Eigen::Vector2d(offset_map_x, offset_map_y), mass, inertia, hpc_c_min, use_hpc, dt, initial_min_lambda);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius, wheel_max_omega,
                                     max_linear_accel, max_angular_accel);
@@ -263,7 +261,13 @@ void FormationController6DMapHpcArtstein::timer_cb()
         leader.x, Td_ + std::max(tau_v_, tau_w_));
     Eigen::VectorXd x2_h = predict_follower_state(follower);
 
-    controller_initialized_ = true;
+    try {
+      ctrl_->initialize(x1_h, x2_h);
+      controller_initialized_ = true;
+    } catch (const std::exception& e) {
+      RCLCPP_ERROR(get_logger(), "6D Map HPC initialization failed: %s", e.what());
+      return;
+    }
   }
 
   Eigen::VectorXd x1_h = predict_leader_state(

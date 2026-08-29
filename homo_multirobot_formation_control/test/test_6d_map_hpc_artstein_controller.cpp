@@ -8,10 +8,11 @@
 int main()
 {
   formation_control::MapHpcController6DArtstein controller(
-      Eigen::Vector2d(-1.0, 0.0), 2.0, 1.0, -0.25, 1.2, 2.0, 0.5, true, 0.05);
+      Eigen::Vector2d(-1.0, 0.0), 2.0, 1.0, 0.5, true, 0.05, 1.0);
   Eigen::VectorXd leader = Eigen::VectorXd::Zero(6);
   Eigen::VectorXd follower = Eigen::VectorXd::Zero(6);
   follower(0) = -1.0;
+  controller.initialize(leader, follower);
   assert(controller.command(leader, follower).norm() < 1e-12);
   leader(2) = M_PI_2;
   follower(2) = M_PI_2;

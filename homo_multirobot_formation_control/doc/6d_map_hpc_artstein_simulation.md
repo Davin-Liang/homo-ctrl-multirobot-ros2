@@ -1,16 +1,16 @@
 # 6D map-frame HPC 与 Artstein 数值仿真
 
-该脚本验证 `6D_齐次编队控制理论_Codex工程压缩版.md` 指定的 map-frame 固定偏移模型。它是独立于旧 `6d_disc_artstein` 的数值实验，不修改 ROS 2 控制器。
+该脚本验证 map-frame 固定偏移模型，并与 `formation_control_node_6d_map_hpc_artstein` 对齐；不修改旧 `6d_artstein_disc` 控制器。
 
 ## 模型与对照
 
 - 误差：`[ex, ey, e_theta, evx_map, evy_map, e_omega]`；位置偏移固定为 `[-1.0, 0.0] m`。
-- 控制器：沿用项目现有的正则化工程 HPC `u_impl`，而非包含 `K0` 的理论控制律。
+- 控制器：初始化时按 4D Artstein 同构的三通道规则计算 `k_lin`，再用 `lpc2hpc` 同步生成 `P`、`Gd`、`nu`；固定 map 偏移无选点切换，运行期不重算。
 - plant：map-frame 平移和 yaw-rate 的一阶速度响应，默认 `Td=0.22 s`、`tau=0.43 s`、控制周期 `0.05 s`、积分周期 `0.01 s`。
 - `ideal`：无延迟、无一阶滞后。
 - `delayed`：含相同 plant，仅使用测量状态反馈。
 - `artstein`：含相同 plant，使用 map-frame 状态预测后再进入同一 HPC。
-- `artstein_linear`：与 `artstein` 使用完全相同的预测和 plant，但直接使用基础线性反馈 `u=Ke`，关闭齐次范数、截断和误差翘曲。
+- `artstein_linear`：与 `artstein` 使用完全相同的预测和 plant，但直接使用初始化的 `k_lin e`，关闭齐次范数和误差翘曲。
 
 三个组共享 Leader 圆轨迹、Follower 初值、HPC 参数、命令限幅和随机种子。
 

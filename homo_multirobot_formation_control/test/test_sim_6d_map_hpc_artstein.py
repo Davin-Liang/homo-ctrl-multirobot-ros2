@@ -17,6 +17,17 @@ SPEC.loader.exec_module(MODULE)
 
 
 class MapFrameModelTest(unittest.TestCase):
+    def test_fixed_yaw_leader_keeps_circle_translation_with_zero_yaw_rate(self):
+        state = MODULE.fixed_yaw_leader_state(2.1, 2.0, 0.45)
+        nominal = MODULE.circle_leader_state(2.1, 2.0, 0.45)
+        np.testing.assert_allclose(state[:2], nominal[:2], atol=1e-12)
+        np.testing.assert_allclose(
+            MODULE.rot(state[2]) @ state[3:5],
+            MODULE.rot(nominal[2]) @ nominal[3:5], atol=1e-12,
+        )
+        self.assertEqual(state[2], 0.0)
+        self.assertEqual(state[5], 0.0)
+
     def test_unknown_yaw_jitter_keeps_circle_translation_and_uses_three_frequency_yaw(self):
         time = 1.37
         state = MODULE.unknown_yaw_jitter_leader_state(time, 2.0, 0.45)
@@ -136,6 +147,18 @@ class MapFrameModelTest(unittest.TestCase):
         ctrl = MODULE.RegularizedMapHpc(2.0, 1.0, -0.25, 1.2, 2.0, 0.5, use_hpc=False)
         error = np.array([0.3, -0.2, 0.1, 0.4, -0.5, 0.2])
         np.testing.assert_allclose(ctrl.command(error), ctrl.k @ error)
+
+    def test_dynamic_klin_is_initialized_from_the_first_map_error(self):
+        ctrl = MODULE.RegularizedMapHpc(2.0, 1.0, -0.25, 1.2, 2.0, 0.5)
+        error = np.array([2.0, -1.0, 0.5, -0.4, 0.2, -0.1])
+        ctrl.command(error)
+        expected = MODULE.calculate_klin_6d(error, 2.0, 1.0, 1.0)
+        np.testing.assert_allclose(ctrl.k, expected, atol=1e-12)
+
+    def test_dynamic_klin_keeps_large_positive_velocity_ratio_like_4d_reference(self):
+        error = np.array([1.0, 1.0, 1.0, -3.0, 0.0, 0.0])
+        k = MODULE.calculate_klin_6d(error, 2.0, 1.0, 1.0)
+        self.assertAlmostEqual(k[0, 3], -12.0, places=12)
 
     def test_predictor_matches_measurement_without_delay_or_lag(self):
         state = np.array([0.2, -0.1, 0.3, 0.4, -0.2, 0.1])

@@ -38,6 +38,7 @@
 | **6D (运动学, 边界投影)**        | `formation_single_follower_6d.launch.py`                     | `formation_control_node_6d`                     | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]`                             | 连续边界投影                  | 集成于 6D 主回路                   |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py`                | `formation_control_node_6d_disc`                | 同 6D                                                              | 离散多边形 + tol 切换         | 集成于 6D 主回路                   |
 | **6D Artstein Disc (预测补偿)**  | `formation_single_follower_6d_artstein_disc.launch.py`       | `formation_control_node_6d_artstein_disc`       | 同 6D，进入 HPC 前做平移/yaw 预测                                  | 离散多边形 + tol 切换         | 2D Artstein 预测后集成于 6D 主回路 |
+| **6D Map HPC Artstein** | `formation_single_follower_6d_map_hpc_artstein.launch.py` | `formation_control_node_6d_map_hpc_artstein` | map 系固定偏移 + 平移/yaw Artstein 预测 | 单一固定 `offset_map` | 初始化时计算 6D `k_lin`，并以 `lpc2hpc_nd` 同步构建 HPC |
 | **6D Artstein Disc + HOCBF**     | `formation_single_follower_6d_artstein_disc_hocbf.launch.py` | `formation_control_node_6d_artstein_disc_hocbf` | 同 6D Artstein Disc；预测 map 平移状态进入多圆柱 HOCBF-QP          | 离散多边形 + 局部切向通行偏置 | 保留 Artstein yaw 输出             |
 | **6D Motor (电机感知模型)**      | `formation_single_follower_6d_motor.launch.py`               | `formation_control_node_6d_motor`               | `[p_x,p_y,v_x^c,v_y^c,v_x^r,v_y^r]` (map 系, cmd/real 拆分)      | 离散多边形 + tol 切换         | 独立 P+前馈                        |
 | **6D+OA (运动学+避障)**          | `formation_single_follower_6d_oa.launch.py`                  | `formation_control_node_6d_oa`                  | 同 6D                                                              | 同 6D                         | 同 6D                              |
@@ -533,6 +534,27 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 | `hpc_vel_threshold`  | 0.3  | leader twist 变化超过该阈值才重算 HPC                                 |
 | `hpc_yaw_threshold`  | 0.3  | leader/follower 相对 yaw 变化超过该阈值才重算 HPC                     |
 | `stability_margin`   | 0.01 | `A+B*K` Hurwitz 检查裕度，不满足则复用上一组稳定 HPC 或退回线性控制 |
+
+### 启动（6D Map HPC Artstein，固定 map 编队偏移）
+
+该节点与数值 map-frame 模型一致：Follower 目标为 `p_leader + offset_map`。
+Leader 原地自转时，Follower 只跟随 yaw，不绕 Leader 旋转。固定偏移没有离散选点，
+因此 `k_lin`、`P`、`Gd` 和 `nu` 仅在控制器初始化时同步计算一次。
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_map_hpc_artstein.launch.py \
+  leader_ns:=/robot1 follower_ns:=/robot2 \
+  offset_map_x:=-1.0 offset_map_y:=0.0 initial_min_lambda:=1.0 \
+  tau:=0.43 tau_yaw:=0.43 Td:=0.22
+```
+
+延迟注入测试需使模型参数与 plant 一致：
+
+```bash
+ros2 launch homo_multirobot_formation_control formation_single_follower_6d_map_hpc_artstein.launch.py \
+  use_motor_delay:=true motor_tau:=0.43 transport_delay:=0.22 delay_max_accel:=2.0 \
+  tau:=0.43 tau_yaw:=0.43 Td:=0.22
+```
 | `max_linear_accel`   | 2.0  | 控制器侧 body x/y 分量加速度约束                                      |
 | `max_angular_accel`  | 4.0  | 控制器侧 yaw 加速度约束                                               |
 | `delay_max_accel`    | 2.0  | 仿真延迟节点侧分量加速度约束，仅 `use_motor_delay:=true` 时生效     |
