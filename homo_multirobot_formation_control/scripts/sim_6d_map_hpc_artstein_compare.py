@@ -291,6 +291,26 @@ def periodic_accel_yaw_leader_state(t: float, radius: float, speed: float,
     return _leader_with_yaw_offset(t, radius, speed, yaw_offset, yaw_rate_offset)
 
 
+def unknown_yaw_jitter_leader_state(t: float, radius: float, speed: float) -> np.ndarray:
+    """Circle translation with a zero-baseline, deterministic unknown yaw jitter."""
+    state = circle_leader_state(t, radius, speed)
+    velocity_map = rot(state[2]) @ state[3:5]
+    yaw = (
+        0.20 * np.sin(0.73 * t)
+        - 0.09 * np.sin(1.91 * t + 0.70)
+        - 0.04 * np.sin(3.47 * t + 1.10)
+    )
+    yaw_rate = (
+        0.20 * 0.73 * np.cos(0.73 * t)
+        - 0.09 * 1.91 * np.cos(1.91 * t + 0.70)
+        - 0.04 * 3.47 * np.cos(3.47 * t + 1.10)
+    )
+    state[2] = yaw
+    state[3:5] = map_to_body(yaw, velocity_map)
+    state[5] = yaw_rate
+    return state
+
+
 def predict_leader_from_observation(leader: np.ndarray, time: float, horizon: float,
                                     radius: float, speed: float) -> np.ndarray:
     """Predict a planned circle without non-causally seeing a future yaw step."""
@@ -300,6 +320,18 @@ def predict_leader_from_observation(leader: np.ndarray, time: float, horizon: fl
     velocity_map = rot(future[2]) @ future[3:5]
     future[2] = wrap_angle(future[2] + yaw_offset)
     future[3:5] = map_to_body(future[2], velocity_map)
+    return future
+
+
+def predict_unknown_yaw_jitter_leader_from_observation(
+    leader: np.ndarray, time: float, horizon: float, radius: float, speed: float
+) -> np.ndarray:
+    """Causal Leader prediction: circle translation plus constant measured yaw rate."""
+    future = circle_leader_state(time + horizon, radius, speed)
+    velocity_map = rot(future[2]) @ future[3:5]
+    future[2] = wrap_angle(leader[2] + leader[5] * horizon)
+    future[3:5] = map_to_body(future[2], velocity_map)
+    future[5] = leader[5]
     return future
 
 
@@ -313,6 +345,8 @@ def leader_state(t: float, config: SimulationConfig) -> np.ndarray:
         return constant_accel_yaw_leader_state(t, config.leader_radius, config.leader_speed)
     if config.leader_mode == "periodic_accel":
         return periodic_accel_yaw_leader_state(t, config.leader_radius, config.leader_speed)
+    if config.leader_mode == "unknown_yaw_jitter":
+        return unknown_yaw_jitter_leader_state(t, config.leader_radius, config.leader_speed)
     raise ValueError(f"unsupported leader_mode: {config.leader_mode}")
 
 
@@ -395,6 +429,10 @@ def simulate_case(kind: str, config: SimulationConfig) -> SimulationResult:
             horizon = config.td + config.tau
             if config.leader_mode == "yaw_step":
                 leader_ctrl = predict_leader_from_observation(
+                    leader, t, horizon, config.leader_radius, config.leader_speed,
+                )
+            elif config.leader_mode == "unknown_yaw_jitter":
+                leader_ctrl = predict_unknown_yaw_jitter_leader_from_observation(
                     leader, t, horizon, config.leader_radius, config.leader_speed,
                 )
             else:
@@ -489,16 +527,26 @@ def run_continuous_yaw_experiments(base_output_dir: Path) -> dict[str, list[Path
     }
 
 
+def run_unknown_yaw_jitter_experiment(output_dir: Path) -> list[Path]:
+    return run_experiment(SimulationConfig(
+        leader_mode="unknown_yaw_jitter", output_dir=output_dir
+    ))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out-dir", type=Path, default=SimulationConfig.output_dir)
     parser.add_argument("--tmax", type=float, default=SimulationConfig.tmax)
     parser.add_argument("--continuous-yaw", action="store_true")
+    parser.add_argument("--unknown-yaw-jitter", action="store_true")
     args = parser.parse_args()
     if args.continuous_yaw:
         for scenario, paths in run_continuous_yaw_experiments(args.out_dir).items():
             for path in paths:
                 print(f"{scenario}: {path}")
+    elif args.unknown_yaw_jitter:
+        for path in run_unknown_yaw_jitter_experiment(args.out_dir):
+            print(path)
     else:
         for path in run_experiment(SimulationConfig(tmax=args.tmax, output_dir=args.out_dir)):
             print(path)

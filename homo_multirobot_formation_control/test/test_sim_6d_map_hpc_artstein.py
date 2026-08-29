@@ -17,6 +17,46 @@ SPEC.loader.exec_module(MODULE)
 
 
 class MapFrameModelTest(unittest.TestCase):
+    def test_unknown_yaw_jitter_keeps_circle_translation_and_uses_three_frequency_yaw(self):
+        time = 1.37
+        state = MODULE.unknown_yaw_jitter_leader_state(time, 2.0, 0.45)
+        nominal = MODULE.circle_leader_state(time, 2.0, 0.45)
+        expected_yaw = (
+            0.20 * np.sin(0.73 * time)
+            - 0.09 * np.sin(1.91 * time + 0.70)
+            - 0.04 * np.sin(3.47 * time + 1.10)
+        )
+        expected_rate = (
+            0.20 * 0.73 * np.cos(0.73 * time)
+            - 0.09 * 1.91 * np.cos(1.91 * time + 0.70)
+            - 0.04 * 3.47 * np.cos(3.47 * time + 1.10)
+        )
+        np.testing.assert_allclose(state[:2], nominal[:2], atol=1e-12)
+        np.testing.assert_allclose(
+            MODULE.rot(state[2]) @ state[3:5],
+            MODULE.rot(nominal[2]) @ nominal[3:5],
+            atol=1e-12,
+        )
+        self.assertAlmostEqual(state[2], expected_yaw, places=12)
+        self.assertAlmostEqual(state[5], expected_rate, places=12)
+
+    def test_unknown_yaw_jitter_predictor_uses_only_current_yaw_and_rate(self):
+        time, horizon = 1.37, 0.65
+        observation = MODULE.unknown_yaw_jitter_leader_state(time, 2.0, 0.45)
+        predicted = MODULE.predict_unknown_yaw_jitter_leader_from_observation(
+            observation, time, horizon, 2.0, 0.45
+        )
+        future_translation = MODULE.circle_leader_state(time + horizon, 2.0, 0.45)
+        np.testing.assert_allclose(predicted[:2], future_translation[:2], atol=1e-12)
+        np.testing.assert_allclose(
+            MODULE.rot(predicted[2]) @ predicted[3:5],
+            MODULE.rot(future_translation[2]) @ future_translation[3:5],
+            atol=1e-12,
+        )
+        self.assertAlmostEqual(
+            predicted[2], MODULE.wrap_angle(observation[2] + observation[5] * horizon), places=12
+        )
+
     def test_constant_accel_yaw_keeps_map_translation_and_caps_rate(self):
         state = MODULE.constant_accel_yaw_leader_state(60.0, 2.0, 0.45)
         nominal = MODULE.circle_leader_state(60.0, 2.0, 0.45)
@@ -178,6 +218,15 @@ class MapFrameModelTest(unittest.TestCase):
                 (Path(directory) / name / "summary_metrics.csv").exists()
                 for name in outputs
             ))
+
+    def test_unknown_yaw_jitter_runner_writes_summary(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = MODULE.run_unknown_yaw_jitter_experiment(Path(directory))
+            self.assertEqual(
+                {path.name for path in paths},
+                {"comparison.png", "summary_metrics.csv", "timeseries.csv", "diagnostics.txt"},
+            )
+            self.assertTrue(all(path.exists() for path in paths))
 
 
 if __name__ == "__main__":
