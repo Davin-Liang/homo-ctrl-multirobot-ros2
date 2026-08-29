@@ -19,11 +19,10 @@ def generate_launch_description():
     follower_ns = LaunchConfiguration("follower_ns")
     use_sim_time = LaunchConfiguration("use_sim_time")
 
-    radius = LaunchConfiguration("radius")
+    offset_map_x = LaunchConfiguration("offset_map_x")
+    offset_map_y = LaunchConfiguration("offset_map_y")
     mass = LaunchConfiguration("mass")
     I = LaunchConfiguration("I")
-    m_p = LaunchConfiguration("m_p")
-    tol = LaunchConfiguration("tol")
     use_hpc = LaunchConfiguration("use_hpc")
     control_rate = LaunchConfiguration("control_rate")
     hpc_c_min = LaunchConfiguration("hpc_c_min")
@@ -65,11 +64,10 @@ def generate_launch_description():
                 "leader_ns": leader_ns,
                 "follower_ns": follower_ns,
                 "use_sim_time": use_sim_time,
-                "radius": radius,
+                "offset_map_x": offset_map_x,
+                "offset_map_y": offset_map_y,
                 "mass": mass,
                 "I": I,
-                "m_p": m_p,
-                "tol": tol,
                 "use_hpc": use_hpc,
                 "control_rate": control_rate,
                 "hpc_c_min": hpc_c_min,
@@ -113,11 +111,10 @@ def generate_launch_description():
             DeclareLaunchArgument("leader_ns", default_value="/robot1"),
             DeclareLaunchArgument("follower_ns", default_value="/robot2"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
-            DeclareLaunchArgument("radius", default_value="2.0"),
+            DeclareLaunchArgument("offset_map_x", default_value="-1.0"),
+            DeclareLaunchArgument("offset_map_y", default_value="0.0"),
             DeclareLaunchArgument("mass", default_value="2.0"),
             DeclareLaunchArgument("I", default_value="1.0"),
-            DeclareLaunchArgument("m_p", default_value="4"),
-            DeclareLaunchArgument("tol", default_value="0.1"),
             DeclareLaunchArgument("use_hpc", default_value="true"),
             DeclareLaunchArgument("control_rate", default_value="20.0"),
             DeclareLaunchArgument("hpc_c_min", default_value="0.5"),

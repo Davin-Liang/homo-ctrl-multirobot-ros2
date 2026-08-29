@@ -139,7 +139,7 @@ private:
   double max_angular_vel_ = 0.5;
   double min_cmd_vel_ = 0.0;
 
-  std::unique_ptr<formation_control::MapHpcController6DArtsteinDisc> ctrl_;
+  std::unique_ptr<formation_control::MapHpcController6DArtstein> ctrl_;
   formation_control::KinematicConstraint constraint_;
   formation_control::ArtsteinPredictorNd trans_predictor_;
   formation_control::ArtsteinPredictorNd yaw_predictor_;

@@ -10,15 +10,15 @@
 
 namespace formation_control {
 
-class MapHpcController6DArtsteinDisc {
+class MapHpcController6DArtstein {
 public:
-  MapHpcController6DArtsteinDisc(double radius, int points, double tol,
+  MapHpcController6DArtstein(const Eigen::Vector2d& offset_map,
       double mass, double inertia, double mu, double kp, double kv,
       double c_min, bool use_hpc, double period)
-  : radius_(radius), points_(points), tol_(tol), mass_(mass), inertia_(inertia),
+  : offset_map_(offset_map), mass_(mass), inertia_(inertia),
     mu_(mu), c_min_(c_min), use_hpc_(use_hpc), period_(period)
   {
-    if (radius_ <= 0.0 || points_ <= 0 || mass_ <= 0.0 || inertia_ <= 0.0 ||
+    if (mass_ <= 0.0 || inertia_ <= 0.0 ||
         period_ <= 0.0 || c_min_ <= 0.0 || c_min_ > 1.0) {
       throw std::invalid_argument("invalid 6D map HPC parameters");
     }
@@ -38,7 +38,11 @@ public:
   Eigen::Vector3d command(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower)
   {
     if (leader.size() != 6 || follower.size() != 6) throw std::invalid_argument("state must be 6D");
-    Eigen::Matrix<double, 6, 1> error = select_error(leader, follower);
+    Eigen::Matrix<double, 6, 1> error;
+    error.head<2>() = follower.head<2>() - leader.head<2>() - offset_map_;
+    error(2) = wrap(follower(2) - leader(2));
+    error.segment<2>(3) = rotate(follower(2), follower.segment<2>(3)) - rotate(leader(2), leader.segment<2>(3));
+    error(5) = follower(5) - leader(5);
     Eigen::Vector3d force = use_hpc_ ? homogeneous_command(error) : k_ * error;
     Eigen::Vector2d vf_map = rotate(follower(2), follower.segment<2>(3));
     return Eigen::Vector3d(vf_map(0) + period_ * force(0) / mass_,
@@ -46,36 +50,12 @@ public:
                            follower(5) + period_ * force(2) / inertia_);
   }
 
-  int target_idx() const { return target_idx_; }
-
 private:
   static double wrap(double value) { return std::atan2(std::sin(value), std::cos(value)); }
   static Eigen::Vector2d rotate(double yaw, const Eigen::Vector2d& value)
   {
     const double c = std::cos(yaw), s = std::sin(yaw);
     return {c * value(0) - s * value(1), s * value(0) + c * value(1)};
-  }
-  Eigen::Vector2d target(int index) const
-  {
-    const double phase = 2.0 * M_PI * index / points_;
-    return {-radius_ * std::cos(phase), -radius_ * std::sin(phase)};
-  }
-  Eigen::Matrix<double, 6, 1> error_for(const Eigen::VectorXd& l, const Eigen::VectorXd& f, int index) const
-  {
-    Eigen::Matrix<double, 6, 1> e;
-    e.head<2>() = f.head<2>() - l.head<2>() - rotate(l(2), target(index));
-    e(2) = wrap(f(2) - l(2));
-    e.segment<2>(3) = rotate(f(2), f.segment<2>(3)) - rotate(l(2), l.segment<2>(3));
-    e(5) = f(5) - l(5);
-    return e;
-  }
-  Eigen::Matrix<double, 6, 1> select_error(const Eigen::VectorXd& l, const Eigen::VectorXd& f)
-  {
-    int best = 0; double best_norm = std::numeric_limits<double>::infinity();
-    for (int i = 0; i < points_; ++i) { double n = error_for(l, f, i).norm(); if (n < best_norm) { best = i; best_norm = n; } }
-    double current_norm = error_for(l, f, target_idx_).norm();
-    if (best != target_idx_ && best_norm + tol_ < current_norm) target_idx_ = best;
-    return error_for(l, f, target_idx_);
   }
   Eigen::Matrix<double, 6, 6> lyapunov(const Eigen::Matrix<double, 6, 6>& acl)
   {
@@ -100,7 +80,7 @@ private:
     double c = std::clamp(std::exp(0.5 * (low + high)), c_min_, 1.0);
     return std::pow(c, 1.0 + mu_) * k_ * (gd_ * (1.0 - std::log(c))).exp() * error;
   }
-  double radius_, tol_, mass_, inertia_, mu_, c_min_, period_; int points_, target_idx_ = 0;
+  Eigen::Vector2d offset_map_; double mass_, inertia_, mu_, c_min_, period_;
   bool use_hpc_; Eigen::Matrix<double, 3, 6> k_; Eigen::Matrix<double, 6, 6> gd_, p_;
 };
 }  // namespace formation_control

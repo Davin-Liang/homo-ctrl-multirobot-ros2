@@ -34,11 +34,10 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   leader_ns_ = declare_parameter("leader_ns", "/robot1");
   follower_ns_ = declare_parameter("follower_ns", "/robot2");
 
-  double radius = declare_parameter("radius", 2.0);
+  double offset_map_x = declare_parameter("offset_map_x", -1.0);
+  double offset_map_y = declare_parameter("offset_map_y", 0.0);
   double mass = declare_parameter("mass", 2.0);
   double inertia = declare_parameter("I", 1.0);
-  int m_p = declare_parameter("m_p", 4);
-  double tol = declare_parameter("tol", 0.1);
   bool use_hpc = declare_parameter("use_hpc", true);
   control_rate_ = declare_parameter("control_rate", 20.0);
   double hpc_c_min = declare_parameter("hpc_c_min", 0.5);
@@ -75,8 +74,8 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   double dt = 1.0 / control_rate_;
   build_predictors(tau_v_, tau_w_, Td_, dt);
 
-  ctrl_ = std::make_unique<MapHpcController6DArtsteinDisc>(
-      radius, m_p, tol, mass, inertia, mu, kp, kv, hpc_c_min, use_hpc, dt);
+  ctrl_ = std::make_unique<MapHpcController6DArtstein>(
+      Eigen::Vector2d(offset_map_x, offset_map_y), mass, inertia, mu, kp, kv, hpc_c_min, use_hpc, dt);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius, wheel_max_omega,
                                     max_linear_accel, max_angular_accel);
@@ -304,13 +303,13 @@ void FormationController6DMapHpcArtstein::timer_cb()
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
     "6D_ART pred_shift=(%.3f, %.3f, %.3f) cmd=(%+.3f,%+.3f,%+.3f) "
     "|v_raw|=%.3f |v_clamped|=%.3f |v_final|=%.3f "
-    "target=%d scale=%.2f",
+    "scale=%.2f",
     x2_h(0) - follower.x(0),
     x2_h(1) - follower.x(1),
     wrap_angle(x2_h(2) - follower.x(2)),
     cmd.linear.x, cmd.linear.y, cmd.angular.z,
     raw_linear_mag, clamped_linear_mag, final_linear_mag,
-    ctrl_->target_idx(), wheel_scale);
+    wheel_scale);
 
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
     "YAW_DIAG yaw_l=%.3f yaw_f=%.3f yaw_lp=%.3f yaw_fp=%.3f "
