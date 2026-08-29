@@ -102,6 +102,22 @@ install(TARGETS formation_control_node_4d_artstein
   DESTINATION lib/${PROJECT_NAME}
 )
 
+option(BUILD_6D_MAP_HPC_ARTSTEIN "Build 6D Map HPC Artstein controller" OFF)
+if(BUILD_6D_MAP_HPC_ARTSTEIN)
+  add_executable(formation_control_node_6d_map_hpc_artstein
+    src/main_6d_map_hpc_artstein.cpp
+    src/formation_control_node_6d_map_hpc_artstein.cpp
+  )
+  target_include_directories(formation_control_node_6d_map_hpc_artstein PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+  ament_target_dependencies(formation_control_node_6d_map_hpc_artstein
+    rclcpp geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs)
+  target_link_libraries(formation_control_node_6d_map_hpc_artstein Eigen3::Eigen)
+  install(TARGETS formation_control_node_6d_map_hpc_artstein DESTINATION lib/${PROJECT_NAME})
+endif()
+
 # ---- 以下目标暂不编译，降低实物 ARM 的内存占用；需要时改为 if(TRUE)。--------
 if(FALSE)
 
