@@ -21,13 +21,15 @@
     parameter_name: value
 ```
 
-控制器节点的 `parameters` 按以下顺序传入：
+launch 在生成描述时读取对应 YAML 的 `ros__parameters`，并以其中的值作为同名
+`DeclareLaunchArgument` 的默认值。控制器节点的 `parameters` 再按以下顺序传入：
 
 1. 该 launch 对应的固定 YAML 文件。
 2. 现有 launch argument 构成的参数字典。
 
-ROS 2 按后项覆盖前项处理，因此 YAML 是启动默认值，而命令行中显式提供的
-`name:=value` 会经由 launch argument 覆盖 YAML 中同名参数。辅助的
+这样 launch argument 未由用户指定时会采用 YAML 值；用户在命令行显式提供的
+`name:=value` 则替换该默认值。ROS 2 节点参数列表的后项覆盖前项，因此第二项
+launch argument 参数字典会将该最终值应用到 YAML 之上。辅助的
 `sim_motor_delay.py` 节点继续使用同一批 launch argument，保证延迟模型参数与
 控制器计算一致。
 
@@ -50,10 +52,10 @@ ROS 2 按后项覆盖前项处理，因此 YAML 是启动默认值，而命令�
 
 ## 验证
 
-新增 Python 静态测试，覆盖：
+新增 Python 测试，覆盖：
 
 1. 五份 YAML 文件存在，且为可解析的 ROS 2 参数文件。
 2. 每份 YAML 的参数键与相应 launch 的 `DeclareLaunchArgument` 名称完全一致。
-3. 每个控制器节点将 YAML 放在 `parameters` 的首项，并将 launch argument 参数字典置于其后，保证覆盖顺序。
-4. 使用 `ros2 launch ... --show-args`（在 ROS 环境可用时）确认原有参数仍可从命令行传入。
-
+3. 每个 launch 的 argument 默认值来自相应 YAML，而不是硬编码常量。
+4. 每个控制器节点将 YAML 放在 `parameters` 的首项，并将 launch argument 参数字典置于其后，保证覆盖顺序。
+5. 使用 `ros2 launch ... --show-args`（在 ROS 环境可用时）确认原有参数仍可从命令行传入。
