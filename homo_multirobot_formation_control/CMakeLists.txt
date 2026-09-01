@@ -17,6 +17,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 add_executable(formation_control_node
   src/main.cpp
@@ -328,6 +329,10 @@ install(PROGRAMS
 )
 
 if(BUILD_TESTING)
+  add_test(NAME test_launch_yaml_defaults
+    COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_launch_yaml_defaults.py)
+
   add_executable(test_6d_map_hpc_artstein_controller
     test/test_6d_map_hpc_artstein_controller.cpp
   )

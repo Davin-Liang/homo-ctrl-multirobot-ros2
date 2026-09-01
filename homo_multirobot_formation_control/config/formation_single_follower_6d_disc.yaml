@@ -1,0 +1,22 @@
+/**:
+  ros__parameters:
+    leader_ns: "/robot1"
+    follower_ns: "/robot2"
+    use_sim_time: true
+    radius: 2.0
+    mass: 8.0
+    I: 1.0
+    omega_d: 1.5
+    omega_d_theta: 1.5
+    hpc_vel_threshold: 0.3
+    use_hpc: true
+    m_p: 4
+    tol: 0.1
+    control_rate: 20.0
+    wheel_radius: 0.03
+    base_radius: 0.11
+    wheel_max_omega: 20.0
+    max_linear_accel: 2.0
+    max_angular_accel: 4.0
+    max_linear_vel: 1.0
+    max_angular_vel: 0.5
