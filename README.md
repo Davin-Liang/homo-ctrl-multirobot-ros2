@@ -35,7 +35,7 @@
 | **`homo_multirobot_gazebo`** | 空世界、双机 spawn、可选 RViz 配置与 `world` 静态 TF |
 | **`homo_multirobot_slam_toolbox`** | 多机器人建图封装：支持选定 `mapper_robot` 单机建图（两车复用同一张地图），并支持将 `/map` 重映射进机器人 namespace，便于在 `/robot1` 下调用 `save_map` |
 | **`homo_multirobot_nav`** | 已知地图定位（AMCL 或 slam_toolbox 纯定位）：单车/双车定位 launch + 地图加载 + RViz 配置 |
-| **`homo_multirobot_formation_control`** | Leader-Follower 编队控制（齐次控制算法，C++ / Eigen）。包含 4D、4D Artstein、4D Artstein-LQR、4D Cont、6D、6D Disc、6D Motor、旧 6D+OA，以及 **6D Artstein Disc + predictor-HOCBF**。HOCBF 版本仅从 `/scan` 拟合静态圆柱，在 map 系预测状态上施加多圆柱硬 QP 安全约束。 |
+| **`homo_multirobot_formation_control`** | Leader-Follower 编队控制（齐次控制算法，C++ / Eigen）。包含 4D、4D Artstein、4D Artstein-LQR、4D Cont、6D、6D Disc、旧 6D+OA，以及 **6D Artstein Disc + predictor-HOCBF**。HOCBF 版本仅从 `/scan` 拟合静态圆柱，在 map 系预测状态上施加多圆柱硬 QP 安全约束。 |
 | **`rf2o_laser_odometry`（third_party）** | 2D 激光里程计（rf2o，上游源码引入，ROS 2 分支），订阅 `/robot*/scan` 输出 `/robot*/rf2o/odom`（可选发布 TF） |
 | **`homo_multirobot_localization`** | 多机定位/里程计链路启动与配置：双机/单机 rf2o、双机/单机 EKF（`robot_localization`），以及仿真一键链路（Gazebo + rf2o + EKF） |
 | **`omnidirectional_controllers`（third_party）** | 上游 ros2_control 控制器（订阅 `cmd_vel`，输出轮速，发布里程计等），用于后续三轮全向底盘轮子级控制 |

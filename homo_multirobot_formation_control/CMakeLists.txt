@@ -46,35 +46,6 @@ install(TARGETS formation_control_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# ---- 6D 鐢垫満鎰熺煡妯″瀷鎺у埗鍣紙鎵ц鍣ㄤ竴闃舵粸鍚庡骞匡紝doc/6d_motor_model_design.md锛?---
-# 娉ㄦ剰: 瀹炶溅 ARM 鍐呭瓨涓嶈冻鏃跺彲娉ㄩ噴鎺夋湰 target锛堝悓涓嬫柟 6D 绯诲垪锛?
-# add_executable(formation_control_node_6d_motor
-#   src/main_6d_motor.cpp
-#   src/formation_control_node_6d_motor.cpp
-# )
-
-# target_include_directories(formation_control_node_6d_motor PUBLIC
-#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-# )
-
-# ament_target_dependencies(formation_control_node_6d_motor
-#   rclcpp
-#   geometry_msgs
-#   nav_msgs
-#   tf2
-#   tf2_ros
-#   tf2_geometry_msgs
-# )
-
-# target_link_libraries(formation_control_node_6d_motor
-#   Eigen3::Eigen
-# )
-
-# install(TARGETS formation_control_node_6d_motor
-#   DESTINATION lib/${PROJECT_NAME}
-# )
-
 # ---- 4D Artstein-HPC 鎺у埗鍣紙杈撳叆鏃跺欢绛変环鍙樻崲锛宒oc/artstein_reduction.md锛?---
 add_executable(formation_control_node_4d_artstein
   src/main_4d_artstein.cpp

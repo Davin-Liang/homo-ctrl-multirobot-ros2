@@ -27,7 +27,7 @@
 using namespace formation_control;
 
 // ============================================================================
-// 辅助函数（与 6D Motor 节点相同）
+// EKF 速度转换辅助函数。
 // ============================================================================
 
 static double tf2_yaw(const tf2::Quaternion& q)
@@ -44,7 +44,7 @@ static double msg_yaw(const geometry_msgs::msg::Quaternion& q)
 }
 
 // 将 EKF 里程计变换到 map 坐标系（位置 + 测量速度 + 偏航）。
-// 与 6D Motor 节点的 ekf_to_map 相同，但返回 4 维相关量（无 v_cmd）。
+// 返回 4 维相关量（无内部命令速度状态）。
 static bool ekf_to_map(tf2_ros::Buffer& tf, const std::string& ns,
                        const nav_msgs::msg::Odometry::SharedPtr& odom,
                        double& px, double& py, double& vx_meas, double& vy_meas,

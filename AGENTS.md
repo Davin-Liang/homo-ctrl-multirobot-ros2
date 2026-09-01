@@ -63,7 +63,7 @@ source install/setup.bash
 | `homo_multirobot_gazebo` | Gazebo 世界文件、双机/单机 spawn launch、控制器 YAML 配置 |
 | `homo_multirobot_localization` | 定位/里程计链路 launch 与配置：rf2o 激光里程计 + EKF（robot_localization） |
 | `homo_multirobot_nav` | 已知地图定位（AMCL 或 slam_toolbox 纯定位）：单车/双车 launch + RViz |
-| `homo_multirobot_formation_control` | Leader-Follower 编队控制（齐次控制算法，C++/Eigen）。4D、**4D Artstein + prediction**、4D Artstein-LQR、4D Cont、6D、6D Disc、**6D Motor**、旧 6D+OA，以及 **6D Artstein Disc + predictor-HOCBF**。HOCBF 节点从 `/scan` 拟合静态圆柱，在 map 系预测状态上施加多圆柱硬 QP，并将最终命令回写 Artstein 历史。 |
+| `homo_multirobot_formation_control` | Leader-Follower 编队控制（齐次控制算法，C++/Eigen）。4D、**4D Artstein + prediction**、4D Artstein-LQR、4D Cont、6D、6D Disc、旧 6D+OA，以及 **6D Artstein Disc + predictor-HOCBF**。HOCBF 节点从 `/scan` 拟合静态圆柱，在 map 系预测状态上施加多圆柱硬 QP，并将最终命令回写 Artstein 历史。 |
 | `homo_multirobot_slam_toolbox` | 对上游 `slam_toolbox` 的多机器人封装，支持选定一台车建图、多车复用同一张地图 |
 | `third_party/*` | 上游源码引入副本：`rf2o_laser_odometry`（已补丁：发布横向速度 lin_speed_y，原版只考虑差速车）、`robot_localization`、`omnidirectional_controllers` |
 
@@ -149,28 +149,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_disc.
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_oa.launch.py
 
-# Leader-Follower 编队控制 — 6D Motor 电机感知模型（执行器一阶滞后增广，实物大延迟场景）
-# 状态: [px, py, vx_cmd, vy_cmd, vx_real, vy_real] (map 系), v_cmd 为内部积分状态
-ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
-  leader_ns:=/robot1 follower_ns:=/robot2 use_motor_delay:=true
-# 注入仿实物电机延迟(motor_tau=0.43)+加速度限幅(0.25)，与模型对齐
-ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
-  leader_ns:=/robot1 follower_ns:=/robot2 use_motor_delay:=true \
-  tau:=0.43 omega_d:=0.7 mass:=2.0 hpc_c_min:=0.9
-# 实物: 启用自适应 τ + Smith 预估器(死区补偿) + 最小速度
-ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
-  leader_ns:=/virtual_leader follower_ns:=/robot2 \
-  use_motor_delay:=false tau:=0.43 mass:=2.0 omega_d:=0.7 max_linear_accel:=0.25 \
-  m_p:=1 min_cmd_vel:=0.03 use_smith_predictor:=true smith_tau:=0.43 smith_Td:=0.22
-# 轨迹记录（需指定 controller_node_name 以读取 6D Motor 专属参数）
-ros2 run homo_multirobot_formation_control record_trajectory.py \
-  --ros-args -p mode:=sim -p duration:=45.0 \
-  -p controller_node_name:=formation_control_node_6d_motor
-
-# 设计文档
-# 6D Motor 电机感知模型: doc/motor_homogeneous_control_full.md
-# 原始设计草稿:          doc/6d_motor_model_design.md
-
 # 领航者轨迹（开环 cmd_vel，依赖 Gazebo/EKF 提供里程计）
 ros2 run homo_multirobot_formation_control leader_circle.py --ros-args -r __ns:=/robot1
 ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/robot1
@@ -226,9 +204,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
   tau:=0.43 Td:=0.22 control_rate:=20.0 \
   follower_radius:=0.15 clearance:=0.10 perception_margin:=0.15
 
-# 或使用 6D Motor 电机感知模型 + 虚拟 Leader
-ros2 launch homo_multirobot_formation_control formation_single_follower_6d_motor.launch.py \
-  leader_ns:=/virtual_leader follower_ns:=/robot2 use_motor_delay:=true
 ```
 
 ## 实车 Bringup（mini_omni）
@@ -284,10 +259,10 @@ MAKEFLAGS="-j1" colcon build --packages-select homo_multirobot_formation_control
 
 **3. 目标选择**
 
-> CMakeLists.txt 中默认注释掉部分旧 6D/Motor/OA 目标；当前包含 4D、4D Artstein、
+> CMakeLists.txt 中默认注释掉部分旧 6D/OA 目标；当前包含 4D、4D Artstein、
 > 4D Artstein-LQR、6D Artstein Disc 与 6D Artstein Disc + HOCBF。
-> 如需编译 6D Motor 等目标，先取消对应 `add_executable` 的注释再编译，
-> 编译完成后建议重新注释以减轻后续编译内存压力。
+> 如需使用默认未构建的旧目标，先在 CMakeLists.txt 中按需启用对应 target；
+> 编译完成后建议重新关闭，以减轻后续 ARM 编译的内存压力。
 
 **4. 编译后确认可执行文件**
 ```bash

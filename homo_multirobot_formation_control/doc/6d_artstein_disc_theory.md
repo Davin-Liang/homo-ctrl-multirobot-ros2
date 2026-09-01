@@ -612,7 +612,6 @@ map/body 坐标转换误差
 
 ```text
 6D Disc
-6D Motor
 6D Artstein Disc
 6D+OA QP fusion
 ```

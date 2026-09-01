@@ -2,13 +2,13 @@
 
 /// @file 4D Artstein-HPC 编队控制 ROS 2 节点 — TF + EKF 数据管线。
 ///
-/// 与 6D Motor 节点（formation_control_node_6d_motor.hpp）的差异:
+/// 4D Artstein 节点的状态与预测层设计：
 ///   - 状态 4 维: [px, py, vx_real, vy_real]（map 系）
 ///   - v^cmd 是控制输入，不是状态——控制器直接输出速度指令
 ///   - Artstein 预测: z = x + I(t)，其中 I(t) 是过去 Td 内 v^cmd 的累积贡献
 ///   - leader 和 follower 各维护独立的 v^cmd 环形缓冲
-///   - leader v^cmd 由 EKF 测量速度近似（稳态假设，同 6D Motor）
-///   - 加速度限幅在节点侧作为执行器速率约束（同 6D Motor 的 constraint_.apply）
+///   - leader v^cmd 由 EKF 测量速度近似（稳态假设）
+///   - 加速度限幅在节点侧作为执行器速率约束
 ///   - 不使用 Smith 预估器（死区已通过 Artstein 约简内嵌）
 
 #include <rclcpp/rclcpp.hpp>
