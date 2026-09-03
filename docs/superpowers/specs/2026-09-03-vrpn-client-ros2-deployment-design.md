@@ -40,11 +40,11 @@ colcon build --packages-select vrpn_listener --symlink-install
 source install/setup.bash
 ```
 
-依赖安装通过 `rosdep` 优先解析；若其无法解析 VRPN C++ 开发包，则安装 Ubuntu 的 `libvrpn-dev` 后重试。不会在当前源码仓库运行 `colcon build`，避免生成错误的 build/install/log 目录。导入完成后，`third_party/vrpn_client_ros2/` 的完整源码与本次必要的 Humble 兼容补丁一并提交；不保留独立上游 Git 元数据。
+依赖安装使用 ROS 2 Humble 提供的 `ros-humble-vrpn`，其中包含 VRPN 头文件、库和 CMake 配置。Ubuntu 22.04 的当前软件源不提供 `libvrpn-dev`，因此不使用该包名。不会在当前源码仓库运行 `colcon build`，避免生成错误的 build/install/log 目录。导入完成后，`third_party/vrpn_client_ros2/` 的完整源码与本次必要的 Humble 兼容补丁一并提交；不保留独立上游 Git 元数据。
 
 ## 配置与运行
 
-初次验证保留上游默认参数，运行桥接器确认二进制与 ROS 图正常。连通真实服务器时，使用 launch 参数或其参数 YAML 提供服务器 IP 和端口；固定参考坐标系设为 `world`。刚体名将在启动后的 pose 话题路径中由 VRPN 服务端决定。
+初次验证使用 `localhost` 默认参数，运行桥接器确认二进制与 ROS 图正常。连通真实服务器时，在桥接器的参数 YAML 中提供服务器 IP 和端口；固定参考坐标系设为 `world`。刚体名将在启动后的 pose 话题路径中由 VRPN 服务端决定。
 
 ## 成功标准与失败处理
 
