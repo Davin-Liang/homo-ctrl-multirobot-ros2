@@ -29,7 +29,7 @@ include_directories(include)
 
 add_executable(vrpn_listener src/vrpn_listener.cpp)
 
-target_link_libraries(vrpn_listener vrpn)
+target_link_libraries(vrpn_listener ${VRPN_LIBRARIES})
 
 ament_target_dependencies(vrpn_listener
   rclcpp 
