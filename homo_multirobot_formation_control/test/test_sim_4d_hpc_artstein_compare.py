@@ -55,6 +55,16 @@ def test_prediction_tau_can_differ_from_plant_tau():
     np.testing.assert_allclose(rows[0][2], np.array([5.0, 1.0, 0.0, 0.0]))
 
 
+def test_circle_case_accepts_matched_6d_plant_and_command_parameters():
+    simulation = load_module()
+    rows = simulation.simulate_circle_case(
+        "original", 0.10, 0.05, 0.43, 0.22,
+        plant_dt=0.01, leader_speed=0.45, c_min=0.5, max_cmd=1.0,
+    )
+    assert len(rows) == 2
+    assert np.max(np.abs(np.column_stack([row[5] for row in rows]))) <= 1.0
+
+
 def test_prediction_only_cases_keep_delayed_plant_and_return_samples():
     simulation = load_module()
     delay_rows = simulation.simulate_delay_case("forward_prediction_only", 0.10, 0.01, 0.43, 0.22)

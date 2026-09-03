@@ -424,16 +424,33 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float,
 
 def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float,
                          pos_noise: float = 0.0, vel_noise: float = 0.0, seed: int = 7,
-                         predict_tau: float | None = None):
+                         predict_tau: float | None = None, plant_dt: float | None = None,
+                         leader_speed: float = 0.5, c_min: float = 0.1,
+                         max_cmd: float = 1.5):
     predict_tau = tau if predict_tau is None else predict_tau
     mass = 2.0
-    ctrl = Hpc4D(mass=mass, radius=1.0, c_min=0.1)
+    ctrl = Hpc4D(mass=mass, radius=1.0, c_min=c_min)
     rng = np.random.default_rng(seed)
-    x1 = circle_leader_state(0.0)
+    leader_omega = leader_speed / 2.0
+    x1 = circle_leader_state(0.0, omega=leader_omega)
     x2 = np.array([4.5, 0.0, 0.0, 0.0])
 
-    delay_steps = max(1, int(np.ceil(Td / h)))
-    delay_line = deque([x2[2:4].copy() for _ in range(delay_steps + 1)], maxlen=delay_steps + 1)
+    if plant_dt is None:
+        delay_steps = max(1, int(np.ceil(Td / h)))
+        delay_line = deque([x2[2:4].copy() for _ in range(delay_steps + 1)], maxlen=delay_steps + 1)
+        control_substeps = 1
+        plant_dt = h
+        exact_delay = False
+    else:
+        control_substeps = h / plant_dt
+        if not np.isclose(control_substeps, round(control_substeps), atol=1e-12):
+            raise ValueError("plant_dt must divide the control period")
+        control_substeps = int(round(control_substeps))
+        delay_steps = Td / plant_dt
+        if not np.isclose(delay_steps, round(delay_steps), atol=1e-12):
+            raise ValueError("Td must be an integer multiple of plant_dt")
+        delay_line = deque([x2[2:4].copy() for _ in range(int(round(delay_steps)))])
+        exact_delay = True
     hist_len = max(1, int(np.ceil(Td / h))) + 2
     cmd_history = deque([x2[2:4].copy() for _ in range(hist_len)], maxlen=hist_len)
     last_cmd = x2[2:4].copy()
@@ -459,7 +476,7 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
     rows = []
     t = 0.0
     while t < Tmax - 1e-12:
-        x1 = circle_leader_state(t)
+        x1 = circle_leader_state(t, omega=leader_omega)
         x1_meas = add_measurement_noise(x1, pos_noise, vel_noise, rng)
         x2_meas = add_measurement_noise(x2, pos_noise, vel_noise, rng)
 
@@ -479,12 +496,17 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
             x2_ctrl = x2_meas
 
         accel = ctrl.accel(x1_ctrl, x2_ctrl)
-        vcmd = np.clip(x2_ctrl[2:4] + h * (accel / mass), -1.5, 1.5)
+        vcmd = np.clip(x2_ctrl[2:4] + h * (accel / mass), -max_cmd, max_cmd)
 
-        delay_line.appendleft(vcmd.copy())
-        delayed_cmd = delay_line[-1]
-        x2[2:4] += h * ((delayed_cmd - x2[2:4]) / tau)
-        x2[0:2] += h * x2[2:4]
+        for _ in range(control_substeps):
+            if exact_delay:
+                delayed_cmd = delay_line.popleft() if delay_line else vcmd
+                delay_line.append(vcmd.copy())
+            else:
+                delay_line.appendleft(vcmd.copy())
+                delayed_cmd = delay_line[-1]
+            x2[2:4] += plant_dt * ((delayed_cmd - x2[2:4]) / tau)
+            x2[0:2] += plant_dt * x2[2:4]
 
         last_cmd = vcmd.copy()
         cmd_history.appendleft(vcmd.copy())
@@ -656,6 +678,8 @@ def main():
     parser.add_argument("--tmax", type=float, default=30.0)
     parser.add_argument("--circle-tmax", type=float, default=60.0)
     parser.add_argument("--dt", type=float, default=0.01)
+    parser.add_argument("--plant-dt", type=float, default=None,
+                        help="optional plant integration step; enables exact Td delay")
     parser.add_argument("--tau", type=float, default=0.43,
                         help="physical motor time constant used by the delayed plant")
     parser.add_argument("--predict-tau", type=float, default=None,
@@ -663,6 +687,9 @@ def main():
     parser.add_argument("--Td", type=float, default=0.22)
     parser.add_argument("--pos-noise", type=float, default=0.02)
     parser.add_argument("--vel-noise", type=float, default=0.03)
+    parser.add_argument("--leader-speed", type=float, default=0.5)
+    parser.add_argument("--hpc-c-min", type=float, default=0.1)
+    parser.add_argument("--max-cmd", type=float, default=1.5)
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -675,18 +702,21 @@ def main():
     delay_artstein_td_only = simulate_delay_case("artstein_delay_only", args.tmax, args.dt, args.tau, args.Td, predict_tau)
     delay_comp = simulate_delay_case("compensated", args.tmax, args.dt, args.tau, args.Td, predict_tau)
 
-    circle_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
-    circle_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
-    circle_artstein_td_only = simulate_circle_case("artstein_delay_only", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
-    circle_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
+    circle_kwargs = dict(predict_tau=predict_tau, plant_dt=args.plant_dt,
+                         leader_speed=args.leader_speed, c_min=args.hpc_c_min,
+                         max_cmd=args.max_cmd)
+    circle_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td, **circle_kwargs)
+    circle_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td, **circle_kwargs)
+    circle_artstein_td_only = simulate_circle_case("artstein_delay_only", args.circle_tmax, args.dt, args.tau, args.Td, **circle_kwargs)
+    circle_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td, **circle_kwargs)
     circle_noise_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td,
-                                             args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
+                                             args.pos_noise, args.vel_noise, seed=11, **circle_kwargs)
     circle_noise_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td,
-                                                        args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
+                                                        args.pos_noise, args.vel_noise, seed=11, **circle_kwargs)
     circle_noise_artstein_td_only = simulate_circle_case("artstein_delay_only", args.circle_tmax, args.dt, args.tau, args.Td,
-                                                         args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
+                                                         args.pos_noise, args.vel_noise, seed=11, **circle_kwargs)
     circle_noise_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td,
-                                             args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
+                                             args.pos_noise, args.vel_noise, seed=11, **circle_kwargs)
 
     outputs = [
         plot_paper(paper_rows, out_dir),
