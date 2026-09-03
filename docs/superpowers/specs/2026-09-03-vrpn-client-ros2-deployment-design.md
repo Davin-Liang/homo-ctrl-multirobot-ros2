@@ -8,7 +8,7 @@
 
 本阶段仅部署与验证桥接器：
 
-- 将上游源码放在工作空间的 `src/vrpn_client_ros2/`，不纳入本仓库 Git 管理。
+- 将上游源码放在当前仓库的 `third_party/vrpn_client_ros2/`，并纳入本仓库 Git 管理。
 - 使用系统的 VRPN 开发依赖和 ROS 2 Humble 环境构建桥接器。
 - 启动 `vrpn_listener`，验证 ROS 2 图中出现其发布的刚体 pose 话题。
 
@@ -31,7 +31,7 @@ VRPN server (IP/port supplied at launch)
 
 ## 部署策略
 
-选择上游 `efc-robot/vrpn_client_ros2`，与用户提供的参考文章保持一致。源码在 colcon 工作空间根目录构建：
+选择上游 `efc-robot/vrpn_client_ros2`，与用户提供的参考文章保持一致。将其完整源码（不使用 Git submodule）导入当前仓库的 `third_party/vrpn_client_ros2/`；这样本仓库的提交可精确固定桥接器版本，并允许后续为 Humble 做本地补丁。源码仍由 colcon 工作空间根目录构建：
 
 ```bash
 cd /home/l1anggmgo/ros-projects/homo_multirobot_ws
@@ -40,7 +40,7 @@ colcon build --packages-select vrpn_listener --symlink-install
 source install/setup.bash
 ```
 
-依赖安装通过 `rosdep` 优先解析；若其无法解析 VRPN C++ 开发包，则安装 Ubuntu 的 `libvrpn-dev` 后重试。不会在当前源码仓库运行 `colcon build`，避免生成错误的 build/install/log 目录。
+依赖安装通过 `rosdep` 优先解析；若其无法解析 VRPN C++ 开发包，则安装 Ubuntu 的 `libvrpn-dev` 后重试。不会在当前源码仓库运行 `colcon build`，避免生成错误的 build/install/log 目录。导入完成后，`third_party/vrpn_client_ros2/` 的完整源码与本次必要的 Humble 兼容补丁一并提交；不保留独立上游 Git 元数据。
 
 ## 配置与运行
 
