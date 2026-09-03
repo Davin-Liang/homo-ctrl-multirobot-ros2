@@ -138,18 +138,20 @@ def test_circle_prediction_only_uses_each_measured_state_without_artstein_or_td(
         last_command = row[5]
 
 
-def test_original_and_compensated_short_runs_are_numerically_unchanged():
+def test_original_and_compensated_regressions_preserve_control_state_snapshots():
     simulation = load_module()
     expected_last_samples = {
         ("simulate_delay_case", "original"): np.array([
-            5.0, 1.0, 0.0, 0.0, 0.999702998667, 0.000298983763,
-            -0.019550533082, 0.019846009585, 5.0, 1.0, 0.0, 0.0,
-            -0.055954845729, -0.017927646756,
+            4.999556764954, 0.999857104247, -0.009614710338, -0.003061462668,
+            0.981248096951, 0.020560608213, -0.118117885619, 0.136614131541,
+            4.999652912057, 0.999887718873, -0.008499026036, -0.002720547632,
+            -0.067236681847, -0.017023795767,
         ]),
         ("simulate_delay_case", "compensated"): np.array([
-            5.0, 1.0, 0.0, 0.0, 0.986995152163, 0.013198889993,
-            -0.019550533082, 0.019846009585, 4.980561332032, 0.993725210992,
-            -0.073254135942, -0.023636399611, -0.127093391762, -0.040567335164,
+            4.999151091171, 0.999729175760, -0.021151922880, -0.006657132191,
+            0.904471471298, 0.109359793714, -0.118117885619, 0.136614131541,
+            4.927310200867, 0.981277706293, -0.177679689365, -0.043343748908,
+            -0.231900444054, -0.054558612469,
         ]),
         ("simulate_circle_case", "original"): np.array([
             4.5, 0.0, 0.0, 0.0, 1.999943750264, 0.014999859375,
@@ -164,7 +166,8 @@ def test_original_and_compensated_short_runs_are_numerically_unchanged():
     }
 
     for (function_name, kind), expected in expected_last_samples.items():
-        rows = getattr(simulation, function_name)(kind, 0.04, 0.01, 0.43, 0.22)
+        tmax = 0.30 if function_name == "simulate_delay_case" else 0.04
+        rows = getattr(simulation, function_name)(kind, tmax, 0.01, 0.43, 0.22)
         row = rows[-1]
         np.testing.assert_allclose(np.r_[row[2], row[3], row[4], row[5]], expected, rtol=1e-10, atol=1e-10)
 

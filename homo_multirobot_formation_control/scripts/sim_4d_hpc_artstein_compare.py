@@ -361,8 +361,8 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float)
         x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, tau)
         x1_ctrl = x1_meas
     else:
-        x1_ctrl = x1_meas
-        x2_ctrl = x2_meas
+        x1_ctrl = x1_meas.copy()
+        x2_ctrl = x2_meas.copy()
     ctrl.init(x1_ctrl, x2_ctrl)
 
     rows = []
@@ -381,8 +381,8 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float)
             x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, tau)
             x1_ctrl = x1_meas
         else:
-            x1_ctrl = x1_meas
-            x2_ctrl = x2_meas
+            x1_ctrl = x1_meas.copy()
+            x2_ctrl = x2_meas.copy()
 
         accel = ctrl.accel(x1_ctrl, x2_ctrl)
         vcmd = np.clip(x2_ctrl[2:4] + h * (accel / mass), -1.5, 1.5)
