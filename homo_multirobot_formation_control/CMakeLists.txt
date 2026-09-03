@@ -304,6 +304,11 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test/test_launch_yaml_defaults.py)
 
+  add_test(NAME test_sim_4d_hpc_artstein_compare
+    COMMAND ${Python3_EXECUTABLE}
+    -m pytest -q
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_sim_4d_hpc_artstein_compare.py)
+
   add_executable(test_6d_map_hpc_artstein_controller
     test/test_6d_map_hpc_artstein_controller.cpp
   )
