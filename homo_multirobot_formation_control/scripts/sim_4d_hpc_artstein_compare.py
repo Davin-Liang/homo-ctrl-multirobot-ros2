@@ -337,7 +337,9 @@ def simulate_paper(Tmax: float, h: float):
     return rows
 
 
-def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float):
+def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float,
+                        predict_tau: float | None = None):
+    predict_tau = tau if predict_tau is None else predict_tau
     mass = 2.0
     A_di = np.block([[np.zeros((2, 2)), np.eye(2)], [np.zeros((2, 2)), np.zeros((2, 2))]])
     B_di = np.vstack([np.zeros((2, 2)), np.eye(2) / mass])
@@ -354,11 +356,11 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float)
     x1_meas = x1
     x2_meas = x2
     if kind == "compensated":
-        z2 = x2_meas + artstein_integral(cmd_history, tau, Td, h)
-        x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
-        x1_ctrl = predict_leader_state(x1_meas, tau, Td)
+        z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+        x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
+        x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
     elif kind == "forward_prediction_only":
-        x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, tau)
+        x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
         x1_ctrl = x1_meas
     else:
         x1_ctrl = x1_meas.copy()
@@ -374,11 +376,11 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float)
         x1_meas = x1
         x2_meas = x2
         if kind == "compensated":
-            z2 = x2_meas + artstein_integral(cmd_history, tau, Td, h)
-            x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
-            x1_ctrl = predict_leader_state(x1_meas, tau, Td)
+            z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+            x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
+            x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
         elif kind == "forward_prediction_only":
-            x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, tau)
+            x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
             x1_ctrl = x1_meas
         else:
             x1_ctrl = x1_meas.copy()
@@ -401,7 +403,9 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float)
 
 
 def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float,
-                         pos_noise: float = 0.0, vel_noise: float = 0.0, seed: int = 7):
+                         pos_noise: float = 0.0, vel_noise: float = 0.0, seed: int = 7,
+                         predict_tau: float | None = None):
+    predict_tau = tau if predict_tau is None else predict_tau
     mass = 2.0
     ctrl = Hpc4D(mass=mass, radius=1.0, c_min=0.1)
     rng = np.random.default_rng(seed)
@@ -417,11 +421,11 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
     x1_meas = add_measurement_noise(x1, pos_noise, vel_noise, rng)
     x2_meas = add_measurement_noise(x2, pos_noise, vel_noise, rng)
     if kind == "compensated":
-        z2 = x2_meas + artstein_integral(cmd_history, tau, Td, h)
-        x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
-        x1_ctrl = predict_leader_state(x1_meas, tau, Td)
+        z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+        x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
+        x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
     elif kind == "forward_prediction_only":
-        x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, tau)
+        x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
         x1_ctrl = x1_meas
     else:
         x1_ctrl = x1_meas
@@ -436,11 +440,11 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
         x2_meas = add_measurement_noise(x2, pos_noise, vel_noise, rng)
 
         if kind == "compensated":
-            z2 = x2_meas + artstein_integral(cmd_history, tau, Td, h)
-            x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, tau, Td)
-            x1_ctrl = predict_leader_state(x1_meas, tau, Td)
+            z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+            x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
+            x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
         elif kind == "forward_prediction_only":
-            x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, tau)
+            x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
             x1_ctrl = x1_meas
         else:
             x1_ctrl = x1_meas
@@ -610,7 +614,10 @@ def main():
     parser.add_argument("--tmax", type=float, default=30.0)
     parser.add_argument("--circle-tmax", type=float, default=60.0)
     parser.add_argument("--dt", type=float, default=0.01)
-    parser.add_argument("--tau", type=float, default=0.43)
+    parser.add_argument("--tau", type=float, default=0.43,
+                        help="physical motor time constant used by the delayed plant")
+    parser.add_argument("--predict-tau", type=float, default=None,
+                        help="predictor time constant; defaults to --tau")
     parser.add_argument("--Td", type=float, default=0.22)
     parser.add_argument("--pos-noise", type=float, default=0.02)
     parser.add_argument("--vel-noise", type=float, default=0.03)
@@ -619,20 +626,21 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    predict_tau = args.tau if args.predict_tau is None else args.predict_tau
     paper_rows = simulate_paper(args.tmax, args.dt)
-    delay_orig = simulate_delay_case("original", args.tmax, args.dt, args.tau, args.Td)
-    delay_prediction_only = simulate_delay_case("forward_prediction_only", args.tmax, args.dt, args.tau, args.Td)
-    delay_comp = simulate_delay_case("compensated", args.tmax, args.dt, args.tau, args.Td)
+    delay_orig = simulate_delay_case("original", args.tmax, args.dt, args.tau, args.Td, predict_tau)
+    delay_prediction_only = simulate_delay_case("forward_prediction_only", args.tmax, args.dt, args.tau, args.Td, predict_tau)
+    delay_comp = simulate_delay_case("compensated", args.tmax, args.dt, args.tau, args.Td, predict_tau)
 
-    circle_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td)
-    circle_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td)
-    circle_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td)
+    circle_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
+    circle_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
+    circle_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
     circle_noise_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td,
-                                             args.pos_noise, args.vel_noise, seed=11)
+                                             args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
     circle_noise_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td,
-                                                        args.pos_noise, args.vel_noise, seed=11)
+                                                        args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
     circle_noise_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td,
-                                             args.pos_noise, args.vel_noise, seed=11)
+                                             args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
 
     outputs = [
         plot_paper(paper_rows, out_dir),

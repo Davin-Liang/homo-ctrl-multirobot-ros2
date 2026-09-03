@@ -29,6 +29,21 @@ def test_first_order_prediction_matches_closed_form():
     np.testing.assert_allclose(predicted, np.r_[expected_position, expected_velocity])
 
 
+def test_prediction_tau_can_differ_from_plant_tau():
+    simulation = load_module()
+    plant_tau = 0.43
+    predict_tau = 0.60
+    h = 0.01
+    rows = simulation.simulate_delay_case(
+        "forward_prediction_only", 0.02, h, plant_tau, 0.22, predict_tau=predict_tau
+    )
+    expected_prediction = simulation.predict_follower_state_first_order(
+        np.array([5.0, 1.0, 0.0, 0.0]), np.zeros(2), predict_tau
+    )
+    np.testing.assert_allclose(rows[0][4], expected_prediction)
+    np.testing.assert_allclose(rows[0][2], np.array([5.0, 1.0, 0.0, 0.0]))
+
+
 def test_prediction_only_cases_keep_delayed_plant_and_return_samples():
     simulation = load_module()
     delay_rows = simulation.simulate_delay_case("forward_prediction_only", 0.10, 0.01, 0.43, 0.22)
