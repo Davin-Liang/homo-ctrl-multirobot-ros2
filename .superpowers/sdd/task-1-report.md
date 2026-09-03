@@ -78,3 +78,41 @@ F..FF.                                                                   [100%]
 ### 后续
 
 Task 2 必须在不改变原始/Artstein CSV case 名和输出标签的前提下，提供一阶预测接口与三组绘图/summary 行为；随后使用同一命令验证 GREEN。
+
+---
+
+## 第二轮审查补充：队尾排空、双场景反馈隔离与既有组不变性
+
+### 范围
+
+仅修改 `homo_multirobot_formation_control/test/test_sim_4d_hpc_artstein_compare.py`，并续写本报告。没有修改 production Python 脚本、ROS/C++、launch、CMake 或 results。
+
+### 新增/强化约束
+
+1. `test_real_follower_drains_every_command_through_delay_and_motor_lag`：对 `simulate_delay_case` 和 `simulate_circle_case` 的 `forward_prediction_only`，在 `Td=0.22`、`h=0.01` 下运行 `Td + 0.30 = 0.52 s`。逐样本重放真实 plant 的 `cmd_vel -> Td delay line -> tau` 一阶电机更新并比对真实 follower；然后排空余下的 `Td` 命令队列，断言每一条已生成命令恰好按原顺序进入链路，不留未验证队尾。
+2. `test_delay_prediction_only_uses_measurements_and_first_order_follower_prediction` 与 `test_circle_prediction_only_uses_each_measured_state_without_artstein_or_td`：分别重建 delay 和 circle 场景每一帧的反馈。前者验证 Leader 反馈是当前真实测量状态；后者用固定噪声 seed 重建 Leader/Follower 测量。两者均逐帧要求 Follower 反馈严格等于 `predict_follower_state_first_order(measured_follower, last_command, tau)`，不包含 Artstein 状态、命令历史或 `Td`。
+3. `test_original_and_compensated_short_runs_are_numerically_unchanged`：为 delay/circle 两个短场景中原始组、Artstein 补偿组的末样本建立固定数值回归（真实 follower、两路控制反馈与命令），防止三组扩展意外改动既有结果。
+4. `test_existing_csv_case_names_and_plot_legends_are_preserved`：从对应 plot 函数的实际 axes/legend 读取标签，分别保护 delay/circle 图中原始和补偿标签所在坐标轴；CSV 断言 case 名唯一，且过滤新 prediction-only 行后既有行相对顺序严格保持。
+
+### RED 验证
+
+运行：
+
+```text
+python3 -m pytest -q homo_multirobot_formation_control/test/test_sim_4d_hpc_artstein_compare.py
+```
+
+结果：`4 failed, 4 passed, 1 warning in 2.37s`。
+
+四项失败均为后续 production 工作尚未完成，且与测试断言直接对应：
+
+1. `test_first_order_prediction_matches_closed_form` 缺少 `predict_follower_state_first_order`。
+2. delay 场景逐帧 feedback 隔离测试因同一缺失接口失败。
+3. circle 场景逐帧 feedback 隔离测试因同一缺失接口失败。
+4. 三组 circle plot 测试调用五个位置参数，而当前 `plot_circle_compare` 仍只支持两组比较，触发 `TypeError`。
+
+其余四项通过，包含新的 0.52 s 逐样本延迟/电机重放与队尾排空、既有组数值回归、以及 axes/legend + CSV 兼容性保护。唯一 warning 是环境中的 Matplotlib `Axes3D` 导入告警，和断言无关。
+
+### 后续
+
+Task 2 应实现一阶 Follower 闭式预测，将仅预测组用于两个 simulation 场景，并扩展三组 plot/summary；实现不得改变本报告所固定的 original/compensated 数值、标签和 CSV 既有行相对顺序。完成后使用上述命令验证 GREEN。
