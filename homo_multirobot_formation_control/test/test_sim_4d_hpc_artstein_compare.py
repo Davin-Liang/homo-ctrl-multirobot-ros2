@@ -29,6 +29,17 @@ def test_first_order_prediction_matches_closed_form():
     np.testing.assert_allclose(predicted, np.r_[expected_position, expected_velocity])
 
 
+def test_artstein_delay_only_predicts_to_td_without_tau_forward_step():
+    simulation = load_module()
+    state = np.array([1.0, -2.0, 0.4, -0.6])
+    command = np.array([1.2, 0.2])
+    tau = 0.43
+    td = 0.22
+    predicted = simulation.predict_follower_state_delay_only(state, command, tau, td)
+    A, _ = simulation.actuator_matrices(tau)
+    np.testing.assert_allclose(predicted, simulation.expm(A * td) @ state)
+
+
 def test_prediction_tau_can_differ_from_plant_tau():
     simulation = load_module()
     plant_tau = 0.43
@@ -191,15 +202,18 @@ def test_three_group_summary_and_plot_include_prediction_only(tmp_path):
     simulation = load_module()
     original = simulation.simulate_circle_case("original", 0.10, 0.01, 0.43, 0.22)
     prediction_only = simulation.simulate_circle_case("forward_prediction_only", 0.10, 0.01, 0.43, 0.22)
+    delay_only = simulation.simulate_circle_case("artstein_delay_only", 0.10, 0.01, 0.43, 0.22)
     compensated = simulation.simulate_circle_case("compensated", 0.10, 0.01, 0.43, 0.22)
-    plot = simulation.plot_circle_compare("no noise", original, prediction_only, compensated, tmp_path)
+    plot = simulation.plot_circle_compare("no noise", original, prediction_only, delay_only, compensated, tmp_path)
     summary = simulation.write_summary(tmp_path / "summary.csv", {
         "circle_original_delay_clean": original,
         "circle_forward_prediction_only_clean": prediction_only,
+        "circle_artstein_td_only_clean": delay_only,
         "circle_artstein_prediction_clean": compensated,
     })
     assert plot.exists()
     assert "circle_forward_prediction_only_clean" in summary.read_text(encoding="utf-8")
+    assert "circle_artstein_td_only_clean" in summary.read_text(encoding="utf-8")
 
 
 def test_existing_csv_case_names_and_plot_legends_are_preserved(tmp_path, monkeypatch):
@@ -229,10 +243,13 @@ def test_existing_csv_case_names_and_plot_legends_are_preserved(tmp_path, monkey
     assert existing_names == [
         "ideal_4d_hpc_matlab",
         "matlab_leader_original_delay",
+        "matlab_leader_artstein_td_only",
         "matlab_leader_artstein_prediction",
         "circle_original_delay_clean",
+        "circle_artstein_td_only_clean",
         "circle_artstein_prediction_clean",
         "circle_original_delay_noise",
+        "circle_artstein_td_only_noise",
         "circle_artstein_prediction_noise",
     ]
     assert [name for name in csv_names if "forward_prediction_only" in name] == [
@@ -240,21 +257,27 @@ def test_existing_csv_case_names_and_plot_legends_are_preserved(tmp_path, monkey
         "circle_forward_prediction_only_clean",
         "circle_forward_prediction_only_noise",
     ]
+    assert [name for name in csv_names if "artstein_td_only" in name] == [
+        "matlab_leader_artstein_td_only",
+        "circle_artstein_td_only_clean",
+        "circle_artstein_td_only_noise",
+    ]
     assert legends["MATLAB leader trajectory"] == (
-        "leader", "ideal 4D HPC", "original + delay", "prediction-only + delay",
+        "leader", "ideal 4D HPC", "original + delay", "prediction-only + delay", "Artstein Td-only",
         "Artstein + prediction",
     )
     assert legends["formation error"] == (
-        "ideal 4D HPC", "original + delay", "prediction-only + delay",
+        "ideal 4D HPC", "original + delay", "prediction-only + delay", "Artstein Td-only",
         "Artstein + prediction",
     )
     assert legends["circle trajectory (no noise)"] == (
-        "leader circle", "original 4D + delay", "prediction-only 4D + delay",
+        "leader circle", "original 4D + delay", "prediction-only 4D + delay", "Artstein Td-only",
         "Artstein + prediction",
     )
     assert legends["velocity command"] == (
         "orig $v_x^{cmd}$", "orig $v_y^{cmd}$",
         "pred $v_x^{cmd}$", "pred $v_y^{cmd}$",
+        "Td-only $v_x^{cmd}$", "Td-only $v_y^{cmd}$",
         "comp $v_x^{cmd}$", "comp $v_y^{cmd}$",
     )
     assert {

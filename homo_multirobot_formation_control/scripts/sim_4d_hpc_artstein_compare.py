@@ -287,6 +287,12 @@ def predict_follower_state_first_order(state: np.ndarray, vcmd: np.ndarray, tau:
     return np.r_[position, velocity]
 
 
+def predict_follower_state_delay_only(z: np.ndarray, vcmd: np.ndarray, tau: float, Td: float) -> np.ndarray:
+    del vcmd
+    A, _ = actuator_matrices(tau)
+    return expm(A * Td) @ z
+
+
 def predict_follower_state_from_artstein(z: np.ndarray, vcmd: np.ndarray, tau: float, Td: float) -> np.ndarray:
     A, _ = actuator_matrices(tau)
     delay_free = expm(A * Td) @ z
@@ -299,6 +305,12 @@ def predict_follower_state_from_artstein(z: np.ndarray, vcmd: np.ndarray, tau: f
 def predict_leader_state(x: np.ndarray, tau: float, Td: float) -> np.ndarray:
     predicted = x.copy()
     predicted[0:2] += x[2:4] * (Td + tau)
+    return predicted
+
+
+def predict_leader_state_delay_only(x: np.ndarray, Td: float) -> np.ndarray:
+    predicted = x.copy()
+    predicted[0:2] += x[2:4] * Td
     return predicted
 
 
@@ -359,6 +371,10 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float,
         z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
         x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
         x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
+    elif kind == "artstein_delay_only":
+        z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+        x2_ctrl = predict_follower_state_delay_only(z2, last_cmd, predict_tau, Td)
+        x1_ctrl = predict_leader_state_delay_only(x1_meas, Td)
     elif kind == "forward_prediction_only":
         x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
         x1_ctrl = x1_meas
@@ -379,6 +395,10 @@ def simulate_delay_case(kind: str, Tmax: float, h: float, tau: float, Td: float,
             z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
             x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
             x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
+        elif kind == "artstein_delay_only":
+            z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+            x2_ctrl = predict_follower_state_delay_only(z2, last_cmd, predict_tau, Td)
+            x1_ctrl = predict_leader_state_delay_only(x1_meas, Td)
         elif kind == "forward_prediction_only":
             x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
             x1_ctrl = x1_meas
@@ -424,6 +444,10 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
         z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
         x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
         x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
+    elif kind == "artstein_delay_only":
+        z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+        x2_ctrl = predict_follower_state_delay_only(z2, last_cmd, predict_tau, Td)
+        x1_ctrl = predict_leader_state_delay_only(x1_meas, Td)
     elif kind == "forward_prediction_only":
         x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
         x1_ctrl = x1_meas
@@ -443,6 +467,10 @@ def simulate_circle_case(kind: str, Tmax: float, h: float, tau: float, Td: float
             z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
             x2_ctrl = predict_follower_state_from_artstein(z2, last_cmd, predict_tau, Td)
             x1_ctrl = predict_leader_state(x1_meas, predict_tau, Td)
+        elif kind == "artstein_delay_only":
+            z2 = x2_meas + artstein_integral(cmd_history, predict_tau, Td, h)
+            x2_ctrl = predict_follower_state_delay_only(z2, last_cmd, predict_tau, Td)
+            x1_ctrl = predict_leader_state_delay_only(x1_meas, Td)
         elif kind == "forward_prediction_only":
             x2_ctrl = predict_follower_state_first_order(x2_meas, last_cmd, predict_tau)
             x1_ctrl = x1_meas
@@ -519,10 +547,11 @@ def plot_paper(rows, out_dir: Path):
     return path
 
 
-def plot_delay_compare(ideal_rows, original_rows, prediction_only_rows, compensated_rows, out_dir: Path):
+def plot_delay_compare(ideal_rows, original_rows, prediction_only_rows, delay_only_rows, compensated_rows, out_dir: Path):
     ti, x1i, x2i, _, _, dist_i = rows_to_arrays(ideal_rows)
     to, _, x2o, cmd_o, err_o, dist_o = rows_to_arrays(original_rows, delayed=True)
     tp, _, x2p, cmd_p, err_p, dist_p = rows_to_arrays(prediction_only_rows, delayed=True)
+    td, _, x2d, cmd_d, err_d, dist_d = rows_to_arrays(delay_only_rows, delayed=True)
     tc, _, x2c, cmd_c, err_c, dist_c = rows_to_arrays(compensated_rows, delayed=True)
 
     fig, axs = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
@@ -530,17 +559,21 @@ def plot_delay_compare(ideal_rows, original_rows, prediction_only_rows, compensa
     axs[0, 0].plot(x2i[0], x2i[1], "0.6", label="ideal 4D HPC")
     axs[0, 0].plot(x2o[0], x2o[1], "tab:red", label="original + delay")
     axs[0, 0].plot(x2p[0], x2p[1], "tab:orange", label="prediction-only + delay")
+    axs[0, 0].plot(x2d[0], x2d[1], "tab:green", label="Artstein Td-only")
     axs[0, 0].plot(x2c[0], x2c[1], "tab:blue", label="Artstein + prediction")
     axs[0, 0].set(xlabel="x", ylabel="y", title="MATLAB leader trajectory")
     axs[0, 1].plot(ti, dist_i, "0.6", label="ideal 4D HPC")
     axs[0, 1].plot(to, dist_o, "tab:red", label="original + delay")
     axs[0, 1].plot(tp, dist_p, "tab:orange", label="prediction-only + delay")
+    axs[0, 1].plot(td, dist_d, "tab:green", label="Artstein Td-only")
     axs[0, 1].plot(tc, dist_c, "tab:blue", label="Artstein + prediction")
     axs[0, 1].set(xlabel="t (s)", ylabel="selected target error norm", title="formation error")
     axs[1, 0].plot(to, err_o[0], "tab:red", label="orig $e_x$")
     axs[1, 0].plot(to, err_o[1], "tab:orange", label="orig $e_y$")
     axs[1, 0].plot(tp, err_p[0], "tab:orange", label="pred $e_x$")
     axs[1, 0].plot(tp, err_p[1], "gold", label="pred $e_y$")
+    axs[1, 0].plot(td, err_d[0], "tab:green", label="Td-only $e_x$")
+    axs[1, 0].plot(td, err_d[1], "limegreen", label="Td-only $e_y$")
     axs[1, 0].plot(tc, err_c[0], "tab:blue", label="comp $e_x$")
     axs[1, 0].plot(tc, err_c[1], "tab:cyan", label="comp $e_y$")
     axs[1, 0].set(xlabel="t (s)", ylabel="formation error", title="component error")
@@ -548,6 +581,8 @@ def plot_delay_compare(ideal_rows, original_rows, prediction_only_rows, compensa
     axs[1, 1].plot(to, cmd_o[1], "tab:orange", label="orig $v_y^{cmd}$")
     axs[1, 1].plot(tp, cmd_p[0], "tab:orange", label="pred $v_x^{cmd}$")
     axs[1, 1].plot(tp, cmd_p[1], "gold", label="pred $v_y^{cmd}$")
+    axs[1, 1].plot(td, cmd_d[0], "tab:green", label="Td-only $v_x^{cmd}$")
+    axs[1, 1].plot(td, cmd_d[1], "limegreen", label="Td-only $v_y^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[0], "tab:blue", label="comp $v_x^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[1], "tab:cyan", label="comp $v_y^{cmd}$")
     axs[1, 1].set(xlabel="t (s)", ylabel="cmd_vel (m/s)", title="velocity command")
@@ -560,25 +595,30 @@ def plot_delay_compare(ideal_rows, original_rows, prediction_only_rows, compensa
     return path
 
 
-def plot_circle_compare(noise_label: str, original_rows, prediction_only_rows, compensated_rows, out_dir: Path):
+def plot_circle_compare(noise_label: str, original_rows, prediction_only_rows, delay_only_rows, compensated_rows, out_dir: Path):
     to, x1o, x2o, cmd_o, err_o, dist_o = rows_to_arrays(original_rows, delayed=True)
     tp, _, x2p, cmd_p, err_p, dist_p = rows_to_arrays(prediction_only_rows, delayed=True)
+    td, _, x2d, cmd_d, err_d, dist_d = rows_to_arrays(delay_only_rows, delayed=True)
     tc, x1c, x2c, cmd_c, err_c, dist_c = rows_to_arrays(compensated_rows, delayed=True)
     fig, axs = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
     axs[0, 0].plot(x1o[0], x1o[1], "k--", label="leader circle")
     axs[0, 0].plot(x2o[0], x2o[1], "tab:red", label="original 4D + delay")
     axs[0, 0].plot(x2p[0], x2p[1], "tab:orange", label="prediction-only 4D + delay")
+    axs[0, 0].plot(x2d[0], x2d[1], "tab:green", label="Artstein Td-only")
     axs[0, 0].plot(x2c[0], x2c[1], "tab:blue", label="Artstein + prediction")
     axs[0, 0].axis("equal")
     axs[0, 0].set(xlabel="x", ylabel="y", title=f"circle trajectory ({noise_label})")
     axs[0, 1].plot(to, dist_o, "tab:red", label="original 4D + delay")
     axs[0, 1].plot(tp, dist_p, "tab:orange", label="prediction-only 4D + delay")
+    axs[0, 1].plot(td, dist_d, "tab:green", label="Artstein Td-only")
     axs[0, 1].plot(tc, dist_c, "tab:blue", label="Artstein + prediction")
     axs[0, 1].set(xlabel="t (s)", ylabel="selected target error norm", title="formation error")
     axs[1, 0].plot(to, err_o[0], "tab:red", label="orig $e_x$")
     axs[1, 0].plot(to, err_o[1], "tab:orange", label="orig $e_y$")
     axs[1, 0].plot(tp, err_p[0], "tab:orange", label="pred $e_x$")
     axs[1, 0].plot(tp, err_p[1], "gold", label="pred $e_y$")
+    axs[1, 0].plot(td, err_d[0], "tab:green", label="Td-only $e_x$")
+    axs[1, 0].plot(td, err_d[1], "limegreen", label="Td-only $e_y$")
     axs[1, 0].plot(tc, err_c[0], "tab:blue", label="comp $e_x$")
     axs[1, 0].plot(tc, err_c[1], "tab:cyan", label="comp $e_y$")
     axs[1, 0].set(xlabel="t (s)", ylabel="formation error", title="component error")
@@ -586,6 +626,8 @@ def plot_circle_compare(noise_label: str, original_rows, prediction_only_rows, c
     axs[1, 1].plot(to, cmd_o[1], "tab:orange", label="orig $v_y^{cmd}$")
     axs[1, 1].plot(tp, cmd_p[0], "tab:orange", label="pred $v_x^{cmd}$")
     axs[1, 1].plot(tp, cmd_p[1], "gold", label="pred $v_y^{cmd}$")
+    axs[1, 1].plot(td, cmd_d[0], "tab:green", label="Td-only $v_x^{cmd}$")
+    axs[1, 1].plot(td, cmd_d[1], "limegreen", label="Td-only $v_y^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[0], "tab:blue", label="comp $v_x^{cmd}$")
     axs[1, 1].plot(tc, cmd_c[1], "tab:cyan", label="comp $v_y^{cmd}$")
     axs[1, 1].set(xlabel="t (s)", ylabel="cmd_vel (m/s)", title="velocity command")
@@ -630,34 +672,41 @@ def main():
     paper_rows = simulate_paper(args.tmax, args.dt)
     delay_orig = simulate_delay_case("original", args.tmax, args.dt, args.tau, args.Td, predict_tau)
     delay_prediction_only = simulate_delay_case("forward_prediction_only", args.tmax, args.dt, args.tau, args.Td, predict_tau)
+    delay_artstein_td_only = simulate_delay_case("artstein_delay_only", args.tmax, args.dt, args.tau, args.Td, predict_tau)
     delay_comp = simulate_delay_case("compensated", args.tmax, args.dt, args.tau, args.Td, predict_tau)
 
     circle_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
     circle_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
+    circle_artstein_td_only = simulate_circle_case("artstein_delay_only", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
     circle_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td, predict_tau=predict_tau)
     circle_noise_orig = simulate_circle_case("original", args.circle_tmax, args.dt, args.tau, args.Td,
                                              args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
     circle_noise_prediction_only = simulate_circle_case("forward_prediction_only", args.circle_tmax, args.dt, args.tau, args.Td,
                                                         args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
+    circle_noise_artstein_td_only = simulate_circle_case("artstein_delay_only", args.circle_tmax, args.dt, args.tau, args.Td,
+                                                         args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
     circle_noise_comp = simulate_circle_case("compensated", args.circle_tmax, args.dt, args.tau, args.Td,
                                              args.pos_noise, args.vel_noise, seed=11, predict_tau=predict_tau)
 
     outputs = [
         plot_paper(paper_rows, out_dir),
-        plot_delay_compare(paper_rows, delay_orig, delay_prediction_only, delay_comp, out_dir),
-        plot_circle_compare("no noise", circle_orig, circle_prediction_only, circle_comp, out_dir),
+        plot_delay_compare(paper_rows, delay_orig, delay_prediction_only, delay_artstein_td_only, delay_comp, out_dir),
+        plot_circle_compare("no noise", circle_orig, circle_prediction_only, circle_artstein_td_only, circle_comp, out_dir),
         plot_circle_compare(f"pos σ={args.pos_noise}m, vel σ={args.vel_noise}m/s",
-                            circle_noise_orig, circle_noise_prediction_only, circle_noise_comp, out_dir),
+                            circle_noise_orig, circle_noise_prediction_only, circle_noise_artstein_td_only, circle_noise_comp, out_dir),
         write_summary(out_dir / "summary_metrics.csv", {
             "ideal_4d_hpc_matlab": paper_rows,
             "matlab_leader_original_delay": delay_orig,
             "matlab_leader_forward_prediction_only": delay_prediction_only,
+            "matlab_leader_artstein_td_only": delay_artstein_td_only,
             "matlab_leader_artstein_prediction": delay_comp,
             "circle_original_delay_clean": circle_orig,
             "circle_forward_prediction_only_clean": circle_prediction_only,
+            "circle_artstein_td_only_clean": circle_artstein_td_only,
             "circle_artstein_prediction_clean": circle_comp,
             "circle_original_delay_noise": circle_noise_orig,
             "circle_forward_prediction_only_noise": circle_noise_prediction_only,
+            "circle_artstein_td_only_noise": circle_noise_artstein_td_only,
             "circle_artstein_prediction_noise": circle_noise_comp,
         }),
     ]
