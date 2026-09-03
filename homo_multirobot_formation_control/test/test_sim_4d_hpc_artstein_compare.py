@@ -217,17 +217,26 @@ def test_existing_csv_case_names_and_plot_legends_are_preserved(tmp_path, monkey
         "circle_original_delay_noise",
         "circle_artstein_prediction_noise",
     ]
+    assert [name for name in csv_names if "forward_prediction_only" in name] == [
+        "matlab_leader_forward_prediction_only",
+        "circle_forward_prediction_only_clean",
+        "circle_forward_prediction_only_noise",
+    ]
     assert legends["MATLAB leader trajectory"] == (
-        "leader", "ideal 4D HPC", "original + delay", "Artstein + prediction",
+        "leader", "ideal 4D HPC", "original + delay", "prediction-only + delay",
+        "Artstein + prediction",
     )
     assert legends["formation error"] == (
-        "ideal 4D HPC", "original + delay", "Artstein + prediction",
+        "ideal 4D HPC", "original + delay", "prediction-only + delay",
+        "Artstein + prediction",
     )
     assert legends["circle trajectory (no noise)"] == (
-        "leader circle", "original 4D + delay", "Artstein + prediction",
+        "leader circle", "original 4D + delay", "prediction-only 4D + delay",
+        "Artstein + prediction",
     )
     assert legends["velocity command"] == (
         "orig $v_x^{cmd}$", "orig $v_y^{cmd}$",
+        "pred $v_x^{cmd}$", "pred $v_y^{cmd}$",
         "comp $v_x^{cmd}$", "comp $v_y^{cmd}$",
     )
     assert {

@@ -8,6 +8,7 @@
 
 - 原始 4D HPC 能否复现 MATLAB 论文结果。
 - 有输入时间延迟 `Td` 和电机一阶响应 `tau` 后，原始 4D HPC 的性能退化。
+- 仅预测电机一阶响应、但不补偿输入延迟的反馈，能否区分 `tau` 与 `Td` 的影响。
 - 4D Artstein + motor forward prediction 能否在不改变 HPC 幂零结构的前提下改善延迟场景。
 - 后续 ROS C++ 新架构应尽量与 Python 数值仿真结构对应，避免 Python、C++、实物参数语义漂移。
 
@@ -61,7 +62,28 @@ cmd_vel -> pure input delay (Td) -> first-order motor response (tau) -> v_real
 `tau`，最终实际速度 `v_real` 滞后于指令速度。该模型用于测试不补偿时的性能退化，
 典型表现包括跟踪滞后、误差周期振荡、速度指令增大或变宽。
 
-### C. 4D Artstein + Prediction 新架构
+### C. 原始 4D HPC + 仅一阶前向预测
+
+该对照组仍使用与其他延迟组完全相同的真实执行器链路：
+
+```text
+cmd_vel -> pure input delay (Td) -> first-order motor response (tau) -> v_real
+```
+
+它从测得的 Follower 状态和上一周期速度命令构造仅跨越一个电机时间常数的反馈状态：
+
+```text
+measured follower [p, v_real]
+    -> first-order motor forward prediction (tau only)
+    -> predicted HPC state x_h=[p_pred, v_pred]
+    -> original 4D double-integrator HPC
+```
+
+该组不调用 Artstein 输入延迟补偿，也不预测 `Td`；Leader 仍直接使用测得状态。
+因此它用于隔离“只处理电机滞后 `tau`、不处理传输延迟 `Td`”的效果，而不是将真实 plant
+理想化为无延迟系统。
+
+### D. 4D Artstein + Prediction 新架构
 
 结构：
 
@@ -84,7 +106,7 @@ measured follower [p, v_real]
 - 预测层给 HPC 构造更接近未来执行状态的反馈状态 `x_h=[p_pred,v_pred]`。
 - HPC 输出仍按原始 4D double-integrator 解释为加速度/等效力，再积分成速度命令。
 
-### D. 预测位置 + 伪速度反馈消融
+### E. 预测位置 + 伪速度反馈消融
 
 为区分 Artstein 预测位置和预测速度各自的作用，专用脚本
 `scripts/sim_4d_hpc_artstein_pseudo_velocity_feedback_compare.py` 提供
@@ -118,6 +140,9 @@ summary_metrics.csv
 ```
 
 图和指标的读取方式：
+
+- 三组延迟对照图中，红色为 `original + delay`，橙色为 `prediction-only + delay`，
+  蓝色为 `Artstein + prediction`。三组共享同一真实 plant：`cmd_vel -> Td -> tau -> v_real`。
 
 - `Trajectory`：Leader/Follower 轨迹。用于判断是否能形成圆轨迹、8 字轨迹或 MATLAB 原始轨迹下的编队形状。
 - `Formation error`：当前选中编队点的位置误差范数。用于判断编队跟踪是否稳定。
