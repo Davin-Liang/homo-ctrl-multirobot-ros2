@@ -405,8 +405,13 @@ void FormationController4DArtstein::timer_cb()
   // ---- 诊断：实际控制频率 + 数据新鲜度（每 5 秒）----------------------------
   ++diag_tick_;
   auto now = get_clock()->now();
-  sum_leader_age_ += (now - leader_odom_stamp_).seconds();
-  sum_ekf_age_    += (now - follower_odom_stamp_).seconds();
+  if (state_source_ == "mocap") {
+    sum_leader_age_ += (now - leader_mocap_received_).seconds();
+    sum_ekf_age_    += (now - follower_mocap_received_).seconds();
+  } else {
+    sum_leader_age_ += (now - leader_odom_stamp_).seconds();
+    sum_ekf_age_    += (now - follower_odom_stamp_).seconds();
+  }
   double diag_elapsed = (now - last_diag_time_).seconds();
   if (diag_elapsed >= 5.0) {
     double real_freq = diag_tick_ / diag_elapsed;
