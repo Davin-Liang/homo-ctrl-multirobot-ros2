@@ -1,5 +1,0 @@
-case,max_position_error,tail_mean_position_error,final_position_error,max_yaw_error,tail_mean_yaw_error,final_yaw_error,post_step_peak_position_error,post_step_peak_yaw_error
-ideal,2.841694,0.066833,0.066833,0.401886,0.017721,0.034163,0.066844,0.046145
-delayed,2.946956,2.201752,2.204381,0.586933,0.193986,0.099225,2.247798,0.451387
-artstein,2.884903,0.375882,0.374170,0.531026,0.107926,0.092257,0.377521,0.313852
-artstein_linear,2.970114,1.803277,1.805230,0.603641,0.164261,0.084906,1.848850,0.406371

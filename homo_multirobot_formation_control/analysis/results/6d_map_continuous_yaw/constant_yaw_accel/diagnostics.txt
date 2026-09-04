@@ -1,5 +1,0 @@
-controllability_rank=6
-g0_b=0.0
-ag0_commutator=0.0
-agd_commutator=0.0
-gd_b=0.0
