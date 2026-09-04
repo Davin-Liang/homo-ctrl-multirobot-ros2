@@ -2,7 +2,7 @@
   ros__parameters:
     server: localhost
     port: 3883
-    frame_id: "world"
+    frame_id: "map"
     mainloop_frequency: 100.0
     refresh_trackers_frequency: 1.0
     tracker_mainloop_frequency: 100.0

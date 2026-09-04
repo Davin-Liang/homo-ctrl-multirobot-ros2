@@ -11,6 +11,8 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/twist_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -28,6 +30,8 @@ private:
 
   // ---- 参数 ----------------------------------------------------------------
   std::string leader_ns_, follower_ns_;
+  std::string state_source_;
+  double mocap_state_timeout_ = 0.10;
   double Kp_yaw_, K_ff_;
   double max_linear_vel_, max_angular_vel_;
   double control_rate_;
@@ -45,6 +49,11 @@ private:
 
   // 最新缓冲消息（回调更新，定时器读取）
   nav_msgs::msg::Odometry::SharedPtr leader_odom_, follower_odom_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr leader_mocap_pose_sub_, follower_mocap_pose_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr leader_mocap_twist_sub_, follower_mocap_twist_sub_;
+  geometry_msgs::msg::PoseStamped::SharedPtr leader_mocap_pose_, follower_mocap_pose_;
+  geometry_msgs::msg::TwistStamped::SharedPtr leader_mocap_twist_, follower_mocap_twist_;
+  rclcpp::Time leader_mocap_received_{0, 0, RCL_ROS_TIME}, follower_mocap_received_{0, 0, RCL_ROS_TIME};
 
   // ---- 发布 ----------------------------------------------------------------
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;

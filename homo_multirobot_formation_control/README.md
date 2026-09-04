@@ -808,3 +808,17 @@ ros2 run tf2_tools view_frames
 # 验证 map → base_footprint TF
 ros2 run tf2_ros tf2_echo map robot2_base_footprint
 ```
+
+## 纯动捕 4D 控制
+
+先在同一控制主机启动 `mocap_two_robots.launch.py`，再启动以下任一种控制器。两者直接读取 `/robotN/mocap/pose` 与 `/robotN/mocap/twist` 的 map 系状态；不查 `map -> robotN_odom` TF，也不再次旋转动捕全局线速度。
+
+```bash
+# 原始 4D
+ros2 launch homo_multirobot_formation_control formation_single_follower_mocap.launch.py
+
+# 4D Artstein
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_mocap.launch.py
+```
+
+任一机器人动捕状态超过 `0.10 s` 未更新时，控制器发布零 `/robot2/cmd_vel` 并重置内部初始化。动捕模式与现有 EKF/TF 定位模式必须二选一启动。

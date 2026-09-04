@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    map_frame: map
+    odom_frame: robot1_odom
+    base_frame: robot1_base_footprint
+    state_timeout: 0.10
+    world_x: 0.0
+    world_y: 0.0
+    world_yaw: 0.0
+    rigid_to_base_x: 0.0
+    rigid_to_base_y: 0.0
+    rigid_to_base_yaw: 0.0

@@ -1,0 +1,11 @@
+case,max_distance,tail_mean_distance,tail_std_distance,final_distance
+ideal_4d_hpc_matlab,3.222052,0.051755,0.000140,0.051863
+matlab_leader_original_delay,3.182916,1.356488,0.185031,1.453791
+matlab_leader_forward_prediction_only,3.178387,0.690455,0.093579,0.618816
+matlab_leader_artstein_prediction,3.178100,0.382265,0.082113,0.301994
+circle_original_delay_clean,1.677039,0.571264,0.009173,0.573374
+circle_forward_prediction_only_clean,1.587237,0.725801,0.000034,0.725810
+circle_artstein_prediction_clean,1.586662,0.530469,0.000001,0.530469
+circle_original_delay_noise,1.684148,0.563657,0.031432,0.574981
+circle_forward_prediction_only_noise,1.587243,0.731088,0.011069,0.741805
+circle_artstein_prediction_noise,1.586662,0.519674,0.012807,0.531414

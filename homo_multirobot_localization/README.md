@@ -223,3 +223,24 @@ ros2 launch homo_multirobot_localization rf2o_ekf_single_robot.launch.py \
 ros2 launch homo_multirobot_localization rf2o_ekf_two_robots.launch.py
 ```
 
+---
+
+## 动捕纯定位（双车）
+
+该模式不启动 rf2o、EKF、AMCL 或 slam_toolbox。它在控制主机上启动一个 VRPN bridge 和两份 C++ `mocap_state_adapter`，输出统一 `map` 坐标系的状态：
+
+```bash
+ros2 launch homo_multirobot_localization mocap_two_robots.launch.py \
+  server:=<VRPN服务器IP> port:=3883 \
+  robot1_rigid_name:=robot1 robot2_rigid_name:=robot2
+```
+
+检查：
+
+```bash
+ros2 topic echo /robot1/mocap/pose --once
+ros2 topic echo /robot2/mocap/twist --once
+ros2 run tf2_ros tf2_echo map robot2_base_footprint
+```
+
+默认 `state_timeout:=0.10`，对应约 120 Hz 动捕连续缺失约 12 帧。每台车的 `mocap_robotN.yaml` 存放坐标轴、场地原点及刚体到车体的外参；实测值应在本机私有覆盖文件中配置，避免提交实验室专用参数。

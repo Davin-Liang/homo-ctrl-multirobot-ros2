@@ -4,6 +4,8 @@
     leader_ns: "/robot1"
     # 跟随机器人命名空间。
     follower_ns: "/robot2"
+    state_source: "ekf_tf"
+    mocap_state_timeout: 0.10
     # 是否使用 ROS 仿真时钟。
     use_sim_time: true
     # 安全圆上的离散编队点数量。

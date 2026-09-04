@@ -31,6 +31,11 @@ FormationController::FormationController()
 {
   leader_ns_   = declare_parameter("leader_ns",   "/robot1");
   follower_ns_ = declare_parameter("follower_ns", "/robot2");
+  state_source_ = declare_parameter("state_source", "ekf_tf");
+  mocap_state_timeout_ = declare_parameter("mocap_state_timeout", 0.10);
+  if (state_source_ != "ekf_tf" && state_source_ != "mocap") {
+    throw std::runtime_error("state_source must be 'ekf_tf' or 'mocap'");
+  }
   int m_p      = declare_parameter("m_p",      4);
   double radius = declare_parameter("radius",  2.0);
   double tol    = declare_parameter("tol",     0.1);
@@ -68,6 +73,7 @@ FormationController::FormationController()
 
   // EKF 里程计: 自身一致的速度（50 Hz, IMU + rf2o 融合）
   auto qos = rclcpp::SensorDataQoS();
+  if (state_source_ == "ekf_tf") {
   leader_sub_ = create_subscription<nav_msgs::msg::Odometry>(
     leader_ns_ + "/odometry/filtered", qos,
     [this](nav_msgs::msg::Odometry::SharedPtr m) {
@@ -80,6 +86,16 @@ FormationController::FormationController()
       follower_odom_ = m; follower_ok_ = true;
       follower_odom_stamp_ = m->header.stamp;
     });
+  } else {
+    leader_mocap_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(leader_ns_ + "/mocap/pose", qos,
+      [this](geometry_msgs::msg::PoseStamped::SharedPtr m) { leader_mocap_pose_ = m; leader_mocap_received_ = now(); leader_ok_ = true; });
+    follower_mocap_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(follower_ns_ + "/mocap/pose", qos,
+      [this](geometry_msgs::msg::PoseStamped::SharedPtr m) { follower_mocap_pose_ = m; follower_mocap_received_ = now(); follower_ok_ = true; });
+    leader_mocap_twist_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(leader_ns_ + "/mocap/twist", qos,
+      [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { leader_mocap_twist_ = m; });
+    follower_mocap_twist_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(follower_ns_ + "/mocap/twist", qos,
+      [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { follower_mocap_twist_ = m; });
+  }
 
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 
@@ -173,8 +189,26 @@ void FormationController::timer_cb()
 
   Vec4d x1, x2;
   double leader_yaw, follower_yaw, leader_az;
-  if (!ekf_to_map(*tf_buffer_, leader_ns_,   leader_odom_,   x1, leader_yaw,   leader_az)) return;
-  if (!ekf_to_map(*tf_buffer_, follower_ns_, follower_odom_, x2, follower_yaw, leader_az)) return;
+  if (state_source_ == "ekf_tf") {
+    if (!ekf_to_map(*tf_buffer_, leader_ns_, leader_odom_, x1, leader_yaw, leader_az) ||
+        !ekf_to_map(*tf_buffer_, follower_ns_, follower_odom_, x2, follower_yaw, leader_az)) return;
+  } else {
+    const auto t = now();
+    if (!leader_mocap_pose_ || !leader_mocap_twist_ || !follower_mocap_pose_ || !follower_mocap_twist_ ||
+        (t - leader_mocap_received_).seconds() > mocap_state_timeout_ ||
+        (t - follower_mocap_received_).seconds() > mocap_state_timeout_) {
+      controller_initialized_ = false;
+      cmd_pub_->publish(geometry_msgs::msg::Twist{});
+      return;
+    }
+    x1 << leader_mocap_pose_->pose.position.x, leader_mocap_pose_->pose.position.y,
+          leader_mocap_twist_->twist.linear.x, leader_mocap_twist_->twist.linear.y;
+    x2 << follower_mocap_pose_->pose.position.x, follower_mocap_pose_->pose.position.y,
+          follower_mocap_twist_->twist.linear.x, follower_mocap_twist_->twist.linear.y;
+    leader_yaw = msg_yaw(leader_mocap_pose_->pose.orientation);
+    follower_yaw = msg_yaw(follower_mocap_pose_->pose.orientation);
+    leader_az = leader_mocap_twist_->twist.angular.z;
+  }
 
   // 延迟初始化: 收到第一帧完整数据后初始化控制器
   if (!controller_initialized_) {

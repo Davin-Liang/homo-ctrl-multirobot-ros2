@@ -21,7 +21,7 @@ void VRPN_CALLBACK VRPNListener::handlePose(void *userData, const vrpn_TRACKERCB
     Synchronizer *synchronizer = static_cast<Synchronizer *>(userData);
     VRPNListener *listener = static_cast<VRPNListener *>(synchronizer->listener_ptr);
 
-    RCLCPP_INFO(listener->get_logger(), "recv new pose data from sender [%s]", synchronizer->sender_name.c_str());
+    RCLCPP_DEBUG(listener->get_logger(), "recv new pose data from sender [%s]", synchronizer->sender_name.c_str());
 
     // write pose data
     geometry_msgs::msg::PoseStamped pose_msg;
@@ -48,10 +48,13 @@ void VRPN_CALLBACK VRPNListener::handleTwist(void *userData, const vrpn_TRACKERV
     Synchronizer *synchronizer = static_cast<Synchronizer *>(userData);
     VRPNListener *listener = static_cast<VRPNListener *>(synchronizer->listener_ptr);
 
-    RCLCPP_INFO(listener->get_logger(), "recv new twist data from sender [%s]", synchronizer->sender_name.c_str());
+    RCLCPP_DEBUG(listener->get_logger(), "recv new twist data from sender [%s]", synchronizer->sender_name.c_str());
 
     // write twist data
     geometry_msgs::msg::TwistStamped twist_msg;
+    twist_msg.header.frame_id = listener->_frame_id;
+    twist_msg.header.stamp.sec = twistData.msg_time.tv_sec;
+    twist_msg.header.stamp.nanosec = twistData.msg_time.tv_usec * 1000;
     // write twist data: linear
     twist_msg.twist.linear.x = twistData.vel[0];
     twist_msg.twist.linear.y = twistData.vel[1];
@@ -65,9 +68,15 @@ void VRPN_CALLBACK VRPNListener::handleTwist(void *userData, const vrpn_TRACKERV
             twistData.vel_quat[3]));
     double roll, pitch, yaw;
     rot_mat.getRPY(roll, pitch, yaw);
-    twist_msg.twist.angular.x = roll;
-    twist_msg.twist.angular.y = pitch;
-    twist_msg.twist.angular.z = yaw;
+    twist_msg.twist.angular.x = 0.0;
+    twist_msg.twist.angular.y = 0.0;
+    if (twistData.vel_quat_dt > 0.0) {
+        twist_msg.twist.angular.z = yaw / twistData.vel_quat_dt;
+    } else {
+        twist_msg.twist.angular.z = 0.0;
+        RCLCPP_WARN_THROTTLE(listener->get_logger(), *listener->get_clock(), 2000,
+                             "VRPN velocity report has non-positive vel_quat_dt; angular.z set to zero");
+    }
 
     // publish twist data
     synchronizer->twist_publisher->publish(twist_msg);
@@ -78,10 +87,13 @@ void VRPN_CALLBACK VRPNListener::handleAccel(void *userData, const vrpn_TRACKERA
     Synchronizer *synchronizer = static_cast<Synchronizer *>(userData);
     VRPNListener *listener = static_cast<VRPNListener *>(synchronizer->listener_ptr);
 
-    RCLCPP_INFO(listener->get_logger(), "recv new accel data from sender [%s]", synchronizer->sender_name.c_str());
+    RCLCPP_DEBUG(listener->get_logger(), "recv new accel data from sender [%s]", synchronizer->sender_name.c_str());
 
     // write accel data
     geometry_msgs::msg::AccelStamped accel_msg;
+    accel_msg.header.frame_id = listener->_frame_id;
+    accel_msg.header.stamp.sec = accelData.msg_time.tv_sec;
+    accel_msg.header.stamp.nanosec = accelData.msg_time.tv_usec * 1000;
     // write accel data: linear
     accel_msg.accel.linear.x = accelData.acc[0];
     accel_msg.accel.linear.y = accelData.acc[1];

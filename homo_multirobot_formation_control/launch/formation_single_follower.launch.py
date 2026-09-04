@@ -28,6 +28,8 @@ def generate_launch_description():
     leader_ns = LaunchConfiguration("leader_ns")
     follower_ns = LaunchConfiguration("follower_ns")
     use_sim_time = LaunchConfiguration("use_sim_time")
+    state_source = LaunchConfiguration("state_source")
+    mocap_state_timeout = LaunchConfiguration("mocap_state_timeout")
 
     # Formation geometry
     m_p = LaunchConfiguration("m_p")
@@ -79,6 +81,8 @@ def generate_launch_description():
             "leader_ns": leader_ns,
             "follower_ns": follower_ns,
             "use_sim_time": use_sim_time,
+            "state_source": state_source,
+            "mocap_state_timeout": mocap_state_timeout,
             "m_p": m_p,
             "radius": radius,
             "tol": tol,
@@ -125,6 +129,10 @@ def generate_launch_description():
                               description="Follower robot namespace"),
         DeclareLaunchArgument("use_sim_time", default_value="true",
                               description="Use simulation time"),
+        DeclareLaunchArgument("state_source", default_value="ekf_tf",
+                              description="State source: ekf_tf or mocap"),
+        DeclareLaunchArgument("mocap_state_timeout", default_value="0.10",
+                              description="Mocap state watchdog timeout (s)"),
         DeclareLaunchArgument("m_p", default_value="4",
                               description="Number of safe formation points"),
         DeclareLaunchArgument("radius", default_value="2.0",
