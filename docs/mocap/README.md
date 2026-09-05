@@ -76,6 +76,21 @@ launch_lidar:=true
 
 该 launch 的默认参数为 `namespace:=robot1`、`prefix:=robot1_`、`launch_lidar:=false`。Follower 必须显式覆盖为 `namespace:=robot2 prefix:=robot2_`。
 
+首次使用新增的 `bringup_mini_omni_mocap.launch.py` 前，需构建并重新 source 该功能包：
+
+```bash
+cd ~/ros-projects/homo_multirobot_ws
+source /opt/ros/humble/setup.bash
+colcon build --packages-select turn_on_wheeltec_robot \
+  --symlink-install --cmake-args -DBUILD_TESTING=OFF
+source install/setup.bash
+
+ros2 launch turn_on_wheeltec_robot \
+  bringup_mini_omni_mocap.launch.py --show-args
+```
+
+最后一条命令应显示 `namespace`、`prefix`、`launch_lidar`。使用 `--symlink-install` 时后续修改已有 launch 文件一般可立即生效，但首次新增 launch 文件后仍建议重新构建一次。
+
 这两个机器人侧 launch 不发布定位状态或 `odom -> base_footprint` TF；该 TF 由控制主机上的动捕 adapter 发布。
 
 在控制主机运行：
