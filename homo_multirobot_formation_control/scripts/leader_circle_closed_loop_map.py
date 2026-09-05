@@ -15,8 +15,10 @@ from typing import Deque, Iterable, Tuple
 import numpy as np
 import rclpy
 from geometry_msgs.msg import Twist
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 import tf2_ros
 
 
@@ -166,6 +168,10 @@ class LeaderCircleClosedLoop(Node):
         self.declare_parameter('start_side', 'top')
         self.declare_parameter('rate', 20.0)
         self.declare_parameter('odom_topic', 'odometry/filtered')
+        self.declare_parameter('state_source', 'odom_tf')
+        self.declare_parameter('mocap_pose_topic', 'mocap/pose')
+        self.declare_parameter('mocap_twist_topic', 'mocap/twist')
+        self.declare_parameter('mocap_state_timeout', 0.10)
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('Td', 0.22)
         self.declare_parameter('tau_v', 0.43)
@@ -184,6 +190,9 @@ class LeaderCircleClosedLoop(Node):
         self.start_side = str(self.get_parameter('start_side').value)
         self.rate = float(self.get_parameter('rate').value)
         self.map_frame = str(self.get_parameter('map_frame').value)
+        self.state_source = str(self.get_parameter('state_source').value)
+        self.mocap_state_timeout = float(
+            self.get_parameter('mocap_state_timeout').value)
         self.td = float(self.get_parameter('Td').value)
         self.tau_v = float(self.get_parameter('tau_v').value)
         self.kp = float(self.get_parameter('kp').value)
@@ -203,6 +212,10 @@ class LeaderCircleClosedLoop(Node):
             raise ValueError('Td must be non-negative and tau_v must be positive')
         if self.start_side not in ('top', 'bottom'):
             raise ValueError("start_side must be 'top' or 'bottom'")
+        if self.state_source not in ('odom_tf', 'mocap'):
+            raise ValueError("state_source must be 'odom_tf' or 'mocap'")
+        if self.mocap_state_timeout <= 0.0:
+            raise ValueError('mocap_state_timeout must be positive')
 
         direction_sign = 1.0 if self.direction == 'ccw' else -1.0
         if self.direction not in ('ccw', 'cw'):
@@ -221,15 +234,29 @@ class LeaderCircleClosedLoop(Node):
         self.frame_id = ''
         self.localization_valid = False
         self.tf_warning_emitted = False
+        self.mocap_pose_time: float | None = None
+        self.mocap_twist_time: float | None = None
         self.last_command_map = np.zeros(2)
         self.last_omega_command = 0.0
 
         self.publisher = self.create_publisher(Twist, 'cmd_vel', 10)
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-        odom_topic = str(self.get_parameter('odom_topic').value)
-        self.subscription = self.create_subscription(
-            Odometry, odom_topic, self.odom_callback, 10)
+        if self.state_source == 'odom_tf':
+            self.tf_buffer = tf2_ros.Buffer()
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+            odom_topic = str(self.get_parameter('odom_topic').value)
+            self.subscription = self.create_subscription(
+                Odometry, odom_topic, self.odom_callback, 10)
+        else:
+            self.tf_buffer = None
+            self.tf_listener = None
+            pose_topic = str(self.get_parameter('mocap_pose_topic').value)
+            twist_topic = str(self.get_parameter('mocap_twist_topic').value)
+            self.mocap_pose_subscription = self.create_subscription(
+                PoseStamped, pose_topic, self.mocap_pose_callback,
+                qos_profile_sensor_data)
+            self.mocap_twist_subscription = self.create_subscription(
+                TwistStamped, twist_topic, self.mocap_twist_callback,
+                qos_profile_sensor_data)
         self.timer = self.create_timer(self.dt, self.timer_callback)
 
         self.get_logger().info(
@@ -238,7 +265,7 @@ class LeaderCircleClosedLoop(Node):
             f'omega={self.omega_ref:.3f} rad/s heading='
             f'{math.degrees(self.heading):.1f} deg '
             f'start_side={self.start_side} '
-            f'map_frame={self.map_frame} '
+            f'map_frame={self.map_frame} state_source={self.state_source} '
             f'Td={self.td:.2f} s tau_v={self.tau_v:.2f} s')
 
     def now_seconds(self) -> float:
@@ -278,11 +305,52 @@ class LeaderCircleClosedLoop(Node):
                 self.tf_warning_emitted = True
             return
 
-        self.position, self.velocity_map, self.yaw = odom_state_to_map(
+        position, velocity_map, yaw = odom_state_to_map(
             position_odom, yaw_odom, body_velocity, map_translation,
             map_to_odom_yaw)
+        self.accept_state(position, velocity_map, yaw)
         self.localization_valid = True
         self.tf_warning_emitted = False
+
+    def mocap_pose_callback(self, message: PoseStamped) -> None:
+        if message.header.frame_id != self.map_frame:
+            self.get_logger().error(
+                f'mocap pose frame {message.header.frame_id!r} is not '
+                f'{self.map_frame!r}')
+            self.localization_valid = False
+            return
+        position = np.array([message.pose.position.x, message.pose.position.y])
+        yaw = yaw_from_quaternion(
+            message.pose.orientation.x, message.pose.orientation.y,
+            message.pose.orientation.z, message.pose.orientation.w)
+        self.position = position
+        self.yaw = yaw
+        self.mocap_pose_time = self.now_seconds()
+        self.initialize_if_ready()
+
+    def mocap_twist_callback(self, message: TwistStamped) -> None:
+        if message.header.frame_id != self.map_frame:
+            self.get_logger().error(
+                f'mocap twist frame {message.header.frame_id!r} is not '
+                f'{self.map_frame!r}')
+            self.localization_valid = False
+            return
+        self.velocity_map = np.array([
+            message.twist.linear.x, message.twist.linear.y])
+        self.mocap_twist_time = self.now_seconds()
+        self.initialize_if_ready()
+
+    def accept_state(self, position: np.ndarray, velocity_map: np.ndarray,
+                     yaw: float) -> None:
+        self.position = position
+        self.velocity_map = velocity_map
+        self.yaw = yaw
+        self.initialize_if_ready()
+
+    def initialize_if_ready(self) -> None:
+        if self.position is None or self.velocity_map is None or self.yaw is None:
+            return
+        self.localization_valid = True
 
         if self.p0 is None:
             self.p0 = self.position.copy()
@@ -299,6 +367,12 @@ class LeaderCircleClosedLoop(Node):
         self.publisher.publish(Twist())
 
     def timer_callback(self) -> None:
+        if self.state_source == 'mocap':
+            now = self.now_seconds()
+            if (self.mocap_pose_time is None or self.mocap_twist_time is None or
+                    now - self.mocap_pose_time > self.mocap_state_timeout or
+                    now - self.mocap_twist_time > self.mocap_state_timeout):
+                self.localization_valid = False
         if (self.position is None or self.velocity_map is None or
                 self.yaw is None or self.p0 is None or
                 self.start_time is None or not self.localization_valid):
@@ -354,11 +428,12 @@ def main(args=None) -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        node.publish_zero()
+        if rclpy.ok():
+            node.publish_zero()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':
     main()
-
