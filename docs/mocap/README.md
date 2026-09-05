@@ -74,6 +74,8 @@ ros2 launch turn_on_wheeltec_robot bringup_mini_omni_mocap.launch.py \
 launch_lidar:=true
 ```
 
+该 launch 的默认参数为 `namespace:=robot1`、`prefix:=robot1_`、`launch_lidar:=false`。Follower 必须显式覆盖为 `namespace:=robot2 prefix:=robot2_`。
+
 这两个机器人侧 launch 不发布定位状态或 `odom -> base_footprint` TF；该 TF 由控制主机上的动捕 adapter 发布。
 
 在控制主机运行：
@@ -83,13 +85,19 @@ source /opt/ros/humble/setup.bash
 source ~/ros-projects/homo_multirobot_ws/install/setup.bash
 
 ros2 launch homo_multirobot_localization mocap_two_robots.launch.py \
-  server:=<VRPN服务器IP> \
-  port:=3883 \
-  robot1_rigid_name:=robot1 \
-  robot2_rigid_name:=robot2
+  server:=<VRPN服务器IP>
 ```
 
 该 launch 启动一个 `vrpn_listener` 和两个 C++ `mocap_state_adapter`。它不会启动编队算法、Gazebo、EKF 或机器人驱动。
+
+未显式指定时的默认参数：
+
+| 参数 | 默认值 |
+|---|---|
+| `port` | `3883` |
+| `robot1_rigid_name` | `robot1` |
+| `robot2_rigid_name` | `robot2` |
+| `state_timeout` | `0.10` s |
 
 验证话题：
 
@@ -189,6 +197,8 @@ use_sim_time=false
 mocap_state_timeout=0.10
 ```
 
+两者的通用默认参数为 `leader_ns:=/robot1`、`follower_ns:=/robot2`、`control_rate:=20.0`、`max_linear_vel:=1.0`、`max_angular_vel:=0.5`。原始 4D 默认 `radius:=2.0`；4D Artstein 默认 `radius:=4.0`，并额外默认 `tau:=0.43`、`Td:=0.22`。
+
 在 mocap 模式中，4D 状态直接为：
 
 ```text
@@ -230,6 +240,8 @@ ros2 launch homo_multirobot_formation_control \
 | `mocap_state_timeout` | pose/twist 超时急停时间（s） | `0.10` |
 
 与开环 `leader_circle.py` 不同，该节点利用动捕当前位置和全局速度做位置/速度闭环与延迟预测；若动捕 pose 或 twist 超时，会发布零 `/robot1/cmd_vel`。
+
+未显式指定时，该 launch 默认 `namespace:=robot1`、`use_sim_time:=true`、`state_source:=odom_tf`、`radius:=2.0`、`speed:=0.2`、`heading:=0.0`、`direction:=ccw`。动捕实车模式必须至少覆盖 `use_sim_time:=false state_source:=mocap`。
 
 ## 安全与故障处理
 
