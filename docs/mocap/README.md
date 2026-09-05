@@ -54,6 +54,28 @@ colcon build --paths \
 
 ## 启动双车动捕状态链路
 
+### 机器人侧纯动捕底盘 bringup
+
+每台实车仍需运行底盘串口驱动，以接收 `cmd_vel` 并驱动 STM32；纯动捕模式不需要 ImuProcessor、rf2o 或 EKF。每台车分别运行：
+
+```bash
+# Leader
+ros2 launch turn_on_wheeltec_robot bringup_mini_omni_mocap.launch.py \
+  namespace:=robot1 prefix:=robot1_
+
+# Follower
+ros2 launch turn_on_wheeltec_robot bringup_mini_omni_mocap.launch.py \
+  namespace:=robot2 prefix:=robot2_
+```
+
+默认只启动 `wheeltec_robot_node` 和 `robot_state_publisher`。如果需要激光 scan 显示或后续避障，追加：
+
+```bash
+launch_lidar:=true
+```
+
+这两个机器人侧 launch 不发布定位状态或 `odom -> base_footprint` TF；该 TF 由控制主机上的动捕 adapter 发布。
+
 在控制主机运行：
 
 ```bash
