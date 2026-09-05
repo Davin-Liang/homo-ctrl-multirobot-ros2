@@ -175,6 +175,40 @@ mocap_state_timeout=0.10
 
 不会查 `map -> robotN_odom` TF，也不会将动捕 map 系线速度再次旋转。
 
+## Leader 动捕闭环绕圈
+
+`leader_circle_closed_loop_map.launch.py` 可让 Leader 使用自己的动捕 map 系位姿和速度闭环跟踪圆轨迹。先启动上文的 `mocap_two_robots.launch.py`，再在控制主机启动：
+
+```bash
+ros2 launch homo_multirobot_formation_control \
+  leader_circle_closed_loop_map.launch.py \
+  namespace:=robot1 \
+  use_sim_time:=false \
+  state_source:=mocap \
+  radius:=1.0 speed:=0.20 heading:=0.0 direction:=ccw
+```
+
+该节点订阅：
+
+```text
+/robot1/mocap/pose
+/robot1/mocap/twist
+```
+
+两条消息都必须有 `header.frame_id=map`。节点输出 `/robot1/cmd_vel`。
+
+| 参数 | 含义 | 建议初值 |
+|---|---|---|
+| `radius` | 圆轨迹半径（m） | `1.0` |
+| `speed` | 圆周切向速度（m/s） | `0.20` |
+| `heading` | Leader 期望固定车头方向（度，map 系） | `0.0` |
+| `direction` | `ccw` 逆时针或 `cw` 顺时针 | `ccw` |
+| `Td` | 电机纯滞后补偿时间（s） | `0.22` |
+| `tau_v` | 速度一阶响应时间常数（s） | `0.43` |
+| `mocap_state_timeout` | pose/twist 超时急停时间（s） | `0.10` |
+
+与开环 `leader_circle.py` 不同，该节点利用动捕当前位置和全局速度做位置/速度闭环与延迟预测；若动捕 pose 或 twist 超时，会发布零 `/robot1/cmd_vel`。
+
 ## 安全与故障处理
 
 动捕频率约 120 Hz，默认超时为 `0.10 s`。若任一刚体超过约 12 帧没有新 pose：
