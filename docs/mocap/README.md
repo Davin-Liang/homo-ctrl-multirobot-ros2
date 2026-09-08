@@ -222,6 +222,39 @@ mocap_state_timeout=0.10
 
 不会查 `map -> robotN_odom` TF，也不会将动捕 map 系线速度再次旋转。
 
+## 6D Map-HPC Artstein 动捕编队
+
+启动纯动捕 Map-HPC Artstein：
+
+```bash
+ros2 launch homo_multirobot_formation_control \
+  formation_single_follower_6d_map_hpc_artstein_mocap.launch.py
+```
+
+该 launch 固定 `state_source=mocap`、`use_sim_time=false`、`use_motor_delay=false`，并订阅 `/robot1/mocap/{pose,twist}` 与 `/robot2/mocap/{pose,twist}`。
+
+动捕位置/yaw 位于 map 系；动捕 `vx_map/vy_map` 仅在节点入口按 yaw 转为 6D 模型需要的 `vx_body/vy_body`。其余 Map-HPC 控制律、Artstein 预测与 body-frame `/robot2/cmd_vel` 输出保持原有语义。
+
+### map 固定离散多边形
+
+| 参数 | 含义 | 默认值 |
+|---|---|---|
+| `m_p` | map 固定候选顶点数 | `4` |
+| `radius` | Leader 到 Follower 的期望半径（m） | `2.0` |
+| `tol` | 新顶点切换所需最小误差收益（m） | `0.1` |
+
+例如 `m_p:=4 radius:=2.0` 时，候选偏置为：
+
+```text
+(+2, 0), (0, +2), (-2, 0), (0, -2)
+```
+
+这些方向固定在全局 map，不随 Leader yaw 转动。控制器选择当前误差最小的顶点；只有新顶点比当前点至少优 `tol` 时才切换，避免边界附近反复跳点。
+
+其他默认控制参数：`mass=2.0`、`I=1.0`、`tau=0.43`、`tau_yaw=0.43`、`Td=0.22`、`control_rate=20.0`、`max_linear_vel=1.0`、`max_angular_vel=0.5`、`mocap_state_timeout=0.10`。
+
+任一机器人动捕 pose 或 twist 超过 `0.10 s` 未更新时，节点发布零 `/robot2/cmd_vel` 并清空预测器历史；恢复新鲜双车数据后重新初始化。
+
 ## Leader 动捕闭环绕圈
 
 `leader_circle_closed_loop_map.launch.py` 可让 Leader 使用自己的动捕 map 系位姿和速度闭环跟踪圆轨迹。先启动上文的 `mocap_two_robots.launch.py`，再在控制主机启动：
