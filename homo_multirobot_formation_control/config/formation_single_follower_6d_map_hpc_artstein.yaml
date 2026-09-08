@@ -6,6 +6,10 @@
     follower_ns: "/robot2"
     # 是否使用 ROS 仿真时钟。
     use_sim_time: true
+    # 状态来源：ekf_tf（默认）或 mocap。
+    state_source: "ekf_tf"
+    # 动捕 pose/twist 状态超时急停时间（s）。
+    mocap_state_timeout: 0.10
     # map 坐标系固定离散多边形的候选顶点数。
     m_p: 4
     # Leader 到 Follower 的离散编队半径（m）。
@@ -37,11 +41,11 @@
     # 单个车轮最大角速度（rad/s）。
     wheel_max_omega: 20.0
     # 最大线加速度（m/s²）。
-    max_linear_accel: 2.0
+    max_linear_accel: 0.5
     # 最大角加速度（rad/s²）。
-    max_angular_accel: 4.0
+    max_angular_accel: 1.0
     # 最大线速度（m/s）。
-    max_linear_vel: 1.0
+    max_linear_vel: 0.5
     # 最大角速度（rad/s）。
     max_angular_vel: 0.5
     # 非零命令最小速度（m/s）；0 表示关闭。
@@ -53,4 +57,4 @@
     # 传输延迟（s）。
     transport_delay: 0.22
     # 延迟节点最大线加速度（m/s²）。
-    delay_max_accel: 2.0
+    delay_max_accel: 0.5
