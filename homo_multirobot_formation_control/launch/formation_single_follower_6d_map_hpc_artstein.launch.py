@@ -38,8 +38,9 @@ def generate_launch_description():
     follower_ns = LaunchConfiguration("follower_ns")
     use_sim_time = LaunchConfiguration("use_sim_time")
 
-    offset_map_x = LaunchConfiguration("offset_map_x")
-    offset_map_y = LaunchConfiguration("offset_map_y")
+    m_p = LaunchConfiguration("m_p")
+    radius = LaunchConfiguration("radius")
+    tol = LaunchConfiguration("tol")
     mass = LaunchConfiguration("mass")
     I = LaunchConfiguration("I")
     use_hpc = LaunchConfiguration("use_hpc")
@@ -82,8 +83,9 @@ def generate_launch_description():
                 "leader_ns": leader_ns,
                 "follower_ns": follower_ns,
                 "use_sim_time": use_sim_time,
-                "offset_map_x": offset_map_x,
-                "offset_map_y": offset_map_y,
+                "m_p": m_p,
+                "radius": radius,
+                "tol": tol,
                 "mass": mass,
                 "I": I,
                 "use_hpc": use_hpc,
@@ -129,8 +131,9 @@ def generate_launch_description():
             DeclareLaunchArgument("leader_ns", default_value="/robot1"),
             DeclareLaunchArgument("follower_ns", default_value="/robot2"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
-            DeclareLaunchArgument("offset_map_x", default_value="-1.0"),
-            DeclareLaunchArgument("offset_map_y", default_value="0.0"),
+            DeclareLaunchArgument("m_p", default_value="4"),
+            DeclareLaunchArgument("radius", default_value="2.0"),
+            DeclareLaunchArgument("tol", default_value="0.1"),
             DeclareLaunchArgument("mass", default_value="2.0"),
             DeclareLaunchArgument("I", default_value="1.0"),
             DeclareLaunchArgument("use_hpc", default_value="true"),

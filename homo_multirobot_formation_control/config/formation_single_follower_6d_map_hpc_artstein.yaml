@@ -6,10 +6,12 @@
     follower_ns: "/robot2"
     # 是否使用 ROS 仿真时钟。
     use_sim_time: true
-    # 地图坐标系下编队偏移 x（m）。
-    offset_map_x: -1.0
-    # 地图坐标系下编队偏移 y（m）。
-    offset_map_y: 0.0
+    # map 坐标系固定离散多边形的候选顶点数。
+    m_p: 4
+    # Leader 到 Follower 的离散编队半径（m）。
+    radius: 2.0
+    # 切换至新顶点所需的最小误差收益（m）。
+    tol: 0.1
     # 控制器模型质量调参值，非实际质量。
     mass: 2.0
     # 偏航转动惯量调参值。

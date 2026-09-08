@@ -34,8 +34,9 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   leader_ns_ = declare_parameter("leader_ns", "/robot1");
   follower_ns_ = declare_parameter("follower_ns", "/robot2");
 
-  double offset_map_x = declare_parameter("offset_map_x", -1.0);
-  double offset_map_y = declare_parameter("offset_map_y", 0.0);
+  int m_p = declare_parameter("m_p", 4);
+  double radius = declare_parameter("radius", 2.0);
+  double tol = declare_parameter("tol", 0.1);
   double mass = declare_parameter("mass", 2.0);
   double inertia = declare_parameter("I", 1.0);
   bool use_hpc = declare_parameter("use_hpc", true);
@@ -73,7 +74,7 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   build_predictors(tau_v_, tau_w_, Td_, dt);
 
   ctrl_ = std::make_unique<MapHpcController6DArtstein>(
-      Eigen::Vector2d(offset_map_x, offset_map_y), mass, inertia, hpc_c_min, use_hpc, dt, initial_min_lambda);
+      m_p, radius, tol, mass, inertia, hpc_c_min, use_hpc, dt, initial_min_lambda);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius, wheel_max_omega,
                                     max_linear_accel, max_angular_accel);
@@ -234,9 +235,11 @@ void FormationController6DMapHpcArtstein::timer_cb()
   if (!odom_to_state(leader_ns_, leader_odom_, leader)) {
     return;
   }
+
   if (!odom_to_state(follower_ns_, follower_odom_, follower)) {
     return;
   }
+  const bool target_switched = ctrl_->select_target(leader.x, follower.x);
 
   int trans_buf_size = trans_predictor_.buffer_size();
   int yaw_buf_size = yaw_predictor_.buffer_size();
@@ -268,6 +271,12 @@ void FormationController6DMapHpcArtstein::timer_cb()
       RCLCPP_ERROR(get_logger(), "6D Map HPC initialization failed: %s", e.what());
       return;
     }
+  } else if (target_switched) {
+    Eigen::VectorXd x1_h = predict_leader_state(
+        leader.x, Td_ + std::max(tau_v_, tau_w_));
+    Eigen::VectorXd x2_h = predict_follower_state(follower);
+    ctrl_->initialize(x1_h, x2_h);
+    RCLCPP_INFO(get_logger(), "6D Map HPC switched polygon target to %d.", ctrl_->target_index());
   }
 
   Eigen::VectorXd x1_h = predict_leader_state(

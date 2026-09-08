@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <vector>
 
 #include <Eigen/Dense>
 #include <unsupported/Eigen/MatrixFunctions>
@@ -14,18 +15,35 @@ namespace formation_control {
 
 class MapHpcController6DArtstein {
 public:
-  MapHpcController6DArtstein(const Eigen::Vector2d& offset_map,
+  MapHpcController6DArtstein(int m_p, double radius, double tol,
       double mass, double inertia, double c_min, bool use_hpc, double period,
       double initial_min_lambda)
-  : offset_map_(offset_map), mass_(mass), inertia_(inertia),
-    c_min_(c_min), use_hpc_(use_hpc), period_(period), min_lambda_(initial_min_lambda)
+  : mass_(mass), inertia_(inertia), c_min_(c_min), use_hpc_(use_hpc), period_(period), min_lambda_(initial_min_lambda), tol_(tol)
   {
-    if (mass_ <= 0.0 || inertia_ <= 0.0 ||
+    if (m_p < 1 || radius <= 0.0 || tol_ < 0.0 || mass_ <= 0.0 || inertia_ <= 0.0 ||
         period_ <= 0.0 || c_min_ <= 0.0 || c_min_ > 1.0) {
       throw std::invalid_argument("invalid 6D map HPC parameters");
     }
+    for (int j = 0; j < m_p; ++j) {
+      const double angle = 2.0 * M_PI * static_cast<double>(j) / static_cast<double>(m_p);
+      offsets_.emplace_back(radius * std::cos(angle), radius * std::sin(angle));
+    }
     a_ = Eigen::MatrixXd::Zero(6, 6); a_(0,3)=a_(1,4)=a_(2,5)=1.0;
     b_ = Eigen::MatrixXd::Zero(6, 3); b_(3,0)=b_(4,1)=1.0/mass_; b_(5,2)=1.0/inertia_;
+  }
+
+  const std::vector<Eigen::Vector2d>& offsets() const { return offsets_; }
+  int target_index() const { return target_index_; }
+  bool select_target(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower) {
+    int best = 0; double best_distance = std::numeric_limits<double>::max();
+    for (int j = 0; j < static_cast<int>(offsets_.size()); ++j) {
+      const double distance = (follower.head<2>() - leader.head<2>() - offsets_[j]).norm();
+      if (distance < best_distance) { best = j; best_distance = distance; }
+    }
+    if (target_index_ < 0) { target_index_ = best; return true; }
+    const double current_distance = (follower.head<2>() - leader.head<2>() - offsets_[target_index_]).norm();
+    if (best != target_index_ && best_distance + tol_ < current_distance) { target_index_ = best; return true; }
+    return false;
   }
 
   void initialize(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower) {
@@ -56,7 +74,7 @@ private:
   }
   Eigen::Matrix<double, 6, 1> error_of(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower) const {
     Eigen::Matrix<double, 6, 1> error;
-    error.head<2>() = follower.head<2>() - leader.head<2>() - offset_map_;
+    error.head<2>() = follower.head<2>() - leader.head<2>() - offsets_.at(target_index_);
     error(2) = wrap(follower(2) - leader(2));
     error.segment<2>(3) = rotate(follower(2), follower.segment<2>(3)) - rotate(leader(2), leader.segment<2>(3));
     error(5) = follower(5) - leader(5); return error;
@@ -95,7 +113,8 @@ private:
     double c = std::clamp(std::exp(0.5 * (low + high)), c_min_, 1.0);
     return std::pow(c, 1.0 + nu_) * k_ * (gd_ * (1.0 - std::log(c))).exp() * error;
   }
-  Eigen::Vector2d offset_map_; double mass_, inertia_, c_min_, period_, min_lambda_, nu_=0.0;
+  std::vector<Eigen::Vector2d> offsets_; int target_index_ = -1;
+  double mass_, inertia_, c_min_, period_, min_lambda_, nu_=0.0, tol_;
   bool use_hpc_, initialized_=false; Eigen::Matrix<double, 3, 6> k_; Eigen::MatrixXd a_, b_, gd_, p_;
 };
 }  // namespace formation_control
