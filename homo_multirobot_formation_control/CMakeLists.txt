@@ -121,7 +121,11 @@ install(TARGETS formation_control_node_4d_artstein_lqr
   DESTINATION lib/${PROJECT_NAME}
 )
 
+endif()
+
 # ---- 6D Artstein Disc 控制器（方向 A: 平移/偏航预测 + 6D Disc HPC）--------
+option(BUILD_6D_ARTSTEIN_DISC "Build 6D Artstein Disc controller" OFF)
+if(BUILD_6D_ARTSTEIN_DISC)
 add_executable(formation_control_node_6d_artstein_disc
   src/main_6d_artstein_disc.cpp
   src/formation_control_node_6d_artstein_disc.cpp
@@ -148,6 +152,10 @@ target_link_libraries(formation_control_node_6d_artstein_disc
 install(TARGETS formation_control_node_6d_artstein_disc
   DESTINATION lib/${PROJECT_NAME}
 )
+
+endif()
+
+if(FALSE)
 
 add_executable(formation_control_node_6d_artstein_disc_hocbf
   src/main_6d_artstein_disc_hocbf.cpp

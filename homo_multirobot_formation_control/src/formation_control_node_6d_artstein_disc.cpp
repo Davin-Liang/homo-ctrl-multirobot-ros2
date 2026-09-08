@@ -33,6 +33,14 @@ FormationController6DArtsteinDisc::FormationController6DArtsteinDisc()
 {
   leader_ns_ = declare_parameter("leader_ns", "/robot1");
   follower_ns_ = declare_parameter("follower_ns", "/robot2");
+  state_source_ = declare_parameter("state_source", "ekf_tf");
+  mocap_state_timeout_ = declare_parameter("mocap_state_timeout", 0.10);
+  if (state_source_ != "ekf_tf" && state_source_ != "mocap") {
+    throw std::invalid_argument("6D Artstein Disc: state_source must be ekf_tf or mocap");
+  }
+  if (mocap_state_timeout_ <= 0.0) {
+    throw std::invalid_argument("6D Artstein Disc: mocap_state_timeout must be positive");
+  }
 
   double radius = declare_parameter("radius", 2.0);
   double mass = declare_parameter("mass", 2.0);
@@ -89,6 +97,7 @@ FormationController6DArtsteinDisc::FormationController6DArtsteinDisc()
   tf_listener_ = std::make_unique<tf2_ros::TransformListener>(*tf_buffer_);
 
   auto qos = rclcpp::SensorDataQoS();
+  if (state_source_ == "ekf_tf") {
   leader_sub_ = create_subscription<nav_msgs::msg::Odometry>(
     leader_ns_ + "/odometry/filtered", qos,
     [this](nav_msgs::msg::Odometry::SharedPtr m) {
@@ -103,6 +112,16 @@ FormationController6DArtsteinDisc::FormationController6DArtsteinDisc()
       follower_ok_ = true;
       follower_odom_stamp_ = m->header.stamp;
     });
+  } else {
+    leader_mocap_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(leader_ns_ + "/mocap/pose", qos,
+      [this](geometry_msgs::msg::PoseStamped::SharedPtr m) { leader_mocap_pose_ = m; leader_mocap_received_ = now(); leader_ok_ = true; });
+    follower_mocap_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(follower_ns_ + "/mocap/pose", qos,
+      [this](geometry_msgs::msg::PoseStamped::SharedPtr m) { follower_mocap_pose_ = m; follower_mocap_received_ = now(); follower_ok_ = true; });
+    leader_mocap_twist_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(leader_ns_ + "/mocap/twist", qos,
+      [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { leader_mocap_twist_ = m; });
+    follower_mocap_twist_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(follower_ns_ + "/mocap/twist", qos,
+      [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { follower_mocap_twist_ = m; });
+  }
 
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 
@@ -238,11 +257,32 @@ void FormationController6DArtsteinDisc::timer_cb()
   }
 
   State6D leader, follower;
-  if (!odom_to_state(leader_ns_, leader_odom_, leader)) {
-    return;
-  }
-  if (!odom_to_state(follower_ns_, follower_odom_, follower)) {
-    return;
+  if (state_source_ == "ekf_tf") {
+    if (!odom_to_state(leader_ns_, leader_odom_, leader) ||
+        !odom_to_state(follower_ns_, follower_odom_, follower)) return;
+  } else {
+    const auto t = now();
+    if (!leader_mocap_pose_ || !leader_mocap_twist_ || !follower_mocap_pose_ || !follower_mocap_twist_ ||
+        (t - leader_mocap_received_).seconds() > mocap_state_timeout_ ||
+        (t - follower_mocap_received_).seconds() > mocap_state_timeout_) {
+      controller_initialized_ = false;
+      follower_vcmd_map_hist_.clear();
+      follower_wcmd_hist_.clear();
+      cmd_pub_->publish(geometry_msgs::msg::Twist{});
+      return;
+    }
+    auto fill_mocap = [this](const geometry_msgs::msg::PoseStamped::SharedPtr& pose,
+                             const geometry_msgs::msg::TwistStamped::SharedPtr& twist,
+                             State6D& state) {
+      const double yaw = msg_yaw(pose->pose.orientation);
+      const Eigen::Vector2d v_map(twist->twist.linear.x, twist->twist.linear.y);
+      const Eigen::Vector2d v_body = map_to_body(yaw, v_map);
+      state.x << pose->pose.position.x, pose->pose.position.y, yaw,
+                 v_body(0), v_body(1), twist->twist.angular.z;
+      state.v_map = v_map;
+    };
+    fill_mocap(leader_mocap_pose_, leader_mocap_twist_, leader);
+    fill_mocap(follower_mocap_pose_, follower_mocap_twist_, follower);
   }
 
   int trans_buf_size = trans_predictor_.buffer_size();
@@ -334,8 +374,13 @@ void FormationController6DArtsteinDisc::timer_cb()
 
   ++diag_tick_;
   auto now = get_clock()->now();
-  sum_leader_age_ += (now - leader_odom_stamp_).seconds();
-  sum_ekf_age_ += (now - follower_odom_stamp_).seconds();
+  if (state_source_ == "mocap") {
+    sum_leader_age_ += (now - leader_mocap_received_).seconds();
+    sum_ekf_age_ += (now - follower_mocap_received_).seconds();
+  } else {
+    sum_leader_age_ += (now - leader_odom_stamp_).seconds();
+    sum_ekf_age_ += (now - follower_odom_stamp_).seconds();
+  }
   double diag_elapsed = (now - last_diag_time_).seconds();
   if (diag_elapsed >= 5.0) {
     double real_freq = diag_tick_ / diag_elapsed;

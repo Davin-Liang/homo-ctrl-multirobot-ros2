@@ -18,6 +18,8 @@ def generate_launch_description():
     leader_ns = LaunchConfiguration("leader_ns")
     follower_ns = LaunchConfiguration("follower_ns")
     use_sim_time = LaunchConfiguration("use_sim_time")
+    state_source = LaunchConfiguration("state_source")
+    mocap_state_timeout = LaunchConfiguration("mocap_state_timeout")
 
     radius = LaunchConfiguration("radius")
     mass = LaunchConfiguration("mass")
@@ -67,6 +69,8 @@ def generate_launch_description():
                 "leader_ns": leader_ns,
                 "follower_ns": follower_ns,
                 "use_sim_time": use_sim_time,
+                "state_source": state_source,
+                "mocap_state_timeout": mocap_state_timeout,
                 "radius": radius,
                 "mass": mass,
                 "I": I,
@@ -119,6 +123,8 @@ def generate_launch_description():
             DeclareLaunchArgument("leader_ns", default_value="/robot1"),
             DeclareLaunchArgument("follower_ns", default_value="/robot2"),
             DeclareLaunchArgument("use_sim_time", default_value="true"),
+            DeclareLaunchArgument("state_source", default_value="ekf_tf"),
+            DeclareLaunchArgument("mocap_state_timeout", default_value="0.10"),
             DeclareLaunchArgument("radius", default_value="2.0"),
             DeclareLaunchArgument("mass", default_value="2.0"),
             DeclareLaunchArgument("I", default_value="1.0"),
