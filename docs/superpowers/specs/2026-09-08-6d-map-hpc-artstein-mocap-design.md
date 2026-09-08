@@ -2,7 +2,25 @@
 
 ## 目标
 
-为 `formation_control_node_6d_map_hpc_artstein` 增加纯动捕状态输入，并将该 target 改为默认构建。保留现有 6D Artstein Disc 的动捕适配，不修改 HOCBF 或其他节点。
+将 `formation_control_node_6d_map_hpc_artstein` 的单一固定 `offset_map_x/y` 编队方案替换为 map 固定离散多边形，并增加纯动捕状态输入。该 target 改为默认构建。保留现有 6D Artstein Disc 的动捕适配，不修改 HOCBF 或其他节点。
+
+## map 固定离散多边形
+
+移除 `offset_map_x`、`offset_map_y` 参数，改用：
+
+```text
+m_p       候选顶点数，必须 >= 1
+radius    Leader 到 Follower 的期望半径，必须 > 0
+tol       顶点切换迟滞阈值，必须 >= 0
+```
+
+候选偏置固定在全局 map 坐标系：
+
+```text
+d_j = radius * [cos(2*pi*j/m_p), sin(2*pi*j/m_p)]
+```
+
+每个控制周期用当前 Leader map 位置加 `d_j` 形成候选 Follower 目标点。控制器选择当前位置误差最小的候选点；仅当新点的误差比当前点至少小 `tol` 时切换，避免临界位置反复跳点。Leader yaw 不影响候选点方向。
 
 ## 输入模式
 
@@ -37,7 +55,7 @@ vx_body =  cos(yaw) * vx_map + sin(yaw) * vy_map
 vy_body = -sin(yaw) * vx_map + cos(yaw) * vy_map
 ```
 
-控制器输出仍先由 Map-HPC 产生 map 命令，再按 Follower yaw 转为 body-frame `/robot2/cmd_vel`。Artstein 平移/偏航预测器、HPC 核心和轮速约束不改。
+控制器把当前选择的 map 固定偏置送入 Map-HPC 误差计算，输出 map 命令后再按 Follower yaw 转为 body-frame `/robot2/cmd_vel`。Artstein 平移/偏航预测器、HPC 核心和轮速约束不改。
 
 ## 安全
 
@@ -65,6 +83,7 @@ use_motor_delay=false
 
 ## 验证
 
-1. 常规编译产生 `formation_control_node_6d_map_hpc_artstein`。
-2. `vrpn_test_server -> mocap_two_robots.launch.py -> Map-HPC mocap launch` 产生非零 `/robot2/cmd_vel`。
-3. 停止 mocap 状态链路后，最多 0.10 s 内 `/robot2/cmd_vel` 为零。
+1. 单元测试验证 `m_p=4/radius=2` 生成四个 map 固定顶点，且 `tol` 阻止不充分收益的切换。
+2. 常规编译产生 `formation_control_node_6d_map_hpc_artstein`。
+3. `vrpn_test_server -> mocap_two_robots.launch.py -> Map-HPC mocap launch` 产生非零 `/robot2/cmd_vel`。
+4. 停止 mocap 状态链路后，最多 0.10 s 内 `/robot2/cmd_vel` 为零。
