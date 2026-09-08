@@ -166,34 +166,6 @@ install(TARGETS formation_control_node_6d_artstein_disc_hocbf DESTINATION lib/${
 endif()
 
 # ---- 浠ヤ笅鐩爣鍦ㄥ皬杞︿笂鍐呭瓨涓嶅缂栬瘧锛屾殏鏃惰烦杩?---- 鍙湪 WSL/寮烘満鍣ㄤ笂鍙栨秷娉ㄩ噴
-# ---- 6D 杩愬姩瀛︽ā鍨嬫帶鍒跺櫒 (Layer 3) -------------------------------------------
-# add_executable(formation_control_node_6d
-#   src/main_6d.cpp
-#   src/formation_control_node_6d.cpp
-# )
-
-# target_include_directories(formation_control_node_6d PUBLIC
-#   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-#   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
-# )
-
-# ament_target_dependencies(formation_control_node_6d
-#   rclcpp
-#   geometry_msgs
-#   nav_msgs
-#   tf2
-#   tf2_ros
-#   tf2_geometry_msgs
-# )
-
-# target_link_libraries(formation_control_node_6d
-#   Eigen3::Eigen
-# )
-
-# install(TARGETS formation_control_node_6d
-#   DESTINATION lib/${PROJECT_NAME}
-# )
-
 # ---- 6D 绂绘暎澶氳竟褰㈢紪闃熸帶鍒跺櫒 ---------------------------------------------------
 # add_executable(formation_control_node_6d_disc
 #   src/main_6d_disc.cpp
