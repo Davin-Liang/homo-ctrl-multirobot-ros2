@@ -63,7 +63,7 @@ source install/setup.bash
 | `homo_multirobot_gazebo` | Gazebo 世界文件、双机/单机 spawn launch、控制器 YAML 配置 |
 | `homo_multirobot_localization` | 定位/里程计链路 launch 与配置：rf2o 激光里程计 + EKF（robot_localization） |
 | `homo_multirobot_nav` | 已知地图定位（AMCL 或 slam_toolbox 纯定位）：单车/双车 launch + RViz |
-| `homo_multirobot_formation_control` | Leader-Follower 编队控制（齐次控制算法，C++/Eigen）。4D、**4D Artstein + prediction**、4D Artstein-LQR、4D Cont、6D、6D Disc、旧 6D+OA，以及 **6D Artstein Disc + predictor-HOCBF**。HOCBF 节点从 `/scan` 拟合静态圆柱，在 map 系预测状态上施加多圆柱硬 QP，并将最终命令回写 Artstein 历史。 |
+| `homo_multirobot_formation_control` | Leader-Follower 编队控制（齐次控制算法，C++/Eigen）。4D、**4D Artstein + prediction**、4D Artstein-LQR、6D、6D Disc、旧 6D+OA，以及 **6D Artstein Disc + predictor-HOCBF**。HOCBF 节点从 `/scan` 拟合静态圆柱，在 map 系预测状态上施加多圆柱硬 QP，并将最终命令回写 Artstein 历史。 |
 | `homo_multirobot_slam_toolbox` | 对上游 `slam_toolbox` 的多机器人封装，支持选定一台车建图、多车复用同一张地图 |
 | `third_party/*` | 上游源码引入副本：`rf2o_laser_odometry`（已补丁：发布横向速度 lin_speed_y，原版只考虑差速车）、`robot_localization`、`omnidirectional_controllers` |
 
@@ -129,11 +129,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
   leader_ns:=/robot1 follower_ns:=/robot2 \
   tau:=0.43 Td:=0.22 control_rate:=20.0 \
   mass:=2.0 hpc_c_min:=0.1
-
-# Leader-Follower 编队控制 — 4D Cont 质点模型（连续边界投影，无 tol/m_p）
-ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py
-ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py \
-  radius:=2.0 mass:=8.0 omega_d:=1.5
 
 # Leader-Follower 编队控制 — 6D 运动学模型（车身朝向 + 全向轮约束 + 边界投影）
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d.launch.py

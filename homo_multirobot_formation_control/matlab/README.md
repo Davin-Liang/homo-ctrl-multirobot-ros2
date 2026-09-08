@@ -17,7 +17,6 @@
 
 ```matlab
 cd matlab/source
-demo_4d_cont           % 4D 连续边界投影 (纯径向)
 lpc_hpc_distance_square % 4D 离散多边形 (原版论文算法)
 ```
 
@@ -43,10 +42,6 @@ lpc_hpc_distance_square % 4D 离散多边形 (原版论文算法)
 | 文件 | 编队策略 | 增益机制 | 噪声 | 说明 |
 |------|---------|---------|------|------|
 | `lpc_hpc_distance_square.m` | 离散多边形 (m_p=4, tol=0.1 切换) | 自适应 (min=1 或 4) | 无 | **原版论文算法**，对照基准 |
-| `demo_4d_cont.m` | 连续边界投影 (纯径向) | 平滑混合 (min=4, max=40) | 无 | 对照 C++ `homo_controller_4d_cont.hpp` |
-| `demo_4d_cont_tangent.m` | 纯径向投影 | 平滑混合 (min=4, max=40) | **有** | 噪声影响分析 |
-| `demo_4d_cont_tangent_noise.m` | 固定角度切向修正 | 平滑混合 (min=4, max=40) | **有** | 径向+切向 = 等价 m_p=1 |
-| `demo_4d_cont_omegad.m` | 纯径向投影 | **C++ ω_d 机制** (恒定增益) | **有** | 对照 C++ `calculate_klin` |
 
 ### 编队策略对比
 
@@ -87,8 +82,6 @@ lpc_hpc_distance_square % 4D 离散多边形 (原版论文算法)
 
 | MATLAB | C++ |
 |--------|-----|
-| `demo_4d_cont.m` | `homo_controller_4d_cont.hpp` |
-| `demo_4d_cont_omegad.m` | `calculate_klin()` in 同上 |
 | `lpc_hpc_distance_square.m` | `homo_controller.hpp` (原版 LpcController) |
 | `hnorm.m` | `hnorm.hpp` |
 | `lpc2hpc.m` | `lpc2hpc.hpp` |

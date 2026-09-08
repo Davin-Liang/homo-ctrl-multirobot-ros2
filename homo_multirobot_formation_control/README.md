@@ -3,7 +3,7 @@
 基于**齐次控制（Homogeneous Control）** 的 Leader-Follower 编队算法（C++ / Eigen），
 适配项目的 slam_toolbox / AMCL + EKF 定位体系。
 
-提供十套控制器：**4D 质点模型**（原版论文算法）、**4D Artstein-预测补偿**、**4D Cont 连续边界投影**、
+提供九套控制器：**4D 质点模型**（原版论文算法）、**4D Artstein-预测补偿**、
 **6D 运动学模型**（考虑车身朝向 + 全向轮约束 + 边界投影编队）、
 **6D Disc 离散多边形编队**（6D 模型 + 离散多边形策略）、
 **6D Artstein Disc**（map 系平移预测 + yaw 预测 + 6D Disc HPC 核心）、
@@ -32,7 +32,6 @@
 | **4D (原版)**                    | `formation_single_follower.launch.py`                        | `formation_control_node`                        | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)                            | 离散多边形 + tol 切换         | 独立 P+前馈                        |
 | **4D Artstein (预测补偿)**       | `formation_single_follower_4d_artstein.launch.py`            | `formation_control_node_4d_artstein`            | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换         | 独立 P+前馈                        |
 | **4D Artstein-LQR (对照组)**     | `formation_single_follower_4d_artstein_lqr.launch.py`        | `formation_control_node_4d_artstein_lqr`        | 同 4D Artstein，预测补偿后进入 4D DARE-LQR                         | 离散多边形 + tol 切换         | 独立 P+前馈                        |
-| **4D Cont (连续边界投影)**       | `formation_single_follower_4d_cont.launch.py`                | `formation_control_node_4d_cont`                | 同 4D                                                              | 连续边界投影（无 tol/m_p）    | 独立 P+前馈                        |
 | **6D (运动学, 边界投影)**        | `formation_single_follower_6d.launch.py`                     | `formation_control_node_6d`                     | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]`                             | 连续边界投影                  | 集成于 6D 主回路                   |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py`                | `formation_control_node_6d_disc`                | 同 6D                                                              | 离散多边形 + tol 切换         | 集成于 6D 主回路                   |
 | **6D Artstein Disc (预测补偿)**  | `formation_single_follower_6d_artstein_disc.launch.py`       | `formation_control_node_6d_artstein_disc`       | 同 6D，进入 HPC 前做平移/yaw 预测                                  | 离散多边形 + tol 切换         | 2D Artstein 预测后集成于 6D 主回路 |
@@ -353,23 +352,6 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artst
 `use_motor_delay:=true` 时，LQR 节点会发布 `cmd_vel_raw`，由 `sim_motor_delay.py`
 注入 `motor_tau + transport_delay` 后转发到 `cmd_vel`。验证 LQR/Artstein 预测补偿时，
 建议先保持 `delay_max_accel:=2.0`，避免把额外速度斜率饱和混入 DARE-LQR 对照。
-
-### 启动（4D Cont 连续边界投影）
-
-```bash
-ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py
-```
-
-带参数：
-
-```bash
-ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py \
-  radius:=2.0 mass:=8.0 omega_d:=1.5
-
-# LPC 消融对照
-ros2 launch homo_multirobot_formation_control formation_single_follower_4d_cont.launch.py \
-  use_hpc:=false
-```
 
 ### 启动（6D 单 follower）
 

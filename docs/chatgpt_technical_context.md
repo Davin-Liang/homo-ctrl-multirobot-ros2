@@ -147,7 +147,6 @@ IMU raw → IMU 处理 → /imu/data_filtered
 | 4D 基线 | `[p_x,p_y,v_x,v_y]`，map 系双积分器 | 离散多边形 + HPC；yaw 独立 P+前馈 | 无专门输入时延补偿 | 默认构建 |
 | 4D Artstein | 同 4D | 原 HPC 核心不变 | Artstein 纯死区补偿 + 一阶速度响应预测 + 可选径向制动层 | 默认构建，推荐的当前主线之一 |
 | 4D Artstein-LQR | 同 4D Artstein | 预测层后改为离散 DARE-LQR，对照组 | 同 Artstein 预测；非 HPC 基准 | 代码存在，默认不构建 |
-| 4D Cont | 同 4D | 连续圆边界投影 | 无专门输入时延补偿 | 旧/可选，当前注释 |
 | 6D | `[p_x,p_y,theta,v_x^b,v_y^b,omega]`，位置 map 系、速度 body 系 | 连续边界投影，yaw 纳入主回路 | 轮速与车体约束 | 旧/可选，当前注释 |
 | 6D Disc | 同 6D | 离散多边形 + tol 切换 | 轮速与车体约束 | 旧/可选，当前注释 |
 | 6D Artstein Disc | 预测 map 平移 + 预测 yaw 后重组 6D body 状态 | 保留 6D Disc HPC 核心 | 分通道 Artstein/执行器预测 | 代码存在，但 `if(FALSE)` 默认不构建 |
