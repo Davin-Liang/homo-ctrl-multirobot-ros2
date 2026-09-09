@@ -73,3 +73,13 @@ def test_wait_for_controller_service_stops_when_ros_shuts_down(monkeypatch):
     assert not module.wait_for_controller_service(
         client, "/robot2/controller/get_parameters", FakeLogger())
     assert client.timeouts == [1.0]
+
+
+def test_cleanup_node_handles_interrupted_construction(monkeypatch):
+    calls = []
+    monkeypatch.setattr(module.rclpy, "ok", lambda: True)
+    monkeypatch.setattr(module.rclpy, "shutdown", lambda: calls.append("shutdown"))
+
+    module.cleanup_node(None)
+
+    assert calls == ["shutdown"]

@@ -558,16 +558,24 @@ class TrajectoryRecorder(Node):
         rclpy.shutdown()
 
 
+def cleanup_node(node):
+    """清理已创建节点，并在仍有效时关闭 ROS 上下文。"""
+    if node is not None:
+        node.destroy_node()
+    if rclpy.ok():
+        rclpy.shutdown()
+
+
 def main():
     rclpy.init()
-    node = TrajectoryRecorder()
+    node = None
     try:
+        node = TrajectoryRecorder()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        cleanup_node(node)
 
 
 if __name__ == '__main__':
