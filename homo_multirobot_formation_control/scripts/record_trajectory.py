@@ -22,6 +22,7 @@
 import rclpy
 from rclpy.node import Node
 from rcl_interfaces.srv import GetParameters
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry
 import tf2_ros
 import matplotlib
@@ -91,6 +92,12 @@ def validate_state_source(value):
         raise ValueError(
             f"state_source 必须是 {', '.join(VALID_STATE_SOURCES)}，当前为 {value!r}")
     return value
+
+
+def mocap_sample(pose, twist):
+    """从动捕适配器的 map 系消息中提取平面状态。"""
+    return (pose.pose.position.x, pose.pose.position.y,
+            twist.twist.linear.x, twist.twist.linear.y)
 
 
 def merge_parameter_overrides(defaults, overrides):
@@ -189,9 +196,6 @@ class TrajectoryRecorder(Node):
         out_subdir = os.path.join(self.out_dir, self.mode)
         os.makedirs(out_subdir, exist_ok=True)
 
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-
         self.t1_x = []; self.t1_y = []; self.t1_t = []
         self.t1_vx = []; self.t1_vy = []; self.t1_v = []
         self.t2_x = []; self.t2_y = []; self.t2_t = []
@@ -200,10 +204,26 @@ class TrajectoryRecorder(Node):
         self.t0 = None
         self.done = False
 
-        self.sub1 = self.create_subscription(
-            Odometry, self.leader_ns + '/odometry/filtered', self.cb_leader, 10)
-        self.sub2 = self.create_subscription(
-            Odometry, self.follower_ns + '/odometry/filtered', self.cb_follower, 10)
+        if self.state_source == 'ekf_tf':
+            self.tf_buffer = tf2_ros.Buffer()
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+            self.sub1 = self.create_subscription(
+                Odometry, self.leader_ns + '/odometry/filtered', self.cb_leader, 10)
+            self.sub2 = self.create_subscription(
+                Odometry, self.follower_ns + '/odometry/filtered', self.cb_follower, 10)
+        else:
+            self.leader_mocap_pose = None
+            self.leader_mocap_twist = None
+            self.follower_mocap_pose = None
+            self.follower_mocap_twist = None
+            self.leader_pose_sub = self.create_subscription(
+                PoseStamped, self.leader_ns + '/mocap/pose', self.cb_leader_mocap_pose, 10)
+            self.leader_twist_sub = self.create_subscription(
+                TwistStamped, self.leader_ns + '/mocap/twist', self.cb_leader_mocap_twist, 10)
+            self.follower_pose_sub = self.create_subscription(
+                PoseStamped, self.follower_ns + '/mocap/pose', self.cb_follower_mocap_pose, 10)
+            self.follower_twist_sub = self.create_subscription(
+                TwistStamped, self.follower_ns + '/mocap/twist', self.cb_follower_mocap_twist, 10)
         self.timer = self.create_timer(0.1, self.check_done)
 
         leader_short = self.leader_ns.lstrip('/')
@@ -212,7 +232,7 @@ class TrajectoryRecorder(Node):
         self.follower_label = f'Follower ({follower_short})'
         self.get_logger().info(
             f'记录中... leader={self.leader_ns} follower={self.follower_ns} '
-            f'时长={self.duration:.0f}s 模式={self.mode} 标签={self.tag or "无"}'
+            f'时长={self.duration:.0f}s 模式={self.mode} 状态源={self.state_source} 标签={self.tag or "无"}'
             + (f' 理想半径={self.ideal_radius:.1f}m' if self.ideal_radius > 0 else ''))
 
     def _query_controller_params(self):
@@ -360,12 +380,51 @@ class TrajectoryRecorder(Node):
         vyl.append(msg.twist.twist.linear.y)
         vl.append(math.hypot(msg.twist.twist.linear.x, msg.twist.twist.linear.y))
 
+    def _record_mocap(self, pose, twist, xl, yl, tl, vxl, vyl, vl):
+        if self.done:
+            return
+        x, y, vx, vy = mocap_sample(pose, twist)
+        now = time.time()
+        if self.t0 is None:
+            self.t0 = now
+            self.get_logger().info('收到第一组完整状态, 开始计时')
+        tl.append(now - self.t0)
+        xl.append(x)
+        yl.append(y)
+        vxl.append(vx)
+        vyl.append(vy)
+        vl.append(math.hypot(vx, vy))
+
     def cb_leader(self, msg):
         self._record(msg, self.leader_ns, self.t1_x, self.t1_y, self.t1_t,
                      self.t1_vx, self.t1_vy, self.t1_v)
     def cb_follower(self, msg):
         self._record(msg, self.follower_ns, self.t2_x, self.t2_y, self.t2_t,
                      self.t2_vx, self.t2_vy, self.t2_v)
+
+    def _mocap_ready(self):
+        return all((self.leader_mocap_pose, self.leader_mocap_twist,
+                    self.follower_mocap_pose, self.follower_mocap_twist))
+
+    def cb_leader_mocap_pose(self, msg):
+        self.leader_mocap_pose = msg
+        if self._mocap_ready():
+            self._record_mocap(
+                msg, self.leader_mocap_twist, self.t1_x, self.t1_y, self.t1_t,
+                self.t1_vx, self.t1_vy, self.t1_v)
+
+    def cb_leader_mocap_twist(self, msg):
+        self.leader_mocap_twist = msg
+
+    def cb_follower_mocap_pose(self, msg):
+        self.follower_mocap_pose = msg
+        if self._mocap_ready():
+            self._record_mocap(
+                msg, self.follower_mocap_twist, self.t2_x, self.t2_y, self.t2_t,
+                self.t2_vx, self.t2_vy, self.t2_v)
+
+    def cb_follower_mocap_twist(self, msg):
+        self.follower_mocap_twist = msg
 
     def check_done(self):
         if self.done or self.t0 is None:

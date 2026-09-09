@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from geometry_msgs.msg import PoseStamped, TwistStamped
 
 
 PACKAGE_DIR = Path(__file__).resolve().parents[1]
@@ -51,6 +52,17 @@ def test_legacy_yaml_without_state_source_gets_ekf_tf_default(tmp_path):
 def test_validate_state_source_rejects_unknown_value():
     with pytest.raises(ValueError, match="state_source"):
         module.validate_state_source("wheel_odom")
+
+
+def test_mocap_sample_uses_map_pose_and_linear_twist_directly():
+    pose = PoseStamped()
+    pose.pose.position.x = 1.25
+    pose.pose.position.y = -0.75
+    twist = TwistStamped()
+    twist.twist.linear.x = 0.4
+    twist.twist.linear.y = -0.2
+
+    assert module.mocap_sample(pose, twist) == (1.25, -0.75, 0.4, -0.2)
 
 
 class FakeClient:
