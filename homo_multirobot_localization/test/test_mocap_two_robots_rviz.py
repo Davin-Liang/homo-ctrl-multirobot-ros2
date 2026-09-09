@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 
@@ -23,3 +24,11 @@ def test_mocap_rviz_config_is_packaged_and_targets_two_robots():
     assert "/robot2/robot_description" in config_source
     assert "DIRECTORY launch config rviz" in CMAKE.read_text()
     assert "<exec_depend>rviz2</exec_depend>" in PACKAGE.read_text()
+
+    robot_models = re.findall(
+        r"    - Alpha: 1\n      Class: rviz_default_plugins/RobotModel(.*?)(?=\n    - Alpha:|\n  Enabled:)",
+        config_source,
+        flags=re.DOTALL,
+    )
+    assert len(robot_models) == 2
+    assert all("Durability Policy: Transient Local" in model for model in robot_models)
