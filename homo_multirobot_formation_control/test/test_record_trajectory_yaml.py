@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 PACKAGE_DIR = Path(__file__).resolve().parents[1]
@@ -34,6 +35,22 @@ def test_invalid_yaml_structure_raises_value_error(tmp_path):
 
     with pytest.raises(ValueError, match=r"/\*\*/ros__parameters"):
         module.load_recorder_parameters(path)
+
+
+def test_legacy_yaml_without_state_source_gets_ekf_tf_default(tmp_path):
+    parameters = dict(module.RECORDER_PARAMETER_DEFAULTS)
+    parameters.pop("state_source")
+    path = tmp_path / "legacy.yaml"
+    path.write_text(
+        yaml.safe_dump({"/**": {"ros__parameters": parameters}}),
+        encoding="utf-8")
+
+    assert module.load_recorder_parameters(path)["state_source"] == "ekf_tf"
+
+
+def test_validate_state_source_rejects_unknown_value():
+    with pytest.raises(ValueError, match="state_source"):
+        module.validate_state_source("wheel_odom")
 
 
 class FakeClient:

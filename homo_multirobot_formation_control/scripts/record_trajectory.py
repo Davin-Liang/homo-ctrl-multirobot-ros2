@@ -43,6 +43,8 @@ CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
                     'switch_min_lambda', 'leader_vel_lpf_tau', 'Td',
                     'max_linear_accel']
 
+VALID_STATE_SOURCES = ('ekf_tf', 'mocap')
+
 RECORDER_PARAMETER_DEFAULTS = {
     'leader_ns': '/robot1',
     'follower_ns': '/robot2',
@@ -56,6 +58,7 @@ RECORDER_PARAMETER_DEFAULTS = {
     'trial_id': 'trial_01',
     'platform': '',
     'controller': '',
+    'state_source': 'ekf_tf',
 }
 
 
@@ -75,9 +78,19 @@ def load_recorder_parameters(path):
     parameters = node_parameters.get('ros__parameters')
     if not isinstance(parameters, dict):
         raise ValueError(f'轨迹记录器配置 {path} 缺少 /**/ros__parameters 映射')
+    parameters = dict(parameters)
+    parameters.setdefault('state_source', 'ekf_tf')
     if set(parameters) != set(RECORDER_PARAMETER_DEFAULTS):
         raise ValueError(f'轨迹记录器配置 {path} 的参数名必须与内置记录器参数一致')
     return parameters
+
+
+def validate_state_source(value):
+    """校验并返回轨迹状态来源。"""
+    if value not in VALID_STATE_SOURCES:
+        raise ValueError(
+            f"state_source 必须是 {', '.join(VALID_STATE_SOURCES)}，当前为 {value!r}")
+    return value
 
 
 def merge_parameter_overrides(defaults, overrides):
@@ -160,6 +173,8 @@ class TrajectoryRecorder(Node):
         self.trial_id = self.get_parameter('trial_id').value
         self.platform = self.get_parameter('platform').value or self.mode
         self.controller = self.get_parameter('controller').value
+        self.state_source = validate_state_source(
+            self.get_parameter('state_source').value)
 
         # 查询控制器参数 + 延迟节点参数（自动生成 tag 和图上标题）
         self.ctrl_params = self._query_controller_params()
