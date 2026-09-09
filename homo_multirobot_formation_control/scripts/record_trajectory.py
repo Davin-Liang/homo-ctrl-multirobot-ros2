@@ -21,6 +21,7 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from rcl_interfaces.srv import GetParameters
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry
@@ -113,6 +114,11 @@ def recording_topics(leader_ns, follower_ns, state_source):
         'leader_topic': leader_ns + '/odometry/filtered',
         'follower_topic': follower_ns + '/odometry/filtered',
     }
+
+
+def velocity_frame_label(state_source):
+    """返回当前记录线速度所在参考系的图表标签。"""
+    return 'Map-frame' if state_source == 'mocap' else 'Body-frame'
 
 
 def merge_parameter_overrides(defaults, overrides):
@@ -231,14 +237,7 @@ class TrajectoryRecorder(Node):
             self.leader_mocap_twist = None
             self.follower_mocap_pose = None
             self.follower_mocap_twist = None
-            self.leader_pose_sub = self.create_subscription(
-                PoseStamped, self.leader_ns + '/mocap/pose', self.cb_leader_mocap_pose, 10)
-            self.leader_twist_sub = self.create_subscription(
-                TwistStamped, self.leader_ns + '/mocap/twist', self.cb_leader_mocap_twist, 10)
-            self.follower_pose_sub = self.create_subscription(
-                PoseStamped, self.follower_ns + '/mocap/pose', self.cb_follower_mocap_pose, 10)
-            self.follower_twist_sub = self.create_subscription(
-                TwistStamped, self.follower_ns + '/mocap/twist', self.cb_follower_mocap_twist, 10)
+            self._create_mocap_subscriptions()
         self.timer = self.create_timer(0.1, self.check_done)
 
         leader_short = self.leader_ns.lstrip('/')
@@ -249,6 +248,21 @@ class TrajectoryRecorder(Node):
             f'记录中... leader={self.leader_ns} follower={self.follower_ns} '
             f'时长={self.duration:.0f}s 模式={self.mode} 状态源={self.state_source} 标签={self.tag or "无"}'
             + (f' 理想半径={self.ideal_radius:.1f}m' if self.ideal_radius > 0 else ''))
+
+    def _create_mocap_subscriptions(self):
+        """创建与动捕适配器 SensorData QoS 匹配的状态订阅。"""
+        self.leader_pose_sub = self.create_subscription(
+            PoseStamped, self.leader_ns + '/mocap/pose', self.cb_leader_mocap_pose,
+            qos_profile_sensor_data)
+        self.leader_twist_sub = self.create_subscription(
+            TwistStamped, self.leader_ns + '/mocap/twist', self.cb_leader_mocap_twist,
+            qos_profile_sensor_data)
+        self.follower_pose_sub = self.create_subscription(
+            PoseStamped, self.follower_ns + '/mocap/pose', self.cb_follower_mocap_pose,
+            qos_profile_sensor_data)
+        self.follower_twist_sub = self.create_subscription(
+            TwistStamped, self.follower_ns + '/mocap/twist', self.cb_follower_mocap_twist,
+            qos_profile_sensor_data)
 
     def _query_controller_params(self):
         """从 follower 命名空间下的控制器节点读取参数。"""
@@ -561,6 +575,7 @@ class TrajectoryRecorder(Node):
 
     def _plot_and_save(self, experiment_dir):
         elapsed = time.time() - self.t0 if self.t0 else 0
+        velocity_frame = velocity_frame_label(self.state_source)
         fig, axes = plt.subplots(3, 2, figsize=(16, 14))
 
         # ---- 子图 1: 轨迹 ----
@@ -596,7 +611,7 @@ class TrajectoryRecorder(Node):
         ax.set_title('Leader-follower distance')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 3: Vx + Vy (body frame) ----
+        # ---- 子图 3: Vx + Vy ----
         ax = axes[1][0]
         for tl, vl, name, c in [
             (self.t1_t, self.t1_vx, self.leader_label + ' Vx', 'tab:blue'),
@@ -605,19 +620,19 @@ class TrajectoryRecorder(Node):
             (self.t2_t, self.t2_vy, self.follower_label + ' Vy', 'gold'),
         ]:
             self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('Body velocity (m/s)')
-        ax.set_title('Body-frame Vx & Vy')
+        ax.set_xlabel('Time (s)'); ax.set_ylabel(f'{velocity_frame} velocity (m/s)')
+        ax.set_title(f'{velocity_frame} Vx & Vy')
         ax.legend(fontsize=6); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 4: |V| body speed ----
+        # ---- 子图 4: |V| ----
         ax = axes[1][1]
         for tl, vl, name, c in [
             (self.t1_t, self.t1_v, self.leader_label, 'tab:blue'),
             (self.t2_t, self.t2_v, self.follower_label, 'tab:orange'),
         ]:
             self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('|V| body (m/s)')
-        ax.set_title('Body-frame |V|')
+        ax.set_xlabel('Time (s)'); ax.set_ylabel(f'|V| {velocity_frame} (m/s)')
+        ax.set_title(f'{velocity_frame} |V|')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
         # ---- 子图 5: X over time ----

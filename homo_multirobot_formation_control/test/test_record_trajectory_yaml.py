@@ -1,9 +1,11 @@
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
 from geometry_msgs.msg import PoseStamped, TwistStamped
+from rclpy.qos import qos_profile_sensor_data
 
 
 PACKAGE_DIR = Path(__file__).resolve().parents[1]
@@ -72,6 +74,56 @@ def test_mocap_recording_topics_include_pose_and_twist():
         "leader_twist_topic": "/robot1/mocap/twist",
         "follower_twist_topic": "/robot2/mocap/twist",
     }
+
+
+def test_mocap_subscriptions_use_sensor_data_qos():
+    subscriptions = []
+    recorder = SimpleNamespace(
+        leader_ns="/robot1",
+        follower_ns="/robot2",
+        cb_leader_mocap_pose=object(),
+        cb_leader_mocap_twist=object(),
+        cb_follower_mocap_pose=object(),
+        cb_follower_mocap_twist=object(),
+    )
+    recorder.create_subscription = lambda *args: subscriptions.append(args) or object()
+
+    module.TrajectoryRecorder._create_mocap_subscriptions(recorder)
+
+    assert [subscription[1] for subscription in subscriptions] == [
+        "/robot1/mocap/pose", "/robot1/mocap/twist",
+        "/robot2/mocap/pose", "/robot2/mocap/twist",
+    ]
+    assert all(subscription[3] is qos_profile_sensor_data for subscription in subscriptions)
+
+
+def test_mocap_callbacks_wait_for_both_robots_before_recording():
+    recorded = []
+    recorder = SimpleNamespace(
+        leader_mocap_pose=None,
+        leader_mocap_twist=None,
+        follower_mocap_pose=None,
+        follower_mocap_twist=None,
+        t1_x=[], t1_y=[], t1_t=[], t1_vx=[], t1_vy=[], t1_v=[],
+        t2_x=[], t2_y=[], t2_t=[], t2_vx=[], t2_vy=[], t2_v=[],
+    )
+    recorder._mocap_ready = lambda: module.TrajectoryRecorder._mocap_ready(recorder)
+    recorder._record_mocap = lambda *args: recorded.append(args)
+    pose = PoseStamped()
+    twist = TwistStamped()
+
+    module.TrajectoryRecorder.cb_leader_mocap_pose(recorder, pose)
+    module.TrajectoryRecorder.cb_leader_mocap_twist(recorder, twist)
+    module.TrajectoryRecorder.cb_follower_mocap_pose(recorder, pose)
+    module.TrajectoryRecorder.cb_follower_mocap_twist(recorder, twist)
+    assert recorded == []
+
+    module.TrajectoryRecorder.cb_leader_mocap_pose(recorder, pose)
+    assert len(recorded) == 1
+
+
+def test_mocap_velocity_label_uses_map_frame():
+    assert module.velocity_frame_label("mocap") == "Map-frame"
 
 
 class FakeClient:
