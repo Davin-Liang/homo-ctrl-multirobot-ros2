@@ -41,6 +41,7 @@ from datetime import datetime
 # 需要自动读取的控制器参数
 CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
                     'm_p', 'Kp_yaw', 'K_ff', 'tol',
+                    'Kd_yaw',
                     'tau', 'hpc_c_min', 'initial_min_lambda',
                     'switch_min_lambda', 'leader_vel_lpf_tau', 'Td',
                     'max_linear_accel']
@@ -359,7 +360,7 @@ class TrajectoryRecorder(Node):
         p = self.ctrl_params
         if not p:
             return ''
-        names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'tol',
+        names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'Kd_yaw', 'tol',
                  'tau', 'hpc_c_min', 'initial_min_lambda', 'switch_min_lambda',
                  'leader_vel_lpf_tau', 'Td']
         parts = []

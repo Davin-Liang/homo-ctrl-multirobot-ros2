@@ -199,7 +199,7 @@ git commit -m "4D Artstein偏航改为PD控制"
 **Interfaces:**
 - Consumes: YAML key `Kd_yaw` and launch `LaunchConfiguration('Kd_yaw')`.
 - Produces: no `K_ff` declaration or forwarding in the 4D Artstein launch path.
-- Produces: trajectory recorder metadata includes `Kd_yaw` if the controller exposes it.
+- Produces: trajectory recorder metadata includes `Kd_yaw` if the controller exposes it while retaining `K_ff` collection for the other controllers that still use yaw feedforward.
 
 - [ ] **Step 1: Write failing public-interface assertions**
 
@@ -227,7 +227,7 @@ Expected: FAIL because the YAML and launch currently expose `K_ff`.
 
 - [ ] **Step 3: Update config, launch, recorder metadata list, and README**
 
-Replace the YAML `K_ff: 1.0` plus “偏航前馈增益” comment with `Kd_yaw: 1.0` and “偏航微分增益（相对角速度误差）”. Rename the launch local variable, node parameter map entry, and `DeclareLaunchArgument`; describe it as “Yaw derivative gain on leader-follower angular velocity error”. In `record_trajectory.py`, replace `K_ff` with `Kd_yaw` in `CTRL_PARAM_NAMES`. Update README's 4D Artstein yaw description from “独立 P+前馈” to “独立线性 PD”, and update the automatic parameter list.
+Replace the YAML `K_ff: 1.0` plus “偏航前馈增益” comment with `Kd_yaw: 1.0` and “偏航微分增益（相对角速度误差）”. Rename the launch local variable, node parameter map entry, and `DeclareLaunchArgument`; describe it as “Yaw derivative gain on leader-follower angular velocity error”. In `record_trajectory.py`, add `Kd_yaw` to `CTRL_PARAM_NAMES` and the title list without removing `K_ff`, because other controller variants still expose the latter. Update README's 4D Artstein yaw description from “独立 P+前馈” to “独立线性 PD”, and update the automatic parameter list.
 
 - [ ] **Step 4: Run source-level checks and targeted build**
 

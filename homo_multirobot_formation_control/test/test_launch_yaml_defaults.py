@@ -64,6 +64,18 @@ class TestLaunchYamlDefaults(unittest.TestCase):
                 self.assertIn("_launch_default(defaults[name])", source)
                 self.assertLess(source.index(yaml_name), source.index("parameters=["))
 
+    def test_4d_artstein_yaw_pd_parameter_interface(self):
+        yaml_path = CONFIG_DIR / "formation_single_follower_4d_artstein.yaml"
+        launch_path = LAUNCH_DIR / "formation_single_follower_4d_artstein.launch.py"
+        names = yaml_parameter_names(yaml_path)
+        source = launch_path.read_text(encoding="utf-8")
+
+        self.assertIn("Kd_yaw", names)
+        self.assertNotIn("K_ff", names)
+        self.assertIn('LaunchConfiguration("Kd_yaw")', source)
+        self.assertIn('"Kd_yaw": Kd_yaw', source)
+        self.assertNotIn("K_ff", source)
+
     def test_runtime_dependencies_and_ctest_registration_are_declared(self):
         self.assertIn("<exec_depend>python3-yaml</exec_depend>",
                       PACKAGE_XML.read_text(encoding="utf-8"))

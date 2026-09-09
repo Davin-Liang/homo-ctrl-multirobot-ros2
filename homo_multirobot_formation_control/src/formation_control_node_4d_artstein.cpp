@@ -23,6 +23,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 #include "homo_multirobot_formation_control/formation_safety.hpp"
+#include "homo_multirobot_formation_control/yaw_pd_controller.hpp"
 
 using namespace formation_control;
 
@@ -106,7 +107,7 @@ FormationController4DArtstein::FormationController4DArtstein()
   double tau    = declare_parameter("tau",     0.43);
   double omega_d = declare_parameter("omega_d", 0.7);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
-  K_ff_         = declare_parameter("K_ff",    1.0);
+  Kd_yaw_       = declare_parameter("Kd_yaw",  1.0);
   control_rate_ = declare_parameter("control_rate", 20.0);
 
   Td_ = declare_parameter("Td", 0.22);
@@ -348,10 +349,9 @@ void FormationController4DArtstein::timer_cb()
   cmd.linear.x = vx_clamped;
   cmd.linear.y = vy_clamped;
 
-  double raw_err   = leader_yaw - follower_yaw;
-  double norm_err  = std::atan2(std::sin(raw_err), std::cos(raw_err));
-  cmd.angular.z = std::clamp(norm_err * Kp_yaw_ + leader_az * K_ff_,
-                              -max_angular_vel_, max_angular_vel_);
+  cmd.angular.z = formation_control::yaw_pd_command(
+      leader_yaw, follower_yaw, leader_az, follower_az,
+      Kp_yaw_, Kd_yaw_, max_angular_vel_);
 
   // ---- 步骤 10: 轮速约束 + 加速度限幅 ---------------------------------------
   double dt = 1.0 / control_rate_;
