@@ -25,7 +25,7 @@
 - Modify: `homo_multirobot_formation_control/README.md:620-625`
 
 **Interfaces:**
-- Produces: `wait_for_controller_parameters(client, service_name, logger) -> GetParameters.Response | None`.
+- Produces: `wait_for_controller_parameters(node, client, service_name, logger) -> GetParameters.Response | None`.
 - Consumes: an available service client; it sends one `GetParameters.Request` with `CTRL_PARAM_NAMES` per attempt.
 
 - [ ] **Step 1: Write failing tests**
@@ -38,7 +38,7 @@ def test_wait_for_controller_parameters_retries_after_timeout(monkeypatch):
     client = FakeParameterClient([FakeFuture(False, None), FakeFuture(True, "response")])
     logger = FakeLogger()
 
-    assert module.wait_for_controller_parameters(client, "/robot2/controller/get_parameters", logger) == "response"
+    assert module.wait_for_controller_parameters(object(), client, "/robot2/controller/get_parameters", logger) == "response"
     assert client.request_names == [module.CTRL_PARAM_NAMES, module.CTRL_PARAM_NAMES]
     assert len(logger.messages) == 1
 
@@ -48,7 +48,7 @@ def test_wait_for_controller_parameters_stops_when_ros_shuts_down(monkeypatch):
     monkeypatch.setattr(module.rclpy, "ok", lambda: next(states))
     client = FakeParameterClient([FakeFuture(False, None)])
 
-    assert module.wait_for_controller_parameters(client, "/robot2/controller/get_parameters", FakeLogger()) is None
+    assert module.wait_for_controller_parameters(object(), client, "/robot2/controller/get_parameters", FakeLogger()) is None
     assert len(client.request_names) == 1
 ```
 
@@ -65,8 +65,8 @@ Expected: FAIL because `wait_for_controller_parameters` is absent.
 
 - [ ] **Step 3: Implement the minimal retry loop**
 
-1. Define `wait_for_controller_parameters(client, service_name, logger)` next to `wait_for_controller_service`.
-2. While `rclpy.ok()`, build a `GetParameters.Request` with `req.names = list(CTRL_PARAM_NAMES)`, call the client, and spin for 2 seconds.
+1. Define `wait_for_controller_parameters(node, client, service_name, logger)` next to `wait_for_controller_service`.
+2. While `rclpy.ok()`, build a `GetParameters.Request` with `req.names = list(CTRL_PARAM_NAMES)`, call the client, and spin the supplied node for 2 seconds.
 3. Return `future.result()` only when the future is done and result is not `None`; otherwise log `等待控制器参数响应: <service_name>` and begin the next iteration.
 4. In `_query_controller_params`, replace the one-shot request and warning branch with this helper. If it returns `None`, return `{}`. Keep the existing parameter-type parsing unchanged.
 5. Update README: `controller_node_name` nonempty now waits for both service discovery and one successful parameter response before recording starts.
