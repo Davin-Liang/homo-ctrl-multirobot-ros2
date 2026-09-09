@@ -653,7 +653,7 @@ Leader 和 Follower 都已收到 pose 与 twist 后，记录器才开始计时�
 - `metadata.yaml` — 与本次数据对应的实验元数据
 
 **自动参数读取**：如果不指定 `tag`，脚本从 follower 命名空间下的控制器节点
-自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, tol`，
+自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, Kd_yaw, tol`，
 以及适用时的 `hpc_c_min, initial_min_lambda, switch_min_lambda`，并：
 
 - 生成实验目录标签（如 `m8_r2_od1.5_f35_20260818_143000/`）
