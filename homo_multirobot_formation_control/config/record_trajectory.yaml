@@ -1,0 +1,14 @@
+/**:
+  ros__parameters:
+    leader_ns: "/robot1"
+    follower_ns: "/robot2"
+    duration: 30.0
+    out_dir: ""
+    radius: 0.0
+    mode: "sim"
+    tag: ""
+    controller_node_name: "formation_control_node"
+    experiment_id: ""
+    trial_id: "trial_01"
+    platform: ""
+    controller: ""

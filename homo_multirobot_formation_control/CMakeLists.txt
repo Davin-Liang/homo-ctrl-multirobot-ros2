@@ -245,6 +245,10 @@ install(PROGRAMS
 )
 
 if(BUILD_TESTING)
+  add_test(NAME test_record_trajectory_yaml
+    COMMAND ${Python3_EXECUTABLE} -m pytest -q
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_record_trajectory_yaml.py)
+
   add_test(NAME test_launch_yaml_defaults
     COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test/test_launch_yaml_defaults.py)

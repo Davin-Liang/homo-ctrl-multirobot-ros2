@@ -596,9 +596,13 @@ ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
 ### record_trajectory — 轨迹记录与画图
 
 ```bash
-# 仿真（自动读控制器参数生成标签，无需手动指定 tag）
+# 使用包内默认 YAML（自动读控制器参数生成标签，无需手动指定 tag）
 ros2 run homo_multirobot_formation_control record_trajectory.py \
-  --ros-args -p mode:=sim -p duration:=30.0
+  --ros-args
+
+# 使用自定义 YAML；命令行参数会覆盖 YAML 中的同名值
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p config_file:=/abs/path/record_trajectory.yaml -p duration:=60.0
 
 # 实物 + 自定义标签
 ros2 run homo_multirobot_formation_control record_trajectory.py \
@@ -608,6 +612,10 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
   -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
   -p radius:=2.0 -p duration:=30.0
 ```
+
+默认配置文件是 `config/record_trajectory.yaml`，采用与编队控制器一致的 ROS 2 参数格式
+`/**: ros__parameters:`。`config_file` 为空时加载该文件；指定 `config_file` 可切换实验配置，
+且显式 `-p` 参数优先于 YAML。
 
 | 参数              | 默认值           | 说明                                                 |
 | ----------------- | ---------------- | ---------------------------------------------------- |

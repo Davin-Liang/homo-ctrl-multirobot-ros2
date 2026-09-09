@@ -27,11 +27,13 @@ import tf2_ros
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from ament_index_python.packages import get_package_share_directory
 import os
 import csv
 import json
 import time
 import math
+import yaml
 from datetime import datetime
 
 # 需要自动读取的控制器参数
@@ -41,23 +43,74 @@ CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
                     'switch_min_lambda', 'leader_vel_lpf_tau', 'Td',
                     'max_linear_accel']
 
+RECORDER_PARAMETER_DEFAULTS = {
+    'leader_ns': '/robot1',
+    'follower_ns': '/robot2',
+    'duration': 30.0,
+    'out_dir': '',
+    'radius': 0.0,
+    'mode': 'sim',
+    'tag': '',
+    'controller_node_name': 'formation_control_node',
+    'experiment_id': '',
+    'trial_id': 'trial_01',
+    'platform': '',
+    'controller': '',
+}
+
+
+def load_recorder_parameters(path):
+    """读取并校验 ROS 2 格式的轨迹记录器参数 YAML。"""
+    try:
+        with open(path, encoding='utf-8') as stream:
+            document = yaml.safe_load(stream)
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValueError(f'无法读取轨迹记录器配置 {path}: {exc}') from exc
+
+    if not isinstance(document, dict):
+        raise ValueError(f'轨迹记录器配置 {path} 必须包含 /**/ros__parameters 映射')
+    node_parameters = document.get('/**')
+    if not isinstance(node_parameters, dict):
+        raise ValueError(f'轨迹记录器配置 {path} 缺少 /**/ros__parameters 映射')
+    parameters = node_parameters.get('ros__parameters')
+    if not isinstance(parameters, dict):
+        raise ValueError(f'轨迹记录器配置 {path} 缺少 /**/ros__parameters 映射')
+    if set(parameters) != set(RECORDER_PARAMETER_DEFAULTS):
+        raise ValueError(f'轨迹记录器配置 {path} 的参数名必须与内置记录器参数一致')
+    return parameters
+
+
+def merge_parameter_overrides(defaults, overrides):
+    """将显式 ROS 参数覆盖到 YAML 默认值。"""
+    values = dict(defaults)
+    values.update({name: value for name, value in overrides.items() if name in values})
+    return values
+
 
 class TrajectoryRecorder(Node):
     def __init__(self):
         super().__init__('trajectory_recorder')
+        self.declare_parameter('config_file', '')
+        config_file = self.get_parameter('config_file').value
+        if not config_file:
+            config_file = os.path.join(
+                get_package_share_directory('homo_multirobot_formation_control'),
+                'config', 'record_trajectory.yaml')
+        try:
+            yaml_defaults = load_recorder_parameters(config_file)
+        except ValueError as exc:
+            self.get_logger().fatal(str(exc))
+            raise
 
-        self.declare_parameter('leader_ns', '/robot1')
-        self.declare_parameter('follower_ns', '/robot2')
-        self.declare_parameter('duration', 30.0)
-        self.declare_parameter('out_dir', '')
-        self.declare_parameter('radius', 0.0)
-        self.declare_parameter('mode', 'sim')
-        self.declare_parameter('tag', '')
-        self.declare_parameter('controller_node_name', 'formation_control_node')
-        self.declare_parameter('experiment_id', '')
-        self.declare_parameter('trial_id', 'trial_01')
-        self.declare_parameter('platform', '')
-        self.declare_parameter('controller', '')
+        overrides = {
+            name: parameter.value
+            for name, parameter in self._parameter_overrides.items()
+            if name in RECORDER_PARAMETER_DEFAULTS
+        }
+        recorder_parameters = merge_parameter_overrides(yaml_defaults, overrides)
+        for name, value in recorder_parameters.items():
+            self.declare_parameter(name, value, ignore_override=True)
+
         self.leader_ns = self.get_parameter('leader_ns').value
         self.follower_ns = self.get_parameter('follower_ns').value
         self.duration = self.get_parameter('duration').value
