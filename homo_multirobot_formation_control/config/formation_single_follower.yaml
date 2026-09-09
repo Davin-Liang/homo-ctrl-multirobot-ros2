@@ -20,8 +20,8 @@
     omega_d: 0.7
     # 偏航比例控制增益。
     Kp_yaw: 4.0
-    # 偏航前馈控制增益。
-    K_ff: 1.0
+    # 偏航微分增益（Leader-Follower 相对角速度误差）。
+    Kd_yaw: 1.0
     # 控制循环频率（Hz）。
     control_rate: 20.0
     # 是否启用齐次控制升级。

@@ -76,6 +76,21 @@ class TestLaunchYamlDefaults(unittest.TestCase):
         self.assertIn('"Kd_yaw": Kd_yaw', source)
         self.assertNotIn("K_ff", source)
 
+    def test_original_4d_yaw_pd_uses_both_angular_velocities(self):
+        source = (PACKAGE_DIR / "src" / "formation_control_node.cpp").read_text(
+            encoding="utf-8")
+        self.assertIn("double leader_yaw, follower_yaw, leader_az, follower_az", source)
+        self.assertIn("yaw_pd_command(", source)
+
+    def test_original_4d_yaw_pd_parameter_interface(self):
+        names = yaml_parameter_names(CONFIG_DIR / "formation_single_follower.yaml")
+        source = (LAUNCH_DIR / "formation_single_follower.launch.py").read_text(
+            encoding="utf-8")
+        self.assertIn("Kd_yaw", names)
+        self.assertNotIn("K_ff", names)
+        self.assertIn('"Kd_yaw": Kd_yaw', source)
+        self.assertNotIn("K_ff", source)
+
     def test_runtime_dependencies_and_ctest_registration_are_declared(self):
         self.assertIn("<exec_depend>python3-yaml</exec_depend>",
                       PACKAGE_XML.read_text(encoding="utf-8"))
