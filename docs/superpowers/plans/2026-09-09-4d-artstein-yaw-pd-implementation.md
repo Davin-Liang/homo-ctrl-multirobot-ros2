@@ -6,7 +6,7 @@
 
 **Architecture:** Add a small header-only yaw helper so the controller's angle wrapping, PD calculation, and angular-speed saturation are independently testable. The ROS node obtains existing Leader/Follower yaw and `angular.z` measurements from either state source, passes them to that helper, and keeps downstream wheel and acceleration constraints unchanged. Rename the public tuning parameter from `K_ff` to `Kd_yaw` everywhere this launchable controller exposes it.
 
-**Tech Stack:** C++17, ROS 2 Humble (`rclcpp`), GoogleTest via `ament_cmake_gtest`, Python launch/YAML validation, colcon.
+**Tech Stack:** C++17, ROS 2 Humble (`rclcpp`), standalone C++ `assert` test executable, Python launch/YAML validation, colcon.
 
 ## Global Constraints
 
@@ -47,25 +47,18 @@
 - [ ] **Step 1: Write failing C++ behavior tests**
 
 ```cpp
-#include <gtest/gtest.h>
+#include <cassert>
 #include "homo_multirobot_formation_control/yaw_pd_controller.hpp"
 
-TEST(YawPdController, UsesYawAndAngularVelocityErrors) {
-  EXPECT_DOUBLE_EQ(
-      formation_control::yaw_pd_command(0.5, 0.1, 0.7, 0.2, 4.0, 1.0, 10.0),
-      2.1);
-}
-
-TEST(YawPdController, WrapsAcrossPiBoundary) {
+int main() {
+  assert(formation_control::yaw_pd_command(
+      0.5, 0.1, 0.7, 0.2, 4.0, 1.0, 10.0) == 2.1);
   const double command = formation_control::yaw_pd_command(
       -3.10, 3.10, 0.0, 0.0, 1.0, 0.0, 10.0);
-  EXPECT_NEAR(command, 0.083185, 1e-5);
-}
-
-TEST(YawPdController, SaturatesAngularCommand) {
-  EXPECT_DOUBLE_EQ(
-      formation_control::yaw_pd_command(2.0, 0.0, 0.0, 0.0, 4.0, 1.0, 0.8),
-      0.8);
+  assert(std::abs(command - 0.083185) < 1e-5);
+  assert(formation_control::yaw_pd_command(
+      2.0, 0.0, 0.0, 0.0, 4.0, 1.0, 0.8) == 0.8);
+  return 0;
 }
 ```
 
@@ -77,7 +70,6 @@ Add this CMake target inside `if(BUILD_TESTING)`:
 add_executable(test_yaw_pd_controller test/test_yaw_pd_controller.cpp)
 target_include_directories(test_yaw_pd_controller PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-ament_target_dependencies(test_yaw_pd_controller rclcpp)
 target_link_libraries(test_yaw_pd_controller Eigen3::Eigen)
 add_test(NAME test_yaw_pd_controller COMMAND test_yaw_pd_controller)
 ```
@@ -145,11 +137,8 @@ git commit -m "新增偏航PD控制器"
 - [ ] **Step 1: Extend the PD unit test with a nonzero follower-rate case**
 
 ```cpp
-TEST(YawPdController, OpposesFollowerAngularVelocityWhenYawErrorIsZero) {
-  EXPECT_DOUBLE_EQ(
-      formation_control::yaw_pd_command(0.0, 0.0, 0.0, 0.3, 4.0, 1.0, 10.0),
-      -0.3);
-}
+assert(formation_control::yaw_pd_command(
+    0.0, 0.0, 0.0, 0.3, 4.0, 1.0, 10.0) == -0.3);
 ```
 
 - [ ] **Step 2: Run the targeted test to verify the derivative behavior**
