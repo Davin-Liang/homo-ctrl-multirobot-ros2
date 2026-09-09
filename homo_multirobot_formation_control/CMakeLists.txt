@@ -321,6 +321,14 @@ if(BUILD_TESTING)
   add_test(NAME test_homo_controller_4d_artstein
     COMMAND test_homo_controller_4d_artstein)
 
+  add_executable(test_yaw_pd_controller test/test_yaw_pd_controller.cpp)
+  target_include_directories(test_yaw_pd_controller PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+  target_link_libraries(test_yaw_pd_controller Eigen3::Eigen)
+  add_test(NAME test_yaw_pd_controller COMMAND test_yaw_pd_controller)
+
   add_executable(test_hocbf_safety_filter
     test/test_hocbf_safety_filter.cpp
     src/hocbf_safety_filter.cpp
