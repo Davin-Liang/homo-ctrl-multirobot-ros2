@@ -87,6 +87,15 @@ def merge_parameter_overrides(defaults, overrides):
     return values
 
 
+def wait_for_controller_service(client, service_name, logger):
+    """等待控制器参数服务就绪，ROS 关闭时停止等待。"""
+    while rclpy.ok():
+        if client.wait_for_service(timeout_sec=1.0):
+            return True
+        logger.info(f'等待控制器参数服务就绪: {service_name}')
+    return False
+
+
 class TrajectoryRecorder(Node):
     def __init__(self):
         super().__init__('trajectory_recorder')
@@ -129,6 +138,8 @@ class TrajectoryRecorder(Node):
 
         # 查询控制器参数 + 延迟节点参数（自动生成 tag 和图上标题）
         self.ctrl_params = self._query_controller_params()
+        if not rclpy.ok():
+            raise KeyboardInterrupt
         self.delay_params = self._query_delay_node_params()
         if not self.tag:
             self.tag = self._build_auto_tag()
@@ -166,13 +177,15 @@ class TrajectoryRecorder(Node):
 
     def _query_controller_params(self):
         """从 follower 命名空间下的控制器节点读取参数。"""
+        if not self.ctrl_node_name:
+            self.get_logger().info('未设置 controller_node_name，跳过控制器参数查询')
+            return {}
+
         node_path = self.follower_ns.rstrip('/') + '/' + self.ctrl_node_name
         svc_name = node_path + '/get_parameters'
         client = self.create_client(GetParameters, svc_name)
 
-        # 等控制器就绪（最多等 3 秒）
-        if not client.wait_for_service(timeout_sec=3.0):
-            self.get_logger().warn(f'控制器参数服务未就绪 ({svc_name})，使用默认标签')
+        if not wait_for_controller_service(client, svc_name, self.get_logger()):
             return {}
 
         req = GetParameters.Request()
