@@ -96,6 +96,19 @@ def wait_for_controller_service(client, service_name, logger):
     return False
 
 
+def wait_for_controller_parameters(node, client, service_name, logger):
+    """等待控制器参数响应，ROS 关闭时停止等待。"""
+    while rclpy.ok():
+        req = GetParameters.Request()
+        req.names = list(CTRL_PARAM_NAMES)
+        future = client.call_async(req)
+        rclpy.spin_until_future_complete(node, future, timeout_sec=2.0)
+        if future.done() and future.result() is not None:
+            return future.result()
+        logger.info(f'等待控制器参数响应: {service_name}')
+    return None
+
+
 class TrajectoryRecorder(Node):
     def __init__(self):
         super().__init__('trajectory_recorder')
@@ -188,13 +201,9 @@ class TrajectoryRecorder(Node):
         if not wait_for_controller_service(client, svc_name, self.get_logger()):
             return {}
 
-        req = GetParameters.Request()
-        req.names = list(CTRL_PARAM_NAMES)
-        future = client.call_async(req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
-
-        if future.done() and future.result() is not None:
-            result = future.result()
+        result = wait_for_controller_parameters(
+            self, client, svc_name, self.get_logger())
+        if result is not None:
             params = {}
             for name, pv in zip(CTRL_PARAM_NAMES, result.values):
                 if pv.type == 3:       # PARAMETER_DOUBLE
@@ -207,9 +216,7 @@ class TrajectoryRecorder(Node):
             if params:
                 self.get_logger().info(f'已读取控制器参数: {params}')
             return params
-        else:
-            self.get_logger().warn('查询控制器参数失败，使用默认标签')
-            return {}
+        return {}
 
     def _query_delay_node_params(self):
         """从 follower 命名空间下的 sim_motor_delay 节点读取参数（可选）。"""

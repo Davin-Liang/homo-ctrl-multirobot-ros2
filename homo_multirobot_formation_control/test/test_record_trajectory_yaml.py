@@ -83,3 +83,49 @@ def test_cleanup_node_handles_interrupted_construction(monkeypatch):
     module.cleanup_node(None)
 
     assert calls == ["shutdown"]
+
+
+class FakeFuture:
+    def __init__(self, done, result):
+        self._done = done
+        self._result = result
+
+    def done(self):
+        return self._done
+
+    def result(self):
+        return self._result
+
+
+class FakeParameterClient:
+    def __init__(self, futures):
+        self.futures = iter(futures)
+        self.request_names = []
+
+    def call_async(self, request):
+        self.request_names.append(request.names)
+        return next(self.futures)
+
+
+def test_wait_for_controller_parameters_retries_after_timeout(monkeypatch):
+    monkeypatch.setattr(module.rclpy, "ok", lambda: True)
+    monkeypatch.setattr(module.rclpy, "spin_until_future_complete", lambda *args, **kwargs: None)
+    client = FakeParameterClient([
+        FakeFuture(False, None), FakeFuture(True, "response")])
+    logger = FakeLogger()
+
+    assert module.wait_for_controller_parameters(
+        object(), client, "/robot2/controller/get_parameters", logger) == "response"
+    assert client.request_names == [module.CTRL_PARAM_NAMES, module.CTRL_PARAM_NAMES]
+    assert len(logger.messages) == 1
+
+
+def test_wait_for_controller_parameters_stops_when_ros_shuts_down(monkeypatch):
+    states = iter([True, False])
+    monkeypatch.setattr(module.rclpy, "ok", lambda: next(states))
+    monkeypatch.setattr(module.rclpy, "spin_until_future_complete", lambda *args, **kwargs: None)
+    client = FakeParameterClient([FakeFuture(False, None)])
+
+    assert module.wait_for_controller_parameters(
+        object(), client, "/robot2/controller/get_parameters", FakeLogger()) is None
+    assert len(client.request_names) == 1

@@ -617,9 +617,9 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 `/**: ros__parameters:`。`config_file` 为空时加载该文件；指定 `config_file` 可切换实验配置，
 且显式 `-p` 参数优先于 YAML。
 
-`controller_node_name` 非空时，记录器会在创建里程计订阅前无限等待该控制器的参数服务就绪，
-因此可以先启动记录器、再启动控制算法；按 Ctrl-C 可停止等待。留空则跳过控制器参数采集，
-立即开始记录，但 `metadata.yaml` 的 `controller_parameters` 将为空。
+`controller_node_name` 非空时，记录器会在创建里程计订阅前无限等待该控制器的参数服务
+就绪并成功返回一次参数，因此可以先启动记录器、再启动控制算法；按 Ctrl-C 可停止等待。
+留空则跳过控制器参数采集，立即开始记录，但 `metadata.yaml` 的 `controller_parameters` 将为空。
 
 | 参数              | 默认值           | 说明                                                 |
 | ----------------- | ---------------- | ---------------------------------------------------- |
