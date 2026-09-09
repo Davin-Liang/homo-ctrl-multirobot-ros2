@@ -65,6 +65,15 @@ def test_mocap_sample_uses_map_pose_and_linear_twist_directly():
     assert module.mocap_sample(pose, twist) == (1.25, -0.75, 0.4, -0.2)
 
 
+def test_mocap_recording_topics_include_pose_and_twist():
+    assert module.recording_topics("/robot1", "/robot2", "mocap") == {
+        "leader_topic": "/robot1/mocap/pose",
+        "follower_topic": "/robot2/mocap/pose",
+        "leader_twist_topic": "/robot1/mocap/twist",
+        "follower_twist_topic": "/robot2/mocap/twist",
+    }
+
+
 class FakeClient:
     def __init__(self, results):
         self.results = iter(results)

@@ -100,6 +100,21 @@ def mocap_sample(pose, twist):
             twist.twist.linear.x, twist.twist.linear.y)
 
 
+def recording_topics(leader_ns, follower_ns, state_source):
+    """返回写入元数据的实际状态话题。"""
+    if state_source == 'mocap':
+        return {
+            'leader_topic': leader_ns + '/mocap/pose',
+            'follower_topic': follower_ns + '/mocap/pose',
+            'leader_twist_topic': leader_ns + '/mocap/twist',
+            'follower_twist_topic': follower_ns + '/mocap/twist',
+        }
+    return {
+        'leader_topic': leader_ns + '/odometry/filtered',
+        'follower_topic': follower_ns + '/odometry/filtered',
+    }
+
+
 def merge_parameter_overrides(defaults, overrides):
     """将显式 ROS 参数覆盖到 YAML 默认值。"""
     values = dict(defaults)
@@ -517,8 +532,9 @@ class TrajectoryRecorder(Node):
                 'duration_s': self.duration,
                 'leader_ns': self.leader_ns,
                 'follower_ns': self.follower_ns,
-                'leader_topic': self.leader_ns + '/odometry/filtered',
-                'follower_topic': self.follower_ns + '/odometry/filtered',
+                'state_source': self.state_source,
+                **recording_topics(
+                    self.leader_ns, self.follower_ns, self.state_source),
                 'coordinate_frame': 'map',
                 'ideal_radius_m': self.ideal_radius,
             },

@@ -611,13 +611,19 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
   -p platform:=real -p controller:=artstein_hpc \
   -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
   -p radius:=2.0 -p duration:=30.0
+
+# 动捕状态：先启动动捕适配器和动捕版控制器，再直接记录 map 系 pose/twist
+ros2 launch homo_multirobot_localization mocap_two_robots.launch.py
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_mocap.launch.py
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p state_source:=mocap
 ```
 
 默认配置文件是 `config/record_trajectory.yaml`，采用与编队控制器一致的 ROS 2 参数格式
 `/**: ros__parameters:`。`config_file` 为空时加载该文件；指定 `config_file` 可切换实验配置，
 且显式 `-p` 参数优先于 YAML。
 
-`controller_node_name` 非空时，记录器会在创建里程计订阅前无限等待该控制器的参数服务
+`controller_node_name` 非空时，记录器会在创建状态订阅前无限等待该控制器的参数服务
 就绪并成功返回一次参数，因此可以先启动记录器、再启动控制算法；按 Ctrl-C 可停止等待。
 留空则跳过控制器参数采集，立即开始记录，但 `metadata.yaml` 的 `controller_parameters` 将为空。
 
@@ -634,6 +640,10 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 | `trial_id`      | `trial_01`     | 重复实验编号                                         |
 | `platform`      | 使用 `mode`    | 实验平台，如 `numerical`、`gazebo`、`real`     |
 | `controller`    | 控制器节点名     | 控制器标签，如 `original_4d_hpc`、`artstein_hpc` |
+| `state_source`  | `ekf_tf`         | `ekf_tf`：EKF 里程计经 TF 转 map；`mocap`：直接订阅 `/mocap/pose` 和 `/mocap/twist` |
+
+`state_source:=mocap` 直接使用 `mocap_two_robots.launch.py` 适配器发布的 map 系状态；仅当
+Leader 和 Follower 都已收到 pose 与 twist 后，记录器才开始计时和写入样本。
 
 **输出**：
 每次运行创建一个独立目录 `{out_dir}/{mode}/{tag}_{timestamp}/`，其中包括：
