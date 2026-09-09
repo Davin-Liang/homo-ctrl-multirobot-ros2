@@ -99,13 +99,25 @@ def wait_for_controller_service(client, service_name, logger):
 def wait_for_controller_parameters(node, client, service_name, logger):
     """等待控制器参数响应，ROS 关闭时停止等待。"""
     while rclpy.ok():
-        req = GetParameters.Request()
-        req.names = list(CTRL_PARAM_NAMES)
-        future = client.call_async(req)
-        rclpy.spin_until_future_complete(node, future, timeout_sec=2.0)
-        if future.done() and future.result() is not None:
-            return future.result()
-        logger.info(f'等待控制器参数响应: {service_name}')
+        future = None
+        try:
+            req = GetParameters.Request()
+            req.names = list(CTRL_PARAM_NAMES)
+            future = client.call_async(req)
+            rclpy.spin_until_future_complete(node, future, timeout_sec=2.0)
+            if future.done() and future.result() is not None:
+                return future.result()
+        except Exception as exc:
+            if future is not None and not future.done():
+                future.cancel()
+            logger.info(f'等待控制器参数响应: {service_name} ({exc})')
+        else:
+            if future is not None and not future.done():
+                future.cancel()
+            logger.info(f'等待控制器参数响应: {service_name}')
+
+        if not rclpy.ok() or not wait_for_controller_service(client, service_name, logger):
+            return None
     return None
 
 

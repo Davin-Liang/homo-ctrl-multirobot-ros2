@@ -86,15 +86,22 @@ def test_cleanup_node_handles_interrupted_construction(monkeypatch):
 
 
 class FakeFuture:
-    def __init__(self, done, result):
+    def __init__(self, done, result, error=None):
         self._done = done
         self._result = result
+        self._error = error
+        self.cancel_calls = 0
 
     def done(self):
         return self._done
 
     def result(self):
+        if self._error is not None:
+            raise self._error
         return self._result
+
+    def cancel(self):
+        self.cancel_calls += 1
 
 
 class FakeParameterClient:
@@ -104,19 +111,26 @@ class FakeParameterClient:
 
     def call_async(self, request):
         self.request_names.append(request.names)
-        return next(self.futures)
+        future = next(self.futures)
+        if isinstance(future, Exception):
+            raise future
+        return future
+
+    def wait_for_service(self, timeout_sec):
+        return True
 
 
 def test_wait_for_controller_parameters_retries_after_timeout(monkeypatch):
     monkeypatch.setattr(module.rclpy, "ok", lambda: True)
     monkeypatch.setattr(module.rclpy, "spin_until_future_complete", lambda *args, **kwargs: None)
-    client = FakeParameterClient([
-        FakeFuture(False, None), FakeFuture(True, "response")])
+    timed_out = FakeFuture(False, None)
+    client = FakeParameterClient([timed_out, FakeFuture(True, "response")])
     logger = FakeLogger()
 
     assert module.wait_for_controller_parameters(
         object(), client, "/robot2/controller/get_parameters", logger) == "response"
     assert client.request_names == [module.CTRL_PARAM_NAMES, module.CTRL_PARAM_NAMES]
+    assert timed_out.cancel_calls == 1
     assert len(logger.messages) == 1
 
 
@@ -129,3 +143,14 @@ def test_wait_for_controller_parameters_stops_when_ros_shuts_down(monkeypatch):
     assert module.wait_for_controller_parameters(
         object(), client, "/robot2/controller/get_parameters", FakeLogger()) is None
     assert len(client.request_names) == 1
+
+
+def test_wait_for_controller_parameters_retries_after_request_error(monkeypatch):
+    monkeypatch.setattr(module.rclpy, "ok", lambda: True)
+    monkeypatch.setattr(module.rclpy, "spin_until_future_complete", lambda *args, **kwargs: None)
+    client = FakeParameterClient([
+        RuntimeError("service vanished"), FakeFuture(True, "response")])
+
+    assert module.wait_for_controller_parameters(
+        object(), client, "/robot2/controller/get_parameters", FakeLogger()) == "response"
+    assert len(client.request_names) == 2
