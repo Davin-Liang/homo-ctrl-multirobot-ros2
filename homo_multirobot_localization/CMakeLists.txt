@@ -15,7 +15,7 @@ ament_target_dependencies(mocap_state_adapter rclcpp geometry_msgs tf2 tf2_ros t
 
 install(TARGETS mocap_state_adapter DESTINATION lib/${PROJECT_NAME})
 
-install(DIRECTORY launch config
+install(DIRECTORY launch config rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
