@@ -11,15 +11,15 @@
     # 安全圆上的离散编队点数量。
     m_p: 4
     # 期望编队圆半径（m）。
-    radius: 2.0
+    radius: 1.0
     # 编队点切换迟滞阈值（m）。
-    tol: 0.1
+    tol: 0.2
     # 控制器模型质量调参值，非实际质量。
     mass: 2.0
     # 平移期望闭环带宽（rad/s）。
     omega_d: 0.7
     # 偏航比例控制增益。
-    Kp_yaw: 4.0
+    Kp_yaw: 2.0
     # 偏航微分增益（Leader-Follower 相对角速度误差）。
     Kd_yaw: 1.0
     # 控制循环频率（Hz）。
@@ -29,7 +29,7 @@
     # HPC 变换系数下限。
     hpc_c_min: 0.1
     # 初始 LPC 极点下界。
-    initial_min_lambda: 1.0
+    initial_min_lambda: 1.5
     # 切换后 LPC 极点下界。
     switch_min_lambda: 4.0
     # 全向轮滚动半径（m）。
@@ -39,13 +39,13 @@
     # 单个车轮最大角速度（rad/s）。
     wheel_max_omega: 20.0
     # 最大线加速度（m/s²）。
-    max_linear_accel: 2.0
+    max_linear_accel: 0.6
     # 最大角加速度（rad/s²）。
-    max_angular_accel: 4.0
+    max_angular_accel: 1.0
     # 最大线速度（m/s）。
-    max_linear_vel: 1.0
+    max_linear_vel: 0.45
     # 最大角速度（rad/s）。
-    max_angular_vel: 0.5
+    max_angular_vel: 0.8
     # 是否启用仿真电机延迟。
     use_motor_delay: false
     # 电机一阶滞后时间常数（s）。
@@ -53,4 +53,4 @@
     # 传输延迟（s）。
     transport_delay: 0.0
     # 延迟节点最大线加速度（m/s²）。
-    delay_max_accel: 0.25
+    delay_max_accel: 0.6
