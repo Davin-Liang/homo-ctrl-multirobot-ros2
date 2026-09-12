@@ -233,6 +233,7 @@ install(PROGRAMS
   scripts/leader_circle_closed_loop.py
   scripts/leader_circle_closed_loop_map.py
   scripts/leader_eight.py
+  scripts/leader_eight_closed_loop_map.py
   scripts/record_trajectory.py
   scripts/record_velocity_diagnostics.py
   scripts/virtual_leader_circle.py
