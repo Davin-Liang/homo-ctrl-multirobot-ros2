@@ -8,7 +8,7 @@
 
 启用时，Follower 订阅 `<leader_ns>/cmd_vel` 的 `geometry_msgs/msg/Twist`。该消息是 Leader 车体系速度命令；控制周期中使用最新 Leader yaw 转换为 map 系速度。仅在收到新消息时，与上一帧 map 系命令直接相减得到一次性速度增量 `delta_v_leader_cmd_map`；首帧增量为零。
 
-速度增量经过可选一阶低通和二维模长限幅。消息在 `leader_cmd_timeout` 内未更新时，前馈增量为零。`Twist` 没有时间戳，因此新消息和超时以 Follower 节点的 ROS 时钟接收时间判定。
+速度增量经过可选一阶低通和二维模长限幅。增量上限不新增独立参数，而是每周期由现有执行器约束推导为 `max_linear_accel / control_rate`。消息在 `leader_cmd_timeout` 内未更新时，前馈增量为零。`Twist` 没有时间戳，因此新消息和超时以 Follower 节点的 ROS 时钟接收时间判定。
 
 ## 控制链路
 
@@ -27,9 +27,8 @@ out_map += delta_v_leader_cmd_map_filtered
 - `enable_leader_cmd_feedforward`：默认 `false`。
 - `leader_cmd_timeout`：默认 `0.15 s`，过期时前馈归零。
 - `leader_cmd_delta_lpf_tau`：默认 `0.10 s`；`0` 关闭增量滤波。
-- `leader_cmd_delta_max`：默认 `0.03 m/s`，map 系二维速度增量模长上限。
 
-这些参数写入 YAML，并作为 launch 参数暴露。诊断每秒输出前馈开关、命令年龄、原始/滤波后速度增量和本周期是否消费增量。
+增量模长上限由现有 `max_linear_accel` 和 `control_rate` 自动确定；调节这两个既有参数会同步调整前馈上限。这些新增参数写入 YAML，并作为 launch 参数暴露。诊断每秒输出前馈开关、命令年龄、原始/滤波后速度增量、派生上限和本周期是否消费增量。
 
 ## 验证
 
