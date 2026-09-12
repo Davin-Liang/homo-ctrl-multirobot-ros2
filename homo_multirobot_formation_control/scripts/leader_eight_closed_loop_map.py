@@ -61,15 +61,46 @@ def odom_state_to_map(
     return position_map, velocity_map, yaw_map
 
 
-def reference_omega(
-    amplitude_x: float,
-    amplitude_y: float,
-    speed: float,
-) -> float:
-    """Return the figure-eight angular frequency for a peak reference speed."""
-    if speed == 0.0:
-        return 0.0
-    return speed / math.hypot(amplitude_x, 2.0 * amplitude_y)
+class FigureEightArcLength:
+    """Arc-length parameterization of a figure-eight reference curve."""
+
+    def __init__(
+        self,
+        amplitude_x: float,
+        amplitude_y: float,
+        speed: float,
+        samples: int = 4096,
+    ) -> None:
+        self.amplitude_x = amplitude_x
+        self.amplitude_y = amplitude_y
+        self.speed = speed
+        self.phase = np.linspace(0.0, 2.0 * math.pi, samples + 1)
+        points = np.column_stack((
+            amplitude_x * np.sin(self.phase),
+            amplitude_y * np.sin(2.0 * self.phase),
+        ))
+        segments = np.linalg.norm(np.diff(points, axis=0), axis=1)
+        self.arc_length = np.r_[0.0, np.cumsum(segments)]
+        self.total_length = float(self.arc_length[-1])
+        self.period = (math.inf if speed == 0.0 else
+                       self.total_length / speed)
+
+    def evaluate(self, p0: np.ndarray, elapsed: float) -> Tuple[np.ndarray, np.ndarray]:
+        if self.speed == 0.0:
+            return p0.copy(), np.zeros(2)
+
+        distance = math.fmod(self.speed * elapsed, self.total_length)
+        phase = float(np.interp(distance, self.arc_length, self.phase))
+        position = p0 + np.array([
+            self.amplitude_x * math.sin(phase),
+            self.amplitude_y * math.sin(2.0 * phase),
+        ])
+        tangent = np.array([
+            self.amplitude_x * math.cos(phase),
+            2.0 * self.amplitude_y * math.cos(2.0 * phase),
+        ])
+        velocity = self.speed * tangent / np.linalg.norm(tangent)
+        return position, velocity
 
 
 def eight_reference(
@@ -79,18 +110,9 @@ def eight_reference(
     speed: float,
     elapsed: float,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Return map-frame figure-eight position and velocity about crossing p0."""
-    omega = reference_omega(amplitude_x, amplitude_y, speed)
-    phase = omega * elapsed
-    position = p0 + np.array([
-        amplitude_x * math.sin(phase),
-        amplitude_y * math.sin(2.0 * phase),
-    ])
-    velocity = np.array([
-        amplitude_x * omega * math.cos(phase),
-        2.0 * amplitude_y * omega * math.cos(2.0 * phase),
-    ])
-    return position, velocity
+    """Return constant-speed map-frame figure-eight state about crossing p0."""
+    return FigureEightArcLength(
+        amplitude_x, amplitude_y, speed).evaluate(p0, elapsed)
 
 
 def artstein_integral(
@@ -223,7 +245,7 @@ class LeaderEightClosedLoopMap(Node):
         if self.mocap_state_timeout <= 0.0:
             raise ValueError('mocap_state_timeout must be positive')
 
-        self.omega_ref = reference_omega(
+        self.reference = FigureEightArcLength(
             self.amplitude_x, self.amplitude_y, self.speed)
         self.dt = 1.0 / self.rate
         history_length = max(1, math.ceil(self.td / self.dt)) + 2
@@ -265,8 +287,7 @@ class LeaderEightClosedLoopMap(Node):
         self.get_logger().info(
             'closed-loop figure-eight: '
             f'Ax={self.amplitude_x:.2f} m Ay={self.amplitude_y:.2f} m '
-            f'v_peak={self.speed:.2f} m/s '
-            f'omega={self.omega_ref:.3f} rad/s heading='
+            f'v={self.speed:.2f} m/s T={self.reference.period:.2f} s heading='
             f'{math.degrees(self.heading):.1f} deg '
             f'map_frame={self.map_frame} state_source={self.state_source} '
             f'Td={self.td:.2f} s tau_v={self.tau_v:.2f} s')
@@ -386,8 +407,8 @@ class LeaderEightClosedLoopMap(Node):
         predicted_position, predicted_velocity = predict_delayed_state(
             self.position, self.velocity_map, self.command_history, self.dt,
             self.td, self.tau_v)
-        reference_position, reference_velocity = eight_reference(
-            self.p0, self.amplitude_x, self.amplitude_y, self.speed, elapsed)
+        reference_position, reference_velocity = self.reference.evaluate(
+            self.p0, elapsed)
 
         map_command = reference_velocity - self.kp * (
             predicted_position - reference_position) - self.kv * (

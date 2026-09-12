@@ -1,5 +1,4 @@
 import importlib.util
-import math
 from pathlib import Path
 import sys
 
@@ -18,8 +17,7 @@ SPEC.loader.exec_module(MODULE)
 
 def test_eight_reference_starts_and_returns_to_origin():
     p0 = np.array([1.5, -0.25])
-    omega = MODULE.reference_omega(2.0, 1.0, 0.4)
-    period = 2.0 * math.pi / omega
+    period = MODULE.FigureEightArcLength(2.0, 1.0, 0.4).period
 
     position, _ = MODULE.eight_reference(p0, 2.0, 1.0, 0.4, 0.0)
     returned, _ = MODULE.eight_reference(p0, 2.0, 1.0, 0.4, period)
@@ -31,8 +29,7 @@ def test_eight_reference_starts_and_returns_to_origin():
 def test_eight_reference_peak_speed_and_zero_speed():
     p0 = np.zeros(2)
     speed = 0.4
-    omega = MODULE.reference_omega(2.0, 1.0, speed)
-    period = 2.0 * math.pi / omega
+    period = MODULE.FigureEightArcLength(2.0, 1.0, speed).period
     norms = [
         np.linalg.norm(MODULE.eight_reference(p0, 2.0, 1.0, speed, time)[1])
         for time in np.linspace(0.0, period, 1001)
@@ -43,6 +40,18 @@ def test_eight_reference_peak_speed_and_zero_speed():
     position, velocity = MODULE.eight_reference(p0, 2.0, 1.0, 0.0, 99.0)
     np.testing.assert_allclose(position, p0)
     np.testing.assert_allclose(velocity, [0.0, 0.0])
+
+
+def test_eight_reference_has_constant_speed_along_the_curve():
+    p0 = np.zeros(2)
+    speed = 0.4
+    period = MODULE.FigureEightArcLength(2.0, 1.0, speed).period
+    norms = np.array([
+        np.linalg.norm(MODULE.eight_reference(p0, 2.0, 1.0, speed, time)[1])
+        for time in np.linspace(0.0, period, 101)
+    ])
+
+    np.testing.assert_allclose(norms, speed, atol=1e-12)
 
 
 def test_launch_forwards_map_and_mocap_parameters():

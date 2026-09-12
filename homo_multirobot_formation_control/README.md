@@ -571,9 +571,9 @@ map 位姿为交点的 8 字轨迹。它支持 Gazebo/定位的 `odom_tf` 状态
 map 系动捕位姿与速度的 `mocap` 状态源。动捕位姿或速度超过 `mocap_state_timeout` 未更新时，
 节点会发布零速度。
 
-`speed` 是参考线速度峰值，而非平均速度或周期参数；脚本根据 `amplitude_x`、`amplitude_y`
-自动计算轨迹频率，参考速度不会超过该值。实际指令还受 `max_linear_vel` 和
-`max_linear_accel` 限制。
+`speed` 是沿 8 字曲线的恒定参考线速度，而非周期参数；脚本按弧长参数化自动推进相位。
+当 `max_linear_vel >= speed` 且加速度限幅未触发时，参考速度恒为该值；实际指令仍会受
+`max_linear_vel` 和 `max_linear_accel` 限制。
 
 ```bash
 # Gazebo 或定位链路：需提供 map -> <robot>_odom TF
@@ -592,7 +592,7 @@ ros2 launch homo_multirobot_formation_control leader_eight_closed_loop_map.launc
 | --- | ---: | --- |
 | `amplitude_x` | 2.0 | 8 字 X 方向半幅 (m) |
 | `amplitude_y` | 1.0 | 8 字 Y 方向半幅 (m) |
-| `speed` | 0.2 | 参考线速度峰值 (m/s) |
+| `speed` | 0.2 | 沿 8 字的恒定参考线速度 (m/s) |
 | `state_source` | `odom_tf` | `odom_tf` 或 `mocap` |
 | `mocap_pose_topic` / `mocap_twist_topic` | `mocap/pose` / `mocap/twist` | map 系动捕状态话题 |
 | `mocap_state_timeout` | 0.10 | 任一动捕状态允许的最大陈旧时间 (s) |
