@@ -8,7 +8,7 @@
 
 修改 `homo_multirobot_formation_control/scripts/sim_4d_hpc_artstein_compare.py`。
 
-在既有 MATLAB 激励和圆轨迹两种场景中，为 Artstein + prediction 基线增加一组理想前馈案例。Follower 命令的构造为：先沿用现有 HPC 加速度积分得到的 map 系速度命令，再叠加由 Leader 已知加速度在一个控制周期内产生的速度增量。叠加结果仍走同一速度限幅、输入死区和一阶电机模型。
+在既有 MATLAB 激励和圆轨迹两种场景中，为 Artstein + prediction 基线增加一组理想前馈案例。Follower 命令的构造为：先沿用现有 HPC 加速度积分得到的 map 系速度命令，再叠加由 Leader 已知物理加速度在一个控制周期内产生的速度增量 `h * a_leader`。MATLAB 场景的控制输入先按 `a_leader=u_leader/mass` 转换。叠加结果仍走同一速度限幅、输入死区和一阶电机模型。
 
 ## 对照与输出
 
@@ -16,4 +16,4 @@
 
 ## 验证
 
-先添加 Python 单元测试，验证理想前馈速度增量等于 `h * u_leader / mass`，并验证关闭前馈时命令不变。测试先失败，再实现最小改动使其通过。随后用无噪声、固定随机种子的圆轨迹运行脚本，并检查 CSV 和 PNG 均生成、前馈案例存在且全部指标为有限数。
+先添加 Python 单元测试，验证理想前馈速度增量等于 `h * a_leader`，并验证关闭前馈时命令不变。测试先失败，再实现最小改动使其通过。随后用无噪声、固定随机种子的圆轨迹运行脚本，并检查 CSV 和 PNG 均生成、前馈案例存在且全部指标为有限数。
