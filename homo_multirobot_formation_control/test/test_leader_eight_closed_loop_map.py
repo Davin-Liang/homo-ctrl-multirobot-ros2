@@ -43,3 +43,24 @@ def test_eight_reference_peak_speed_and_zero_speed():
     position, velocity = MODULE.eight_reference(p0, 2.0, 1.0, 0.0, 99.0)
     np.testing.assert_allclose(position, p0)
     np.testing.assert_allclose(velocity, [0.0, 0.0])
+
+
+def test_launch_forwards_map_and_mocap_parameters():
+    launch_path = (
+        Path(__file__).parents[1]
+        / "launch"
+        / "leader_eight_closed_loop_map.launch.py"
+    )
+    source = launch_path.read_text(encoding="utf-8")
+
+    for value in (
+        "amplitude_x",
+        "amplitude_y",
+        "speed",
+        "state_source",
+        "mocap_pose_topic",
+        "mocap_twist_topic",
+        "map_frame",
+        "leader_eight_closed_loop_map.py",
+    ):
+        assert value in source

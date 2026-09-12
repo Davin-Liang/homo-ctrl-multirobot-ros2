@@ -564,6 +564,41 @@ ros2 launch homo_multirobot_formation_control leader_circle_closed_loop_with_del
 
 > 该 launch 不启动 Gazebo 或定位链路；应先启动对应的机器人仿真与 `odometry/filtered` 发布节点。
 
+### leader_eight_closed_loop_map — Map 系闭环 8 字轨迹
+
+该节点复用 Map 系闭环圆轨迹的延迟预测、TF 转换、姿态闭环和限速逻辑，跟踪以第一帧有效
+map 位姿为交点的 8 字轨迹。它支持 Gazebo/定位的 `odom_tf` 状态源，也支持直接订阅
+map 系动捕位姿与速度的 `mocap` 状态源。动捕位姿或速度超过 `mocap_state_timeout` 未更新时，
+节点会发布零速度。
+
+`speed` 是参考线速度峰值，而非平均速度或周期参数；脚本根据 `amplitude_x`、`amplitude_y`
+自动计算轨迹频率，参考速度不会超过该值。实际指令还受 `max_linear_vel` 和
+`max_linear_accel` 限制。
+
+```bash
+# Gazebo 或定位链路：需提供 map -> <robot>_odom TF
+ros2 launch homo_multirobot_formation_control leader_eight_closed_loop_map.launch.py \
+  namespace:=robot1 state_source:=odom_tf \
+  amplitude_x:=2.0 amplitude_y:=1.0 speed:=0.2 heading:=0.0
+
+# 动捕：两个话题的 header.frame_id 必须为 map
+ros2 launch homo_multirobot_formation_control leader_eight_closed_loop_map.launch.py \
+  namespace:=robot1 use_sim_time:=false state_source:=mocap \
+  mocap_pose_topic:=mocap/pose mocap_twist_topic:=mocap/twist \
+  amplitude_x:=2.0 amplitude_y:=1.0 speed:=0.2
+```
+
+| 参数 | 默认值 | 说明 |
+| --- | ---: | --- |
+| `amplitude_x` | 2.0 | 8 字 X 方向半幅 (m) |
+| `amplitude_y` | 1.0 | 8 字 Y 方向半幅 (m) |
+| `speed` | 0.2 | 参考线速度峰值 (m/s) |
+| `state_source` | `odom_tf` | `odom_tf` 或 `mocap` |
+| `mocap_pose_topic` / `mocap_twist_topic` | `mocap/pose` / `mocap/twist` | map 系动捕状态话题 |
+| `mocap_state_timeout` | 0.10 | 任一动捕状态允许的最大陈旧时间 (s) |
+| `map_frame` | `map` | 闭环参考与状态使用的全局坐标系 |
+| `Td` / `tau_v` | 0.22 / 0.43 | 输入死区与平移速度响应时间常数 (s) |
+
 
 
 ### virtual_leader_circle — 虚拟 Leader 绕圈
