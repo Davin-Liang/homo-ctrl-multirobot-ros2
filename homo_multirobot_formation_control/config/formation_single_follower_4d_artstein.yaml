@@ -38,6 +38,12 @@
     switch_min_lambda: 4.0
     # 领航速度低通时间常数（s）；0 为关闭。
     leader_vel_lpf_tau: 0.0
+    # 是否叠加由 Leader /cmd_vel 差分得到的一次性速度前馈。
+    enable_leader_cmd_feedforward: false
+    # Leader /cmd_vel 超时（s）；超时后本周期不叠加前馈。
+    leader_cmd_timeout: 0.15
+    # Leader 命令速度增量低通时间常数（s）；0 为关闭。
+    leader_cmd_delta_lpf_tau: 0.10
     # 非零命令最小速度（m/s）；0 为关闭。
     min_cmd_vel: 0.07
     # 车轮半径（m）。

@@ -115,6 +115,9 @@ def generate_launch_description():
             "initial_min_lambda": LaunchConfiguration("initial_min_lambda"),
             "switch_min_lambda": LaunchConfiguration("switch_min_lambda"),
             "leader_vel_lpf_tau": LaunchConfiguration("leader_vel_lpf_tau"),
+            "enable_leader_cmd_feedforward": LaunchConfiguration("enable_leader_cmd_feedforward"),
+            "leader_cmd_timeout": LaunchConfiguration("leader_cmd_timeout"),
+            "leader_cmd_delta_lpf_tau": LaunchConfiguration("leader_cmd_delta_lpf_tau"),
             "min_cmd_vel": LaunchConfiguration("min_cmd_vel"),
         }],
     )
@@ -180,6 +183,12 @@ def generate_launch_description():
                               description="LPC pole lower bound after formation-point switching, matching Python switch_min_lambda."),
         DeclareLaunchArgument("leader_vel_lpf_tau", default_value="0.0",
                               description="Leader velocity LPF time constant (s)."),
+        DeclareLaunchArgument("enable_leader_cmd_feedforward", default_value="false",
+                              description="Add one-shot Leader /cmd_vel delta feedforward."),
+        DeclareLaunchArgument("leader_cmd_timeout", default_value="0.15",
+                              description="Leader /cmd_vel feedforward timeout (s)."),
+        DeclareLaunchArgument("leader_cmd_delta_lpf_tau", default_value="0.10",
+                              description="Leader command delta LPF time constant (s); 0 disables it."),
         DeclareLaunchArgument("min_cmd_vel", default_value="0.03",
                               description="Minimum cmd_vel magnitude (m/s). "
                                           "Set 0.0 to disable (simulation)."),

@@ -322,6 +322,19 @@ if(BUILD_TESTING)
   add_test(NAME test_homo_controller_4d_artstein
     COMMAND test_homo_controller_4d_artstein)
 
+  add_executable(test_leader_command_delta_feedforward
+    test/test_leader_command_delta_feedforward.cpp
+  )
+  target_include_directories(test_leader_command_delta_feedforward PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+  target_link_libraries(test_leader_command_delta_feedforward
+    Eigen3::Eigen
+  )
+  add_test(NAME test_leader_command_delta_feedforward
+    COMMAND test_leader_command_delta_feedforward)
+
   add_executable(test_yaw_pd_controller test/test_yaw_pd_controller.cpp)
   target_include_directories(test_yaw_pd_controller PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

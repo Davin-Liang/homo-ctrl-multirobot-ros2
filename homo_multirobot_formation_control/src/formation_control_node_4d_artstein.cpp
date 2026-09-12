@@ -134,6 +134,16 @@ FormationController4DArtstein::FormationController4DArtstein()
   leader_vel_lpf_tau_ = declare_parameter("leader_vel_lpf_tau", 0.0);
   min_cmd_vel_ = declare_parameter("min_cmd_vel", 0.03);
   enable_radial_safety_ = declare_parameter("enable_radial_safety", true);
+  enable_leader_cmd_feedforward_ =
+      declare_parameter("enable_leader_cmd_feedforward", false);
+  leader_cmd_timeout_ = declare_parameter("leader_cmd_timeout", 0.15);
+  leader_cmd_delta_lpf_tau_ =
+      declare_parameter("leader_cmd_delta_lpf_tau", 0.10);
+  if (enable_leader_cmd_feedforward_) {
+    leader_cmd_feedforward_ =
+        std::make_unique<formation_control::LeaderCommandDeltaFeedforward>(
+            true, leader_cmd_delta_lpf_tau_, max_linear_accel_ / control_rate_);
+  }
 
   // ---- 控制器 ---------------------------------------------------------------
   ctrl_ = std::make_unique<LpcController4DArtstein>(m_p, radius, tol, mass, tau,
@@ -176,6 +186,16 @@ FormationController4DArtstein::FormationController4DArtstein()
       [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { leader_mocap_twist_ = m; });
     follower_mocap_twist_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(follower_ns_ + "/mocap/twist", qos,
       [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { follower_mocap_twist_ = m; });
+  }
+
+  if (enable_leader_cmd_feedforward_) {
+    leader_cmd_sub_ = create_subscription<geometry_msgs::msg::Twist>(
+      leader_ns_ + "/cmd_vel", 10,
+      [this](geometry_msgs::msg::Twist::SharedPtr m) {
+        leader_cmd_ = m;
+        leader_cmd_received_ = get_clock()->now();
+        ++leader_cmd_sequence_;
+      });
   }
 
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
@@ -240,6 +260,18 @@ void FormationController4DArtstein::timer_cb()
   }
 
   // ---- 步骤 3: Leader 匀速外推到执行器预测时刻 ----------------------------
+  if (enable_leader_cmd_feedforward_ && leader_cmd_ &&
+      leader_cmd_sequence_ != processed_leader_cmd_sequence_) {
+    const Eigen::Vector2d leader_command_map(
+        leader_cmd_->linear.x * std::cos(leader_yaw) -
+            leader_cmd_->linear.y * std::sin(leader_yaw),
+        leader_cmd_->linear.x * std::sin(leader_yaw) +
+            leader_cmd_->linear.y * std::cos(leader_yaw));
+    leader_cmd_feedforward_->ingest(
+        leader_command_map, leader_cmd_received_.seconds());
+    processed_leader_cmd_sequence_ = leader_cmd_sequence_;
+  }
+
   int buf_size = ctrl_->artstein_buffer_size();
 
   Eigen::Vector4d x1_meas;
@@ -305,6 +337,20 @@ void FormationController4DArtstein::timer_cb()
   // 预测器已经提供 x_h；HPC 直接输出当前周期的 map 系速度命令。
   const auto out = ctrl_->lpc_calculate(x1_h, x2_h);
   Eigen::Vector2d out_map(out[0], out[1]);
+  Eigen::Vector2d leader_delta_v = Eigen::Vector2d::Zero();
+  Eigen::Vector2d leader_raw_delta_v = Eigen::Vector2d::Zero();
+  Eigen::Vector2d leader_filtered_delta_v = Eigen::Vector2d::Zero();
+  double leader_cmd_age = -1.0;
+  if (enable_leader_cmd_feedforward_) {
+    leader_delta_v = leader_cmd_feedforward_->consume(
+        get_clock()->now().seconds(), leader_cmd_timeout_);
+    leader_raw_delta_v = leader_cmd_feedforward_->raw_delta();
+    leader_filtered_delta_v = leader_cmd_feedforward_->filtered_delta();
+    if (leader_cmd_) {
+      leader_cmd_age = (get_clock()->now() - leader_cmd_received_).seconds();
+    }
+    out_map += leader_delta_v;
+  }
 
   const double safety_max_decel =
       radial_safety_max_decel_ > 0.0
@@ -395,10 +441,15 @@ void FormationController4DArtstein::timer_cb()
   RCLCPP_INFO_THROTTLE(get_logger(), *get_clock(), 1000,
     "TRACE target=%d best=%.3f current=%.3f sel=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) "
     "raw=(%+6.3f,%+6.3f) final=(%+6.3f,%+6.3f) scale=%.2f "
+    "leader_ff=%s age=%.3f raw=(%+.3f,%+.3f) filt=(%+.3f,%+.3f) used=(%+.3f,%+.3f) "
     "I=(%+6.3f,%+6.3f,%+6.3f,%+6.3f) xh=(%+6.3f,%+6.3f,%+6.3f,%+6.3f)",
     ctrl_->target_index(), best_dist, current_dist,
     selected_err(0), selected_err(1), selected_err(2), selected_err(3),
     vx_body, vy_body, cmd.linear.x, cmd.linear.y, wheel_scale,
+    enable_leader_cmd_feedforward_ ? "on" : "off", leader_cmd_age,
+    leader_raw_delta_v(0), leader_raw_delta_v(1),
+    leader_filtered_delta_v(0), leader_filtered_delta_v(1),
+    leader_delta_v(0), leader_delta_v(1),
     I2(0), I2(1), I2(2), I2(3),
     x2_h(0), x2_h(1), x2_h(2), x2_h(3));
 

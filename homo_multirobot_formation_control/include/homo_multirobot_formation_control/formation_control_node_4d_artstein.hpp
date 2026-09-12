@@ -23,6 +23,7 @@
 #include <Eigen/Dense>
 #include "homo_multirobot_formation_control/homo_controller_4d_artstein.hpp"
 #include "homo_multirobot_formation_control/kinematic_constraint.hpp"
+#include "homo_multirobot_formation_control/leader_command_delta_feedforward.hpp"
 
 class FormationController4DArtstein : public rclcpp::Node
 {
@@ -44,13 +45,18 @@ private:
   double formation_radius_ = 2.0;
   double tau_ = 0.43;
   double min_cmd_vel_ = 0.03;
+  double leader_cmd_timeout_ = 0.15;
+  double leader_cmd_delta_lpf_tau_ = 0.10;
   double Td_;       // 死区时延 (s)
   double control_rate_;
   bool enable_radial_safety_ = true;
+  bool enable_leader_cmd_feedforward_ = false;
 
   // ---- 控制器 + 约束 -------------------------------------------------------
   std::unique_ptr<formation_control::LpcController4DArtstein> ctrl_;
   formation_control::KinematicConstraint constraint_;
+  std::unique_ptr<formation_control::LeaderCommandDeltaFeedforward>
+      leader_cmd_feedforward_;
 
   // ---- v^cmd 内部状态（map 系，回写 + 入缓冲用）---------------------------
   double vx_cmd_map_ = 0.0;
@@ -71,12 +77,17 @@ private:
 
   // ---- EKF 里程计订阅 ------------------------------------------------------
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr leader_sub_, follower_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr leader_cmd_sub_;
   nav_msgs::msg::Odometry::SharedPtr leader_odom_, follower_odom_;
+  geometry_msgs::msg::Twist::SharedPtr leader_cmd_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr leader_mocap_pose_sub_, follower_mocap_pose_sub_;
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr leader_mocap_twist_sub_, follower_mocap_twist_sub_;
   geometry_msgs::msg::PoseStamped::SharedPtr leader_mocap_pose_, follower_mocap_pose_;
   geometry_msgs::msg::TwistStamped::SharedPtr leader_mocap_twist_, follower_mocap_twist_;
   rclcpp::Time leader_mocap_received_{0, 0, RCL_ROS_TIME}, follower_mocap_received_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time leader_cmd_received_{0, 0, RCL_ROS_TIME};
+  uint64_t leader_cmd_sequence_ = 0;
+  uint64_t processed_leader_cmd_sequence_ = 0;
 
   // ---- 发布 ----------------------------------------------------------------
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
