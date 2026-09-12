@@ -29,8 +29,8 @@
 
 | 版本                                   | Launch 文件                                                    | 可执行文件                                        | 状态模型                                                           | 编队策略                      | yaw 控制                           |
 | -------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------- | ---------------------------------- |
-| **4D (原版)**                    | `formation_single_follower.launch.py`                        | `formation_control_node`                        | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)                            | 离散多边形 + tol 切换         | 独立 P+前馈                        |
-| **4D Artstein (预测补偿)**       | `formation_single_follower_4d_artstein.launch.py`            | `formation_control_node_4d_artstein`            | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换         | 独立 P+前馈                        |
+| **4D (原版)**                    | `formation_single_follower.launch.py`                        | `formation_control_node`                        | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)                            | 离散多边形 + tol 切换         | 独立线性 PD                        |
+| **4D Artstein (预测补偿)**       | `formation_single_follower_4d_artstein.launch.py`            | `formation_control_node_4d_artstein`            | 双积分器 `[p_x,p_y,v_x,v_y]` (map 系)，输入前做延迟/电机预测映射 | 离散多边形 + tol 切换         | 独立线性 PD                        |
 | **4D Artstein-LQR (对照组)**     | `formation_single_follower_4d_artstein_lqr.launch.py`        | `formation_control_node_4d_artstein_lqr`        | 同 4D Artstein，预测补偿后进入 4D DARE-LQR                         | 离散多边形 + tol 切换         | 独立 P+前馈                        |
 | **6D (运动学, 边界投影)**        | `formation_single_follower_6d.launch.py`                     | `formation_control_node_6d`                     | 混合系 `[p_x,p_y,θ,v_x^b,v_y^b,ω]`                             | 连续边界投影                  | 集成于 6D 主回路                   |
 | **6D Disc (运动学, 离散多边形)** | `formation_single_follower_6d_disc.launch.py`                | `formation_control_node_6d_disc`                | 同 6D                                                              | 离散多边形 + tol 切换         | 集成于 6D 主回路                   |
@@ -631,9 +631,13 @@ ros2 run homo_multirobot_formation_control virtual_leader_circle.py \
 ### record_trajectory — 轨迹记录与画图
 
 ```bash
-# 仿真（自动读控制器参数生成标签，无需手动指定 tag）
+# 使用包内默认 YAML（自动读控制器参数生成标签，无需手动指定 tag）
 ros2 run homo_multirobot_formation_control record_trajectory.py \
-  --ros-args -p mode:=sim -p duration:=30.0
+  --ros-args
+
+# 使用自定义 YAML；命令行参数会覆盖 YAML 中的同名值
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p config_file:=/abs/path/record_trajectory.yaml -p duration:=60.0
 
 # 实物 + 自定义标签
 ros2 run homo_multirobot_formation_control record_trajectory.py \
@@ -642,7 +646,21 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
   -p platform:=real -p controller:=artstein_hpc \
   -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
   -p radius:=2.0 -p duration:=30.0
+
+# 动捕状态：先启动动捕适配器和动捕版控制器，再直接记录 map 系 pose/twist
+ros2 launch homo_multirobot_localization mocap_two_robots.launch.py
+ros2 launch homo_multirobot_formation_control formation_single_follower_4d_artstein_mocap.launch.py
+ros2 run homo_multirobot_formation_control record_trajectory.py \
+  --ros-args -p state_source:=mocap
 ```
+
+默认配置文件是 `config/record_trajectory.yaml`，采用与编队控制器一致的 ROS 2 参数格式
+`/**: ros__parameters:`。`config_file` 为空时加载该文件；指定 `config_file` 可切换实验配置，
+且显式 `-p` 参数优先于 YAML。
+
+`controller_node_name` 非空时，记录器会在创建状态订阅前无限等待该控制器的参数服务
+就绪并成功返回一次参数，因此可以先启动记录器、再启动控制算法；按 Ctrl-C 可停止等待。
+留空则跳过控制器参数采集，立即开始记录，但 `metadata.yaml` 的 `controller_parameters` 将为空。
 
 | 参数              | 默认值           | 说明                                                 |
 | ----------------- | ---------------- | ---------------------------------------------------- |
@@ -657,6 +675,10 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 | `trial_id`      | `trial_01`     | 重复实验编号                                         |
 | `platform`      | 使用 `mode`    | 实验平台，如 `numerical`、`gazebo`、`real`     |
 | `controller`    | 控制器节点名     | 控制器标签，如 `original_4d_hpc`、`artstein_hpc` |
+| `state_source`  | `ekf_tf`         | `ekf_tf`：EKF 里程计经 TF 转 map；`mocap`：直接订阅 `/mocap/pose` 和 `/mocap/twist` |
+
+`state_source:=mocap` 直接使用 `mocap_two_robots.launch.py` 适配器发布的 map 系状态；仅当
+Leader 和 Follower 都已收到 pose 与 twist 后，记录器才开始计时和写入样本。
 
 **输出**：
 每次运行创建一个独立目录 `{out_dir}/{mode}/{tag}_{timestamp}/`，其中包括：
@@ -666,7 +688,7 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 - `metadata.yaml` — 与本次数据对应的实验元数据
 
 **自动参数读取**：如果不指定 `tag`，脚本从 follower 命名空间下的控制器节点
-自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, tol`，
+自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, Kd_yaw, tol`，
 以及适用时的 `hpc_c_min, initial_min_lambda, switch_min_lambda`，并：
 
 - 生成实验目录标签（如 `m8_r2_od1.5_f35_20260818_143000/`）

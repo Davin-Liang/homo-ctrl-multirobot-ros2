@@ -21,43 +21,172 @@
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from rcl_interfaces.srv import GetParameters
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry
 import tf2_ros
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from ament_index_python.packages import get_package_share_directory
 import os
 import csv
 import json
 import time
 import math
+import yaml
 from datetime import datetime
 
 # 需要自动读取的控制器参数
 CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
                     'm_p', 'Kp_yaw', 'K_ff', 'tol',
+                    'Kd_yaw',
                     'tau', 'hpc_c_min', 'initial_min_lambda',
                     'switch_min_lambda', 'leader_vel_lpf_tau', 'Td',
                     'max_linear_accel']
+
+VALID_STATE_SOURCES = ('ekf_tf', 'mocap')
+
+RECORDER_PARAMETER_DEFAULTS = {
+    'leader_ns': '/robot1',
+    'follower_ns': '/robot2',
+    'duration': 30.0,
+    'out_dir': '',
+    'radius': 0.0,
+    'mode': 'sim',
+    'tag': '',
+    'controller_node_name': 'formation_control_node',
+    'experiment_id': '',
+    'trial_id': 'trial_01',
+    'platform': '',
+    'controller': '',
+    'state_source': 'ekf_tf',
+}
+
+
+def load_recorder_parameters(path):
+    """读取并校验 ROS 2 格式的轨迹记录器参数 YAML。"""
+    try:
+        with open(path, encoding='utf-8') as stream:
+            document = yaml.safe_load(stream)
+    except (OSError, yaml.YAMLError) as exc:
+        raise ValueError(f'无法读取轨迹记录器配置 {path}: {exc}') from exc
+
+    if not isinstance(document, dict):
+        raise ValueError(f'轨迹记录器配置 {path} 必须包含 /**/ros__parameters 映射')
+    node_parameters = document.get('/**')
+    if not isinstance(node_parameters, dict):
+        raise ValueError(f'轨迹记录器配置 {path} 缺少 /**/ros__parameters 映射')
+    parameters = node_parameters.get('ros__parameters')
+    if not isinstance(parameters, dict):
+        raise ValueError(f'轨迹记录器配置 {path} 缺少 /**/ros__parameters 映射')
+    parameters = dict(parameters)
+    parameters.setdefault('state_source', 'ekf_tf')
+    if set(parameters) != set(RECORDER_PARAMETER_DEFAULTS):
+        raise ValueError(f'轨迹记录器配置 {path} 的参数名必须与内置记录器参数一致')
+    return parameters
+
+
+def validate_state_source(value):
+    """校验并返回轨迹状态来源。"""
+    if value not in VALID_STATE_SOURCES:
+        raise ValueError(
+            f"state_source 必须是 {', '.join(VALID_STATE_SOURCES)}，当前为 {value!r}")
+    return value
+
+
+def mocap_sample(pose, twist):
+    """从动捕适配器的 map 系消息中提取平面状态。"""
+    return (pose.pose.position.x, pose.pose.position.y,
+            twist.twist.linear.x, twist.twist.linear.y)
+
+
+def recording_topics(leader_ns, follower_ns, state_source):
+    """返回写入元数据的实际状态话题。"""
+    if state_source == 'mocap':
+        return {
+            'leader_topic': leader_ns + '/mocap/pose',
+            'follower_topic': follower_ns + '/mocap/pose',
+            'leader_twist_topic': leader_ns + '/mocap/twist',
+            'follower_twist_topic': follower_ns + '/mocap/twist',
+        }
+    return {
+        'leader_topic': leader_ns + '/odometry/filtered',
+        'follower_topic': follower_ns + '/odometry/filtered',
+    }
+
+
+def velocity_frame_label(state_source):
+    """返回当前记录线速度所在参考系的图表标签。"""
+    return 'Map-frame' if state_source == 'mocap' else 'Body-frame'
+
+
+def merge_parameter_overrides(defaults, overrides):
+    """将显式 ROS 参数覆盖到 YAML 默认值。"""
+    values = dict(defaults)
+    values.update({name: value for name, value in overrides.items() if name in values})
+    return values
+
+
+def wait_for_controller_service(client, service_name, logger):
+    """等待控制器参数服务就绪，ROS 关闭时停止等待。"""
+    while rclpy.ok():
+        if client.wait_for_service(timeout_sec=1.0):
+            return True
+        logger.info(f'等待控制器参数服务就绪: {service_name}')
+    return False
+
+
+def wait_for_controller_parameters(node, client, service_name, logger):
+    """等待控制器参数响应，ROS 关闭时停止等待。"""
+    while rclpy.ok():
+        future = None
+        try:
+            req = GetParameters.Request()
+            req.names = list(CTRL_PARAM_NAMES)
+            future = client.call_async(req)
+            rclpy.spin_until_future_complete(node, future, timeout_sec=2.0)
+            if future.done() and future.result() is not None:
+                return future.result()
+        except Exception as exc:
+            if future is not None and not future.done():
+                future.cancel()
+            logger.info(f'等待控制器参数响应: {service_name} ({exc})')
+        else:
+            if future is not None and not future.done():
+                future.cancel()
+            logger.info(f'等待控制器参数响应: {service_name}')
+
+        if not rclpy.ok() or not wait_for_controller_service(client, service_name, logger):
+            return None
+    return None
 
 
 class TrajectoryRecorder(Node):
     def __init__(self):
         super().__init__('trajectory_recorder')
+        self.declare_parameter('config_file', '')
+        config_file = self.get_parameter('config_file').value
+        if not config_file:
+            config_file = os.path.join(
+                get_package_share_directory('homo_multirobot_formation_control'),
+                'config', 'record_trajectory.yaml')
+        try:
+            yaml_defaults = load_recorder_parameters(config_file)
+        except ValueError as exc:
+            self.get_logger().fatal(str(exc))
+            raise
 
-        self.declare_parameter('leader_ns', '/robot1')
-        self.declare_parameter('follower_ns', '/robot2')
-        self.declare_parameter('duration', 30.0)
-        self.declare_parameter('out_dir', '')
-        self.declare_parameter('radius', 0.0)
-        self.declare_parameter('mode', 'sim')
-        self.declare_parameter('tag', '')
-        self.declare_parameter('controller_node_name', 'formation_control_node')
-        self.declare_parameter('experiment_id', '')
-        self.declare_parameter('trial_id', 'trial_01')
-        self.declare_parameter('platform', '')
-        self.declare_parameter('controller', '')
+        overrides = {
+            name: parameter.value
+            for name, parameter in self._parameter_overrides.items()
+            if name in RECORDER_PARAMETER_DEFAULTS
+        }
+        recorder_parameters = merge_parameter_overrides(yaml_defaults, overrides)
+        for name, value in recorder_parameters.items():
+            self.declare_parameter(name, value, ignore_override=True)
+
         self.leader_ns = self.get_parameter('leader_ns').value
         self.follower_ns = self.get_parameter('follower_ns').value
         self.duration = self.get_parameter('duration').value
@@ -73,9 +202,13 @@ class TrajectoryRecorder(Node):
         self.trial_id = self.get_parameter('trial_id').value
         self.platform = self.get_parameter('platform').value or self.mode
         self.controller = self.get_parameter('controller').value
+        self.state_source = validate_state_source(
+            self.get_parameter('state_source').value)
 
         # 查询控制器参数 + 延迟节点参数（自动生成 tag 和图上标题）
         self.ctrl_params = self._query_controller_params()
+        if not rclpy.ok():
+            raise KeyboardInterrupt
         self.delay_params = self._query_delay_node_params()
         if not self.tag:
             self.tag = self._build_auto_tag()
@@ -85,9 +218,6 @@ class TrajectoryRecorder(Node):
         out_subdir = os.path.join(self.out_dir, self.mode)
         os.makedirs(out_subdir, exist_ok=True)
 
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
-
         self.t1_x = []; self.t1_y = []; self.t1_t = []
         self.t1_vx = []; self.t1_vy = []; self.t1_v = []
         self.t2_x = []; self.t2_y = []; self.t2_t = []
@@ -96,10 +226,19 @@ class TrajectoryRecorder(Node):
         self.t0 = None
         self.done = False
 
-        self.sub1 = self.create_subscription(
-            Odometry, self.leader_ns + '/odometry/filtered', self.cb_leader, 10)
-        self.sub2 = self.create_subscription(
-            Odometry, self.follower_ns + '/odometry/filtered', self.cb_follower, 10)
+        if self.state_source == 'ekf_tf':
+            self.tf_buffer = tf2_ros.Buffer()
+            self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+            self.sub1 = self.create_subscription(
+                Odometry, self.leader_ns + '/odometry/filtered', self.cb_leader, 10)
+            self.sub2 = self.create_subscription(
+                Odometry, self.follower_ns + '/odometry/filtered', self.cb_follower, 10)
+        else:
+            self.leader_mocap_pose = None
+            self.leader_mocap_twist = None
+            self.follower_mocap_pose = None
+            self.follower_mocap_twist = None
+            self._create_mocap_subscriptions()
         self.timer = self.create_timer(0.1, self.check_done)
 
         leader_short = self.leader_ns.lstrip('/')
@@ -108,27 +247,40 @@ class TrajectoryRecorder(Node):
         self.follower_label = f'Follower ({follower_short})'
         self.get_logger().info(
             f'记录中... leader={self.leader_ns} follower={self.follower_ns} '
-            f'时长={self.duration:.0f}s 模式={self.mode} 标签={self.tag or "无"}'
+            f'时长={self.duration:.0f}s 模式={self.mode} 状态源={self.state_source} 标签={self.tag or "无"}'
             + (f' 理想半径={self.ideal_radius:.1f}m' if self.ideal_radius > 0 else ''))
+
+    def _create_mocap_subscriptions(self):
+        """创建与动捕适配器 SensorData QoS 匹配的状态订阅。"""
+        self.leader_pose_sub = self.create_subscription(
+            PoseStamped, self.leader_ns + '/mocap/pose', self.cb_leader_mocap_pose,
+            qos_profile_sensor_data)
+        self.leader_twist_sub = self.create_subscription(
+            TwistStamped, self.leader_ns + '/mocap/twist', self.cb_leader_mocap_twist,
+            qos_profile_sensor_data)
+        self.follower_pose_sub = self.create_subscription(
+            PoseStamped, self.follower_ns + '/mocap/pose', self.cb_follower_mocap_pose,
+            qos_profile_sensor_data)
+        self.follower_twist_sub = self.create_subscription(
+            TwistStamped, self.follower_ns + '/mocap/twist', self.cb_follower_mocap_twist,
+            qos_profile_sensor_data)
 
     def _query_controller_params(self):
         """从 follower 命名空间下的控制器节点读取参数。"""
+        if not self.ctrl_node_name:
+            self.get_logger().info('未设置 controller_node_name，跳过控制器参数查询')
+            return {}
+
         node_path = self.follower_ns.rstrip('/') + '/' + self.ctrl_node_name
         svc_name = node_path + '/get_parameters'
         client = self.create_client(GetParameters, svc_name)
 
-        # 等控制器就绪（最多等 3 秒）
-        if not client.wait_for_service(timeout_sec=3.0):
-            self.get_logger().warn(f'控制器参数服务未就绪 ({svc_name})，使用默认标签')
+        if not wait_for_controller_service(client, svc_name, self.get_logger()):
             return {}
 
-        req = GetParameters.Request()
-        req.names = list(CTRL_PARAM_NAMES)
-        future = client.call_async(req)
-        rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
-
-        if future.done() and future.result() is not None:
-            result = future.result()
+        result = wait_for_controller_parameters(
+            self, client, svc_name, self.get_logger())
+        if result is not None:
             params = {}
             for name, pv in zip(CTRL_PARAM_NAMES, result.values):
                 if pv.type == 3:       # PARAMETER_DOUBLE
@@ -141,9 +293,7 @@ class TrajectoryRecorder(Node):
             if params:
                 self.get_logger().info(f'已读取控制器参数: {params}')
             return params
-        else:
-            self.get_logger().warn('查询控制器参数失败，使用默认标签')
-            return {}
+        return {}
 
     def _query_delay_node_params(self):
         """从 follower 命名空间下的 sim_motor_delay 节点读取参数（可选）。"""
@@ -210,7 +360,7 @@ class TrajectoryRecorder(Node):
         p = self.ctrl_params
         if not p:
             return ''
-        names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'tol',
+        names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'Kd_yaw', 'tol',
                  'tau', 'hpc_c_min', 'initial_min_lambda', 'switch_min_lambda',
                  'leader_vel_lpf_tau', 'Td']
         parts = []
@@ -260,12 +410,51 @@ class TrajectoryRecorder(Node):
         vyl.append(msg.twist.twist.linear.y)
         vl.append(math.hypot(msg.twist.twist.linear.x, msg.twist.twist.linear.y))
 
+    def _record_mocap(self, pose, twist, xl, yl, tl, vxl, vyl, vl):
+        if self.done:
+            return
+        x, y, vx, vy = mocap_sample(pose, twist)
+        now = time.time()
+        if self.t0 is None:
+            self.t0 = now
+            self.get_logger().info('收到第一组完整状态, 开始计时')
+        tl.append(now - self.t0)
+        xl.append(x)
+        yl.append(y)
+        vxl.append(vx)
+        vyl.append(vy)
+        vl.append(math.hypot(vx, vy))
+
     def cb_leader(self, msg):
         self._record(msg, self.leader_ns, self.t1_x, self.t1_y, self.t1_t,
                      self.t1_vx, self.t1_vy, self.t1_v)
     def cb_follower(self, msg):
         self._record(msg, self.follower_ns, self.t2_x, self.t2_y, self.t2_t,
                      self.t2_vx, self.t2_vy, self.t2_v)
+
+    def _mocap_ready(self):
+        return all((self.leader_mocap_pose, self.leader_mocap_twist,
+                    self.follower_mocap_pose, self.follower_mocap_twist))
+
+    def cb_leader_mocap_pose(self, msg):
+        self.leader_mocap_pose = msg
+        if self._mocap_ready():
+            self._record_mocap(
+                msg, self.leader_mocap_twist, self.t1_x, self.t1_y, self.t1_t,
+                self.t1_vx, self.t1_vy, self.t1_v)
+
+    def cb_leader_mocap_twist(self, msg):
+        self.leader_mocap_twist = msg
+
+    def cb_follower_mocap_pose(self, msg):
+        self.follower_mocap_pose = msg
+        if self._mocap_ready():
+            self._record_mocap(
+                msg, self.follower_mocap_twist, self.t2_x, self.t2_y, self.t2_t,
+                self.t2_vx, self.t2_vy, self.t2_v)
+
+    def cb_follower_mocap_twist(self, msg):
+        self.follower_mocap_twist = msg
 
     def check_done(self):
         if self.done or self.t0 is None:
@@ -358,8 +547,9 @@ class TrajectoryRecorder(Node):
                 'duration_s': self.duration,
                 'leader_ns': self.leader_ns,
                 'follower_ns': self.follower_ns,
-                'leader_topic': self.leader_ns + '/odometry/filtered',
-                'follower_topic': self.follower_ns + '/odometry/filtered',
+                'state_source': self.state_source,
+                **recording_topics(
+                    self.leader_ns, self.follower_ns, self.state_source),
                 'coordinate_frame': 'map',
                 'ideal_radius_m': self.ideal_radius,
             },
@@ -386,6 +576,7 @@ class TrajectoryRecorder(Node):
 
     def _plot_and_save(self, experiment_dir):
         elapsed = time.time() - self.t0 if self.t0 else 0
+        velocity_frame = velocity_frame_label(self.state_source)
         fig, axes = plt.subplots(3, 2, figsize=(16, 14))
 
         # ---- 子图 1: 轨迹 ----
@@ -421,7 +612,7 @@ class TrajectoryRecorder(Node):
         ax.set_title('Leader-follower distance')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 3: Vx + Vy (body frame) ----
+        # ---- 子图 3: Vx + Vy ----
         ax = axes[1][0]
         for tl, vl, name, c in [
             (self.t1_t, self.t1_vx, self.leader_label + ' Vx', 'tab:blue'),
@@ -430,19 +621,19 @@ class TrajectoryRecorder(Node):
             (self.t2_t, self.t2_vy, self.follower_label + ' Vy', 'gold'),
         ]:
             self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('Body velocity (m/s)')
-        ax.set_title('Body-frame Vx & Vy')
+        ax.set_xlabel('Time (s)'); ax.set_ylabel(f'{velocity_frame} velocity (m/s)')
+        ax.set_title(f'{velocity_frame} Vx & Vy')
         ax.legend(fontsize=6); ax.grid(True, alpha=0.3)
 
-        # ---- 子图 4: |V| body speed ----
+        # ---- 子图 4: |V| ----
         ax = axes[1][1]
         for tl, vl, name, c in [
             (self.t1_t, self.t1_v, self.leader_label, 'tab:blue'),
             (self.t2_t, self.t2_v, self.follower_label, 'tab:orange'),
         ]:
             self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('|V| body (m/s)')
-        ax.set_title('Body-frame |V|')
+        ax.set_xlabel('Time (s)'); ax.set_ylabel(f'|V| {velocity_frame} (m/s)')
+        ax.set_title(f'{velocity_frame} |V|')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
 
         # ---- 子图 5: X over time ----
@@ -492,16 +683,24 @@ class TrajectoryRecorder(Node):
         rclpy.shutdown()
 
 
+def cleanup_node(node):
+    """清理已创建节点，并在仍有效时关闭 ROS 上下文。"""
+    if node is not None:
+        node.destroy_node()
+    if rclpy.ok():
+        rclpy.shutdown()
+
+
 def main():
     rclpy.init()
-    node = TrajectoryRecorder()
+    node = None
     try:
+        node = TrajectoryRecorder()
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        cleanup_node(node)
 
 
 if __name__ == '__main__':

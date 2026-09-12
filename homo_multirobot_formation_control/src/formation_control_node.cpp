@@ -20,6 +20,7 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include "homo_multirobot_formation_control/yaw_pd_controller.hpp"
 
 using namespace formation_control;
 
@@ -42,7 +43,7 @@ FormationController::FormationController()
   double mass   = declare_parameter("mass",    8.0);
   double omega_d = declare_parameter("omega_d", 1.5);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
-  K_ff_         = declare_parameter("K_ff",    1.0);
+  Kd_yaw_       = declare_parameter("Kd_yaw",  1.0);
   control_rate_ = declare_parameter("control_rate", 20.0);
 
   double wheel_radius    = declare_parameter("wheel_radius",    0.03);
@@ -188,10 +189,10 @@ void FormationController::timer_cb()
   if (!leader_ok_ || !follower_ok_) return;
 
   Vec4d x1, x2;
-  double leader_yaw, follower_yaw, leader_az;
+  double leader_yaw, follower_yaw, leader_az, follower_az;
   if (state_source_ == "ekf_tf") {
     if (!ekf_to_map(*tf_buffer_, leader_ns_, leader_odom_, x1, leader_yaw, leader_az) ||
-        !ekf_to_map(*tf_buffer_, follower_ns_, follower_odom_, x2, follower_yaw, leader_az)) return;
+        !ekf_to_map(*tf_buffer_, follower_ns_, follower_odom_, x2, follower_yaw, follower_az)) return;
   } else {
     const auto t = now();
     if (!leader_mocap_pose_ || !leader_mocap_twist_ || !follower_mocap_pose_ || !follower_mocap_twist_ ||
@@ -208,6 +209,7 @@ void FormationController::timer_cb()
     leader_yaw = msg_yaw(leader_mocap_pose_->pose.orientation);
     follower_yaw = msg_yaw(follower_mocap_pose_->pose.orientation);
     leader_az = leader_mocap_twist_->twist.angular.z;
+    follower_az = follower_mocap_twist_->twist.angular.z;
   }
 
   // 延迟初始化: 收到第一帧完整数据后初始化控制器
@@ -236,11 +238,9 @@ void FormationController::timer_cb()
   cmd.linear.x = vx_clamped;
   cmd.linear.y = vy_clamped;
 
-  // 偏航控制: 比例（归一化后）+ 前馈
-  double raw_err   = leader_yaw - follower_yaw;
-  double norm_err  = std::atan2(std::sin(raw_err), std::cos(raw_err));
-  cmd.angular.z = std::clamp(norm_err * Kp_yaw_ + leader_az * K_ff_,
-                              -max_angular_vel_, max_angular_vel_);
+  cmd.angular.z = formation_control::yaw_pd_command(
+      leader_yaw, follower_yaw, leader_az, follower_az,
+      Kp_yaw_, Kd_yaw_, max_angular_vel_);
 
   // 全向轮运动学约束（轮速 + 加速度限幅）
   double dt = 1.0 / control_rate_;

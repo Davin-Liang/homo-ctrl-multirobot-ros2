@@ -32,7 +32,7 @@ private:
   std::string leader_ns_, follower_ns_;
   std::string state_source_;
   double mocap_state_timeout_ = 0.10;
-  double Kp_yaw_, K_ff_;
+  double Kp_yaw_, Kd_yaw_;
   double max_linear_vel_, max_angular_vel_;
   double control_rate_;
 

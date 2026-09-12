@@ -13,9 +13,9 @@
     # map 坐标系固定离散多边形的候选顶点数。
     m_p: 4
     # Leader 到 Follower 的离散编队半径（m）。
-    radius: 2.0
+    radius: 1.0
     # 切换至新顶点所需的最小误差收益（m）。
-    tol: 0.1
+    tol: 0.2
     # 控制器模型质量调参值，非实际质量。
     mass: 2.0
     # 偏航转动惯量调参值。
@@ -25,9 +25,9 @@
     # 控制循环频率（Hz）。
     control_rate: 20.0
     # HPC 变换系数下限。
-    hpc_c_min: 0.5
+    hpc_c_min: 0.1
     # 初始 LPC 极点下界。
-    initial_min_lambda: 1.0
+    initial_min_lambda: 1.5
     # 平移等效电机时间常数（s）。
     tau: 0.43
     # 偏航等效电机时间常数（s）。
@@ -41,15 +41,15 @@
     # 单个车轮最大角速度（rad/s）。
     wheel_max_omega: 20.0
     # 最大线加速度（m/s²）。
-    max_linear_accel: 0.5
+    max_linear_accel: 0.6
     # 最大角加速度（rad/s²）。
     max_angular_accel: 1.0
     # 最大线速度（m/s）。
-    max_linear_vel: 0.5
+    max_linear_vel: 0.45
     # 最大角速度（rad/s）。
-    max_angular_vel: 0.5
+    max_angular_vel: 0.8
     # 非零命令最小速度（m/s）；0 表示关闭。
-    min_cmd_vel: 0.0
+    min_cmd_vel: 0.07
     # 是否启用仿真电机延迟。
     use_motor_delay: false
     # 电机一阶滞后时间常数（s）。
@@ -57,4 +57,4 @@
     # 传输延迟（s）。
     transport_delay: 0.22
     # 延迟节点最大线加速度（m/s²）。
-    delay_max_accel: 0.5
+    delay_max_accel: 0.6

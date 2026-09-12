@@ -44,7 +44,7 @@ def generate_launch_description():
 
     # Yaw control
     Kp_yaw = LaunchConfiguration("Kp_yaw")
-    K_ff = LaunchConfiguration("K_ff")
+    Kd_yaw = LaunchConfiguration("Kd_yaw")
 
     # Velocity limits
     max_linear_vel = LaunchConfiguration("max_linear_vel")
@@ -98,7 +98,7 @@ def generate_launch_description():
             "Td": Td,
             "omega_d": omega_d,
             "Kp_yaw": Kp_yaw,
-            "K_ff": K_ff,
+            "Kd_yaw": Kd_yaw,
             "wheel_radius": wheel_radius,
             "base_radius": base_radius,
             "max_linear_vel": max_linear_vel,
@@ -166,8 +166,8 @@ def generate_launch_description():
                               description="Desired closed-loop bandwidth (rad/s)"),
         DeclareLaunchArgument("Kp_yaw", default_value="4.0",
                               description="Proportional yaw gain"),
-        DeclareLaunchArgument("K_ff", default_value="1.0",
-                              description="Feedforward yaw gain"),
+        DeclareLaunchArgument("Kd_yaw", default_value="1.0",
+                              description="Yaw derivative gain on leader-follower angular velocity error"),
         DeclareLaunchArgument("control_rate", default_value="20.0",
                               description="Control loop frequency (Hz)"),
         DeclareLaunchArgument("use_hpc", default_value="true",

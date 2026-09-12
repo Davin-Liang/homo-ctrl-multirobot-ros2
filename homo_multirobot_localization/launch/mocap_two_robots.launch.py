@@ -16,6 +16,7 @@ def generate_launch_description():
     robot2_rigid_name = LaunchConfiguration("robot2_rigid_name")
     timeout = LaunchConfiguration("state_timeout")
     share = FindPackageShare("homo_multirobot_localization")
+    rviz_config = PathJoinSubstitution([share, "rviz", "mocap_two_robots.rviz"])
 
     bridge = Node(
         package="vrpn_listener", executable="vrpn_listener", name="vrpn_listener", output="screen",
@@ -39,11 +40,15 @@ def generate_launch_description():
             "state_timeout": timeout,
         }],
     )
+    rviz = Node(
+        package="rviz2", executable="rviz2", name="rviz2", output="screen",
+        arguments=["-d", rviz_config],
+    )
     return LaunchDescription([
         DeclareLaunchArgument("server", description="VRPN server IP or hostname"),
         DeclareLaunchArgument("port", default_value="3883"),
         DeclareLaunchArgument("robot1_rigid_name", default_value="robot1"),
         DeclareLaunchArgument("robot2_rigid_name", default_value="robot2"),
         DeclareLaunchArgument("state_timeout", default_value="0.10"),
-        bridge, robot1, robot2,
+        bridge, robot1, robot2, rviz,
     ])
