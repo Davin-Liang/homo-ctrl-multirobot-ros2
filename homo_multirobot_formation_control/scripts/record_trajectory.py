@@ -22,7 +22,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
-from rcl_interfaces.srv import GetParameters
+from rcl_interfaces.srv import GetParameters, ListParameters
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry
 import tf2_ros
@@ -38,13 +38,17 @@ import math
 import yaml
 from datetime import datetime
 
-# 需要自动读取的控制器参数
-CTRL_PARAM_NAMES = ['mass', 'radius', 'omega_d', 'control_rate',
-                    'm_p', 'Kp_yaw', 'K_ff', 'tol',
-                    'Kd_yaw',
-                    'tau', 'hpc_c_min', 'initial_min_lambda',
-                    'switch_min_lambda', 'leader_vel_lpf_tau', 'Td',
-                    'max_linear_accel']
+PARAMETER_VALUE_FIELDS = {
+    1: 'bool_value',
+    2: 'integer_value',
+    3: 'double_value',
+    4: 'string_value',
+    5: 'byte_array_value',
+    6: 'bool_array_value',
+    7: 'integer_array_value',
+    8: 'double_array_value',
+    9: 'string_array_value',
+}
 
 VALID_STATE_SOURCES = ('ekf_tf', 'mocap')
 
@@ -129,6 +133,15 @@ def merge_parameter_overrides(defaults, overrides):
     return values
 
 
+def parameter_value_to_python(parameter_value):
+    """将 ROS 参数值转换为 YAML 可写入的 Python 值。"""
+    field = PARAMETER_VALUE_FIELDS.get(parameter_value.type)
+    if field is None:
+        return None
+    value = getattr(parameter_value, field)
+    return list(value) if parameter_value.type >= 5 else value
+
+
 def wait_for_controller_service(client, service_name, logger):
     """等待控制器参数服务就绪，ROS 关闭时停止等待。"""
     while rclpy.ok():
@@ -157,6 +170,31 @@ def wait_for_controller_parameters(node, client, service_name, logger):
             if future is not None and not future.done():
                 future.cancel()
             logger.info(f'等待控制器参数响应: {service_name}')
+
+        if not rclpy.ok() or not wait_for_controller_service(client, service_name, logger):
+            return None
+    return None
+
+
+def wait_for_controller_parameter_names(node, client, service_name, logger):
+    """等待并读取控制器公开的全部参数名称。"""
+    while rclpy.ok():
+        future = None
+        try:
+            req = ListParameters.Request()
+            req.depth = 0
+            future = client.call_async(req)
+            rclpy.spin_until_future_complete(node, future, timeout_sec=2.0)
+            if future.done() and future.result() is not None:
+                return sorted(set(future.result().result.names))
+        except Exception as exc:
+            if future is not None and not future.done():
+                future.cancel()
+            logger.info(f'等待控制器参数名称响应: {service_name} ({exc})')
+        else:
+            if future is not None and not future.done():
+                future.cancel()
+            logger.info(f'等待控制器参数名称响应: {service_name}')
 
         if not rclpy.ok() or not wait_for_controller_service(client, service_name, logger):
             return None

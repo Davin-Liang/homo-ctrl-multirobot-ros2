@@ -32,6 +32,24 @@ def test_explicit_overrides_win_over_yaml_defaults():
     assert values == {"duration": 60.0, "mode": "sim"}
 
 
+@pytest.mark.parametrize(("parameter_value", "expected"), [
+    (SimpleNamespace(type=1, bool_value=True), True),
+    (SimpleNamespace(type=2, integer_value=20), 20),
+    (SimpleNamespace(type=3, double_value=0.43), 0.43),
+    (SimpleNamespace(type=4, string_value="mocap"), "mocap"),
+    (SimpleNamespace(type=6, bool_array_value=[True, False]), [True, False]),
+    (SimpleNamespace(type=7, integer_array_value=[1, 4]), [1, 4]),
+    (SimpleNamespace(type=8, double_array_value=[0.1, 0.2]), [0.1, 0.2]),
+    (SimpleNamespace(type=9, string_array_value=["a", "b"]), ["a", "b"]),
+])
+def test_parameter_value_to_python(parameter_value, expected):
+    assert module.parameter_value_to_python(parameter_value) == expected
+
+
+def test_parameter_value_to_python_ignores_not_set_value():
+    assert module.parameter_value_to_python(SimpleNamespace(type=0)) is None
+
+
 def test_invalid_yaml_structure_raises_value_error(tmp_path):
     path = tmp_path / "invalid.yaml"
     path.write_text("ros__parameters: {}\n", encoding="utf-8")
