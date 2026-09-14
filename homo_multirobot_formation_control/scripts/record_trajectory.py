@@ -142,6 +142,16 @@ def parameter_value_to_python(parameter_value):
     return list(value) if parameter_value.type >= 5 else value
 
 
+def controller_parameter_mapping(names, values):
+    """按参数名配对并忽略未设置的 ROS 参数值。"""
+    params = {}
+    for name, value in zip(names, values):
+        converted = parameter_value_to_python(value)
+        if converted is not None:
+            params[name] = converted
+    return params
+
+
 def wait_for_controller_service(client, service_name, logger):
     """等待控制器参数服务就绪，ROS 关闭时停止等待。"""
     while rclpy.ok():
@@ -151,13 +161,13 @@ def wait_for_controller_service(client, service_name, logger):
     return False
 
 
-def wait_for_controller_parameters(node, client, service_name, logger):
+def wait_for_controller_parameters(node, client, service_name, logger, names):
     """等待控制器参数响应，ROS 关闭时停止等待。"""
     while rclpy.ok():
         future = None
         try:
             req = GetParameters.Request()
-            req.names = list(CTRL_PARAM_NAMES)
+            req.names = list(names)
             future = client.call_async(req)
             rclpy.spin_until_future_complete(node, future, timeout_sec=2.0)
             if future.done() and future.result() is not None:
@@ -250,8 +260,6 @@ class TrajectoryRecorder(Node):
         self.delay_params = self._query_delay_node_params()
         if not self.tag:
             self.tag = self._build_auto_tag()
-        self.ctrl_title = self._build_params_title()
-
         # 输出到 {out_dir}/{mode}/ 子目录
         out_subdir = os.path.join(self.out_dir, self.mode)
         os.makedirs(out_subdir, exist_ok=True)
@@ -310,24 +318,27 @@ class TrajectoryRecorder(Node):
             return {}
 
         node_path = self.follower_ns.rstrip('/') + '/' + self.ctrl_node_name
+        list_svc_name = node_path + '/list_parameters'
+        list_client = self.create_client(ListParameters, list_svc_name)
+
+        if not wait_for_controller_service(
+                list_client, list_svc_name, self.get_logger()):
+            return {}
+
+        names = wait_for_controller_parameter_names(
+            self, list_client, list_svc_name, self.get_logger())
+        if not names:
+            return {}
+
         svc_name = node_path + '/get_parameters'
         client = self.create_client(GetParameters, svc_name)
-
         if not wait_for_controller_service(client, svc_name, self.get_logger()):
             return {}
 
         result = wait_for_controller_parameters(
-            self, client, svc_name, self.get_logger())
+            self, client, svc_name, self.get_logger(), names)
         if result is not None:
-            params = {}
-            for name, pv in zip(CTRL_PARAM_NAMES, result.values):
-                if pv.type == 3:       # PARAMETER_DOUBLE
-                    val = pv.double_value
-                elif pv.type == 2:     # PARAMETER_INTEGER
-                    val = pv.integer_value
-                else:
-                    continue
-                params[name] = val
+            params = controller_parameter_mapping(names, result.values)
             if params:
                 self.get_logger().info(f'已读取控制器参数: {params}')
             return params
@@ -392,26 +403,6 @@ class TrajectoryRecorder(Node):
         if abs(v - round(v)) < 0.01:
             return str(int(round(v)))
         return f'{v:.1f}'
-
-    def _build_params_title(self):
-        """生成控制器参数摘要字符串，画在图上。"""
-        p = self.ctrl_params
-        if not p:
-            return ''
-        names = ['mass', 'radius', 'omega_d', 'm_p', 'control_rate', 'Kp_yaw', 'K_ff', 'Kd_yaw', 'tol',
-                 'tau', 'hpc_c_min', 'initial_min_lambda', 'switch_min_lambda',
-                 'leader_vel_lpf_tau', 'Td']
-        parts = []
-        for n in names:
-            if n in p:
-                parts.append(f'{n}={self._v(p, n)}')
-        # 仿真延迟参数 (存在才加)
-        dp = self.delay_params
-        if dp:
-            for n in ['motor_tau', 'transport_delay', 'max_accel']:
-                if n in dp:
-                    parts.append(f'{n}={dp[n]}')
-        return '  |  '.join(parts)
 
     def _odom_to_map(self, ns, msg):
         odom_frame = ns.lstrip('/') + '_odom'
@@ -699,12 +690,6 @@ class TrajectoryRecorder(Node):
         ax.set_xlabel('Time (s)'); ax.set_ylabel('Y (m)')
         ax.set_title('Y over time')
         ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
-
-        # 控制器参数显示在图最上方
-        if self.ctrl_title:
-            fig.suptitle(self.ctrl_title, fontsize=9, family='monospace',
-                         y=0.99, bbox=dict(boxstyle='round,pad=0.3',
-                                          facecolor='lightyellow', alpha=0.9))
 
         png_path = os.path.join(experiment_dir, 'check.png')
         plt.tight_layout(); plt.savefig(png_path, dpi=150); plt.close()

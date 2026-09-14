@@ -50,6 +50,55 @@ def test_parameter_value_to_python_ignores_not_set_value():
     assert module.parameter_value_to_python(SimpleNamespace(type=0)) is None
 
 
+def test_controller_parameter_mapping_keeps_all_set_values():
+    values = [
+        SimpleNamespace(type=1, bool_value=True),
+        SimpleNamespace(type=3, double_value=0.43),
+        SimpleNamespace(type=4, string_value="ekf_tf"),
+        SimpleNamespace(type=0),
+    ]
+
+    assert module.controller_parameter_mapping(
+        ["use_hpc", "tau", "state_source", "unset"], values) == {
+            "state_source": "ekf_tf",
+            "tau": 0.43,
+            "use_hpc": True,
+        }
+
+
+def test_controller_parameter_mapping_handles_empty_parameter_list():
+    assert module.controller_parameter_mapping([], []) == {}
+
+
+def test_query_controller_params_enumerates_all_parameter_names(monkeypatch):
+    list_client = object()
+    get_client = object()
+    recorder = SimpleNamespace(
+        ctrl_node_name="formation_control_node_4d_artstein",
+        follower_ns="/robot2",
+        create_client=lambda service_type, name: (
+            list_client if name.endswith("/list_parameters") else get_client),
+        get_logger=lambda: FakeLogger(),
+    )
+    monkeypatch.setattr(module, "wait_for_controller_service", lambda *args: True)
+    monkeypatch.setattr(
+        module, "wait_for_controller_parameter_names",
+        lambda *args: ["state_source", "tau", "use_hpc"])
+    monkeypatch.setattr(
+        module, "wait_for_controller_parameters",
+        lambda *args: SimpleNamespace(values=[
+            SimpleNamespace(type=4, string_value="ekf_tf"),
+            SimpleNamespace(type=3, double_value=0.43),
+            SimpleNamespace(type=1, bool_value=True),
+        ]))
+
+    assert module.TrajectoryRecorder._query_controller_params(recorder) == {
+        "state_source": "ekf_tf",
+        "tau": 0.43,
+        "use_hpc": True,
+    }
+
+
 def test_invalid_yaml_structure_raises_value_error(tmp_path):
     path = tmp_path / "invalid.yaml"
     path.write_text("ros__parameters: {}\n", encoding="utf-8")
@@ -236,8 +285,9 @@ def test_wait_for_controller_parameters_retries_after_timeout(monkeypatch):
     logger = FakeLogger()
 
     assert module.wait_for_controller_parameters(
-        object(), client, "/robot2/controller/get_parameters", logger) == "response"
-    assert client.request_names == [module.CTRL_PARAM_NAMES, module.CTRL_PARAM_NAMES]
+        object(), client, "/robot2/controller/get_parameters", logger,
+        ["tau", "use_hpc"]) == "response"
+    assert client.request_names == [["tau", "use_hpc"], ["tau", "use_hpc"]]
     assert timed_out.cancel_calls == 1
     assert len(logger.messages) == 1
 
@@ -249,7 +299,8 @@ def test_wait_for_controller_parameters_stops_when_ros_shuts_down(monkeypatch):
     client = FakeParameterClient([FakeFuture(False, None)])
 
     assert module.wait_for_controller_parameters(
-        object(), client, "/robot2/controller/get_parameters", FakeLogger()) is None
+        object(), client, "/robot2/controller/get_parameters", FakeLogger(),
+        ["tau"]) is None
     assert len(client.request_names) == 1
 
 
@@ -260,5 +311,6 @@ def test_wait_for_controller_parameters_retries_after_request_error(monkeypatch)
         RuntimeError("service vanished"), FakeFuture(True, "response")])
 
     assert module.wait_for_controller_parameters(
-        object(), client, "/robot2/controller/get_parameters", FakeLogger()) == "response"
+        object(), client, "/robot2/controller/get_parameters", FakeLogger(),
+        ["tau"]) == "response"
     assert len(client.request_names) == 2
