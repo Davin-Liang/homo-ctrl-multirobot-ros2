@@ -11,7 +11,7 @@
     # 安全圆上的离散编队点数量。
     m_p: 4
     # 期望编队圆半径（m）。
-    radius: 1.0
+    radius: 2.0
     # 编队点切换迟滞阈值（m）。
     tol: 0.2
     # 双积分器模型质量调参值，非实际质量。
@@ -63,10 +63,10 @@
     # 是否启用延迟相关径向安全限制。
     enable_radial_safety: false
     # 是否注入仿真电机延迟。
-    use_motor_delay: false
+    use_motor_delay: true
     # 电机一阶滞后时间常数（s）。
     motor_tau: 0.43
     # 传输延迟（s）。
-    transport_delay: 0.0
+    transport_delay: 0.22
     # 延迟节点最大线加速度（m/s²）。
     delay_max_accel: 0.6
