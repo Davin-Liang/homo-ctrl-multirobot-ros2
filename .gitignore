@@ -16,6 +16,3 @@ log/
 
 # Local Git worktrees
 .worktrees/
-
-# PDF papers
-robot_traj/

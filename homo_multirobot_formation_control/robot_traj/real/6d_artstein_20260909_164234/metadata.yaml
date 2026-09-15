@@ -1,0 +1,25 @@
+schema_version: 1
+experiment_id: "6d_artstein"
+trial_id: "trial_01"
+platform: "real"
+mode: "real"
+controller: "6d_artstein"
+recording:
+  duration_s: 45.0
+  leader_ns: "/robot1"
+  follower_ns: "/robot2"
+  state_source: "mocap"
+  leader_topic: "/robot1/mocap/pose"
+  follower_topic: "/robot2/mocap/pose"
+  leader_twist_topic: "/robot1/mocap/twist"
+  follower_twist_topic: "/robot2/mocap/twist"
+  coordinate_frame: "map"
+  ideal_radius_m: 1.0
+controller_parameters:
+delay_parameters:
+target_index: null
+desired_follower_x: null
+desired_follower_y: null
+files:
+  csv: "raw.csv"
+  check_plot: "check.png"

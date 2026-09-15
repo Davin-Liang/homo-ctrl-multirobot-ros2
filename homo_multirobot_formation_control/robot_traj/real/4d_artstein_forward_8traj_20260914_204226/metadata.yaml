@@ -1,0 +1,63 @@
+schema_version: 1
+experiment_id: "4d_artstein_no_forward_8traj"
+trial_id: "trial_02"
+platform: "real"
+mode: "real"
+controller: "4d_artstein_no_forward"
+recording:
+  duration_s: 45.0
+  leader_ns: "/robot1"
+  follower_ns: "/robot2"
+  state_source: "mocap"
+  leader_topic: "/robot1/mocap/pose"
+  follower_topic: "/robot2/mocap/pose"
+  leader_twist_topic: "/robot1/mocap/twist"
+  follower_twist_topic: "/robot2/mocap/twist"
+  coordinate_frame: "map"
+  ideal_radius_m: 2.0
+controller_parameters:
+  Kd_yaw: 1.0
+  Kp_yaw: 2.0
+  Td: 0.22
+  base_radius: 0.11
+  control_rate: 20.0
+  enable_leader_cmd_feedforward: true
+  enable_radial_safety: false
+  follower_ns: "/robot2"
+  hpc_c_min: 0.1
+  initial_min_lambda: 1.5
+  leader_cmd_delta_lpf_tau: 0.1
+  leader_cmd_timeout: 0.15
+  leader_ns: "/robot1"
+  leader_vel_lpf_tau: 0.0
+  m_p: 4
+  mass: 2.0
+  max_angular_accel: 1.0
+  max_angular_vel: 0.8
+  max_linear_accel: 0.6
+  max_linear_vel: 0.45
+  min_cmd_vel: 0.07
+  mocap_state_timeout: 0.1
+  omega_d: 0.7
+  qos_overrides./parameter_events.publisher.depth: 1000
+  qos_overrides./parameter_events.publisher.durability: "volatile"
+  qos_overrides./parameter_events.publisher.history: "keep_last"
+  qos_overrides./parameter_events.publisher.reliability: "reliable"
+  radial_safety_effective_delay: -1.0
+  radial_safety_max_decel: 0.0
+  radius: 1.0
+  state_source: "mocap"
+  switch_min_lambda: 4.0
+  tau: 0.43
+  tol: 0.2
+  use_hpc: true
+  use_sim_time: false
+  wheel_max_omega: 20.0
+  wheel_radius: 0.03
+delay_parameters:
+target_index: null
+desired_follower_x: null
+desired_follower_y: null
+files:
+  csv: "raw.csv"
+  check_plot: "check.png"
