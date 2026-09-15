@@ -21,13 +21,13 @@ public:
   // m_p: 安全编队点数量   radius: 编队圆半径 (m)
   // tol: 编队点切换容差 (m)   mass: 双重积分器模型质量（调参用，非物理质量）
   LpcController(int m_p = 4, double radius = 2.0, double tol = 0.1, double mass = 2.0,
-               double omega_d = 1.5, bool use_hpc = true, double hpc_c_min = 0.5,
-               double control_period = 0.1, double initial_min_lambda = 0.0,
-               double switch_min_lambda = 0.0)
-    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), omega_d_(omega_d), use_hpc_(use_hpc),
+               bool use_hpc = true, double hpc_c_min = 0.5,
+               double control_period = 0.1, double initial_min_lambda = 1.5,
+               double switch_min_lambda = 4.0)
+    : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), use_hpc_(use_hpc),
       hpc_c_min_(hpc_c_min), h_(control_period),
-      initial_min_lambda_(initial_min_lambda > 0.0 ? initial_min_lambda : omega_d * mass),
-      switch_min_lambda_(switch_min_lambda > 0.0 ? switch_min_lambda : omega_d * mass)
+      initial_min_lambda_(initial_min_lambda),
+      switch_min_lambda_(switch_min_lambda)
   {
     // 2D 双重积分器: x = [px, py, vx, vy]
     A_ << 0, 0, 1, 0,
@@ -262,7 +262,7 @@ private:
   // 自适应线性增益计算（齐次控制论文 Lemma 1 的实现）。
   //
   // K = [K1, K2]，K1 作用于位置，K2 作用于速度。
-  // 防超调设计: 特征值随 omega_d · mass 自适应缩放，
+  // 防超调设计: 特征值随 min_lambda 自适应缩放，
   // e_i_v / e_i_p 比值被 clamp 防止噪声下增益爆炸。
   // --------------------------------------------------------------------------
   Mat24d calculate_klin(const Vec4d& e, double min_lambda)
@@ -297,7 +297,6 @@ private:
   double radius_;    // 编队圆半径 (m)
   double tol_;       // 切换滞后容差 (m)
   double mass_;      // 模型质量（调参）
-  double omega_d_;   // 期望阻尼带宽
 
   // ---- 系统模型（双重积分器） ----------------------------------------------
   Mat4d  A_;

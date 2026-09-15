@@ -369,7 +369,8 @@ class TrajectoryRecorder(Node):
         parts = []
         parts.append(f"m{self._v(p, 'mass')}")
         parts.append(f"r{self._v(p, 'radius')}")
-        parts.append(f"od{self._v(p, 'omega_d')}")
+        if 'omega_d' in p:
+            parts.append(f"od{self._v(p, 'omega_d')}")
         parts.append(f"f{self._v(p, 'control_rate')}")
         if 'tau' in p:
             parts.append(f"tau{self._v(p, 'tau')}")

@@ -76,6 +76,17 @@ class TestLaunchYamlDefaults(unittest.TestCase):
         self.assertIn('"Kd_yaw": Kd_yaw', source)
         self.assertNotIn("K_ff", source)
 
+    def test_4d_controllers_do_not_expose_omega_d(self):
+        for yaml_name, launch_name in (
+            ("formation_single_follower.yaml", "formation_single_follower.launch.py"),
+            ("formation_single_follower_4d_artstein.yaml",
+             "formation_single_follower_4d_artstein.launch.py"),
+        ):
+            with self.subTest(launch=launch_name):
+                self.assertNotIn("omega_d", yaml_parameter_names(CONFIG_DIR / yaml_name))
+                self.assertNotIn(
+                    "omega_d", (LAUNCH_DIR / launch_name).read_text(encoding="utf-8"))
+
     def test_original_4d_yaw_pd_uses_both_angular_velocities(self):
         source = (PACKAGE_DIR / "src" / "formation_control_node.cpp").read_text(
             encoding="utf-8")

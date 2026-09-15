@@ -261,7 +261,6 @@ $w_i$ 为近距离双曲线增长（上限 8x）的障碍物有效权重。
 | 参数                     | 类型   | 默认值 | 作用                           | 调大效果                       | 调小效果                                           |
 | ------------------------ | ------ | ------ | ------------------------------ | ------------------------------ | -------------------------------------------------- |
 | `mass`                 | double | 2.0    | 双重积分器模型的等效质量       | 增益增大，响应更快             | 增益减小，响应更慢                                 |
-| `omega_d`              | double | 0.7    | 期望阻尼带宽，决定最小收敛速度 | 响应更快但可能震荡             | 更平滑但跟踪滞后                                   |
 | `m_p`                  | int    | 4      | 安全编队点数量                 | 更多编队位置可选               | 编队选择少                                         |
 | `radius`               | double | 2.0    | 编队圆半径 (m)                 | 跟随距离增大                   | 跟随更近                                           |
 | `tol`                  | double | 0.1    | 编队点切换容差 (m)             | 不易频繁切换                   | 切换更灵敏                                         |
@@ -276,7 +275,7 @@ Artstein-HPC 的公平对比时，应在两条命令中显式指定相同的值�
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower.launch.py \
   leader_ns:=/robot1 follower_ns:=/robot2 \
-  mass:=2.0 omega_d:=0.7 control_rate:=20.0 \
+  mass:=2.0 control_rate:=20.0 \
   hpc_c_min:=0.1 initial_min_lambda:=1.0 switch_min_lambda:=4.0
 ```
 
@@ -513,7 +512,7 @@ ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/
 | `rate`        | 20.0   | 发布频率 (Hz)     |
 
 > 两个脚本均为纯开环速度指令，无位置反馈。`period` 控制指令频率而非实际轨迹周期。
-> Y 通道频率为 2ω（X 通道的 2 倍），对控制器带宽要求更高，需适当提高 `omega_d`。
+> Y 通道频率为 2ω（X 通道的 2 倍），对控制器带宽要求更高，需提高相应控制器的反馈增益或降低 Leader 速度。
 
 ### leader_circle_closed_loop — 延迟感知闭环圆轨迹
 
@@ -685,10 +684,10 @@ Leader 和 Follower 都已收到 pose 与 twist 后，记录器才开始计时�
 - `metadata.yaml` — 与本次数据对应的实验元数据
 
 **自动参数读取**：如果不指定 `tag`，脚本从 follower 命名空间下的控制器节点
-自动读取 `mass, radius, omega_d, control_rate, m_p, Kp_yaw, K_ff, Kd_yaw, tol`，
+自动读取 `mass, radius, control_rate, m_p, Kp_yaw, K_ff, Kd_yaw, tol`，
 以及适用时的 `hpc_c_min, initial_min_lambda, switch_min_lambda`，并：
 
-- 生成实验目录标签（如 `m8_r2_od1.5_f35_20260818_143000/`）
+- 生成实验目录标签（如 `m8_r2_f35_20260818_143000/`）
 - 在图上方黄框中显示完整参数组合
 
 CSV 包含时间、Leader/Follower 的 map 系位置、实际速度分量、实际速度模长和

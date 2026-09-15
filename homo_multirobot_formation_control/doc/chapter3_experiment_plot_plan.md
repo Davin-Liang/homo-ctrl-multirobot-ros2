@@ -48,7 +48,6 @@ follower 初始位置与初始速度
 编队点切换容差 tol
 控制频率 control_rate
 mass
-omega_d
 最大速度和最大加速度
 轮速约束
 hpc_c_min、initial_min_lambda、switch_min_lambda
@@ -106,7 +105,7 @@ C1 应使用原始 4D HPC 节点，并在数值仿真和 Gazebo 中关闭实际�
 C3 和 C4 除 HPC/LPC 开关外，其余参数必须一致：
 
 ```text
-tau, Td, radius, m_p, tol, mass, omega_d
+tau, Td, radius, m_p, tol, mass
 控制频率、最大速度、最大加速度、轮速约束
 min_cmd_vel
 初始状态、leader 轨迹、实验时长
@@ -124,7 +123,7 @@ C1/C2 的原始 4D 节点与 C3/C4 的 Artstein 节点现在都支持通过 laun
 
 ```text
 C1 与 C2：保证原始 4D 节点内部参数一致；
-C2 与 C3：除补偿层外，尽量对齐 mass、omega_d、编队几何、限幅和实际延迟；
+C2 与 C3：除补偿层外，尽量对齐 mass、lambda 下界、编队几何、限幅和实际延迟；
 C3 与 C4：严格只切换 use_hpc，其余 Artstein 参数完全一致。
 ```
 
@@ -132,7 +131,7 @@ C3 与 C4：严格只切换 use_hpc，其余 Artstein 参数完全一致。
 的共有参数默认值：
 
 ```text
-mass=2.0，omega_d=0.7，hpc_c_min=0.1
+mass=2.0，hpc_c_min=0.1
 initial_min_lambda=1.0，switch_min_lambda=4.0
 motor_tau=0.43，transport_delay=0.0，delay_max_accel=0.25
 ```

@@ -41,7 +41,6 @@ FormationController::FormationController()
   double radius = declare_parameter("radius",  2.0);
   double tol    = declare_parameter("tol",     0.1);
   double mass   = declare_parameter("mass",    8.0);
-  double omega_d = declare_parameter("omega_d", 1.5);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
   Kd_yaw_       = declare_parameter("Kd_yaw",  1.0);
   control_rate_ = declare_parameter("control_rate", 20.0);
@@ -57,11 +56,11 @@ FormationController::FormationController()
 
   bool use_hpc = declare_parameter("use_hpc", true);
   double hpc_c_min = declare_parameter("hpc_c_min", 0.5);
-  double initial_min_lambda = declare_parameter("initial_min_lambda", omega_d * mass);
-  double switch_min_lambda = declare_parameter("switch_min_lambda", omega_d * mass);
+  double initial_min_lambda = declare_parameter("initial_min_lambda", 1.5);
+  double switch_min_lambda = declare_parameter("switch_min_lambda", 4.0);
 
   ctrl_ = std::make_unique<LpcController>(
-    m_p, radius, tol, mass, omega_d, use_hpc, hpc_c_min, 0.1,
+    m_p, radius, tol, mass, use_hpc, hpc_c_min, 0.1,
     initial_min_lambda, switch_min_lambda);
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius,

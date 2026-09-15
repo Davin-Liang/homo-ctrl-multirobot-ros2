@@ -51,6 +51,16 @@ def test_explicit_overrides_win_over_yaml_defaults():
     assert values == {"duration": 60.0, "mode": "sim"}
 
 
+def test_auto_tag_omits_omega_when_controller_does_not_publish_it():
+    recorder = SimpleNamespace(
+        ctrl_params={"mass": 2.0, "radius": 1.0, "control_rate": 10.0},
+        delay_params={},
+    )
+    recorder._v = module.TrajectoryRecorder._v
+
+    assert module.TrajectoryRecorder._build_auto_tag(recorder) == "m2_r1_f10"
+
+
 @pytest.mark.parametrize(("parameter_value", "expected"), [
     (SimpleNamespace(type=1, bool_value=True), True),
     (SimpleNamespace(type=2, integer_value=20), 20),

@@ -63,7 +63,7 @@ lpc_hpc_distance_square % 4D 离散多边形 (原版论文算法)
 |------|------|---------|
 | MATLAB 原版 | `a = max(-m·ev/ep, 1)` | 自适应, 无上界 → 近圆时爆炸 |
 | MATLAB 平滑混合 | `a = w·a_adaptive + (1-w)·4` | 自适应, 近圆平滑退化 |
-| C++ ω_d | `a = max(clamp(-m·ev/ep, ±ω_d·m), ω_d·m)` | **恒定** = ω_d·m |
+| C++ LPC | 初始化/目标切换时以 `min_lambda` 约束极点 | 稳定的离散增益 |
 
 ### 关键参数
 
@@ -74,7 +74,7 @@ lpc_hpc_distance_square % 4D 离散多边形 (原版论文算法)
 | h | 0.01 s | 仿真步长 (100 Hz) |
 | Tmax | 30 s | 仿真时长 |
 | gain_min / gain_max | 4 / 40 | MATLAB 自适应增益范围 |
-| omega_d | 1.5 | C++ 阻尼带宽 |
+| initial_min_lambda / switch_min_lambda | 1.5 / 4.0 | C++ LPC 初始化/切换时的极点下界 |
 | noise_pos_std | 0.0 | 位置测量噪声 (m) |
 | noise_vel_std | 0.0 | 速度测量噪声 (m/s) |
 

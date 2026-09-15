@@ -20,8 +20,6 @@
     tau: 0.43
     # 执行器纯滞后（s）；0 可关闭 Artstein 补偿。
     Td: 0.22
-    # 期望闭环带宽（rad/s）。
-    omega_d: 0.7
     # 偏航比例增益。
     Kp_yaw: 2.0
     # 偏航微分增益（Leader-Follower 相对角速度误差）。

@@ -105,7 +105,6 @@ FormationController4DArtstein::FormationController4DArtstein()
   double tol    = declare_parameter("tol",     0.1);
   double mass   = declare_parameter("mass",    1.0);   // 4D 中为速度通道等效增益
   double tau    = declare_parameter("tau",     0.43);
-  double omega_d = declare_parameter("omega_d", 0.7);
   Kp_yaw_       = declare_parameter("Kp_yaw",  4.0);
   Kd_yaw_       = declare_parameter("Kd_yaw",  1.0);
   control_rate_ = declare_parameter("control_rate", 20.0);
@@ -147,7 +146,7 @@ FormationController4DArtstein::FormationController4DArtstein()
 
   // ---- 控制器 ---------------------------------------------------------------
   ctrl_ = std::make_unique<LpcController4DArtstein>(m_p, radius, tol, mass, tau,
-                                                    omega_d, use_hpc,
+                                                    use_hpc,
                                                     1.0 / control_rate_,
                                                     hpc_c_min,
                                                     Td_,

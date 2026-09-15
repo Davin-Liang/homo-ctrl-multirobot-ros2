@@ -40,7 +40,6 @@ def generate_launch_description():
     mass = LaunchConfiguration("mass")
     tau = LaunchConfiguration("tau")
     Td = LaunchConfiguration("Td")
-    omega_d = LaunchConfiguration("omega_d")
 
     # Yaw control
     Kp_yaw = LaunchConfiguration("Kp_yaw")
@@ -96,7 +95,6 @@ def generate_launch_description():
             "mass": mass,
             "tau": tau,
             "Td": Td,
-            "omega_d": omega_d,
             "Kp_yaw": Kp_yaw,
             "Kd_yaw": Kd_yaw,
             "wheel_radius": wheel_radius,
@@ -165,8 +163,6 @@ def generate_launch_description():
                                           "Artstein reduction transforms the input-delay "
                                           "system into an equivalent delay-free system. "
                                           "Set 0.0 to disable Artstein compensation."),
-        DeclareLaunchArgument("omega_d", default_value="0.7",
-                              description="Desired closed-loop bandwidth (rad/s)"),
         DeclareLaunchArgument("Kp_yaw", default_value="4.0",
                               description="Proportional yaw gain"),
         DeclareLaunchArgument("Kd_yaw", default_value="1.0",

@@ -25,12 +25,12 @@ class LpcController4DArtstein {
 public:
   LpcController4DArtstein(int m_p = 4, double radius = 2.0, double tol = 0.1,
                           double mass = 2.0, double tau_nominal = 0.43,
-                          double omega_d = 0.7, bool use_hpc = true,
+                          bool use_hpc = true,
                           double control_period = 0.05, double hpc_c_min = 0.1,
                           double Td = 0.22,
                           double initial_min_lambda = 1.0,
                           double switch_min_lambda = 4.0)
-    : hpc_(m_p, radius, tol, mass, omega_d, use_hpc, hpc_c_min, control_period,
+    : hpc_(m_p, radius, tol, mass, use_hpc, hpc_c_min, control_period,
            initial_min_lambda, switch_min_lambda),
       tau_(tau_nominal), h_(control_period), Td_(Td)
   {
