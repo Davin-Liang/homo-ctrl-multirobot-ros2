@@ -97,6 +97,8 @@ class ReportContentTest(unittest.TestCase):
         self.assertIn(builder.LPC_SAFETY_BOUNDARY, full_text)
         self.assertIn("Follower 的前向预测", full_text)
         self.assertIn("Leader 命令速度前馈", full_text)
+        self.assertIn("Artstein 积分项将历史控制输入纳入状态", full_text)
+        self.assertIn("预测状态而非滞后测量状态", full_text)
         for banned in builder.BANNED_TERMS:
             self.assertNotIn(banned, full_text)
 

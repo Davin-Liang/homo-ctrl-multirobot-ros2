@@ -63,7 +63,9 @@ def report_paragraphs():
         "两台 mini_omni 全向移动机器人采用动捕状态源，Leader 的轨迹由速度命令驱动，"
         "Follower 依据相对编队误差输出速度命令。控制频率为 20 Hz，记录时长约 45 s。",
         "Follower 的前向预测使用 Follower 当前动捕状态、最近输出命令和电机时间常数 tau "
-        "预测其短时状态，以补偿执行器响应；它与 Leader 命令速度前馈是两条不同支路。"
+        "预测其短时状态，以补偿执行器响应。其原理是 Artstein 积分项将历史控制输入纳入状态，"
+        "先补偿输入纯滞后，再将状态前向预测到控制时刻，使 HPC/LPC 针对预测状态而非滞后测量状态"
+        "计算控制量；它与 Leader 命令速度前馈是两条不同支路。"
         "Leader 命令速度前馈为可选的 Leader cmd_vel 速度增量支路，直接叠加到控制输出，"
         "不是 Follower 前向预测的开关。",
         "3. 实验过程与统一条件",
@@ -362,8 +364,9 @@ def build_presentation(input_dir, ppt_out):
     slide = presentation.slides.add_slide(blank)
     _add_ppt_title(slide, "控制方法：Artstein + Follower 前向预测 + HPC/LPC")
     _add_ppt_bullets(slide, [
-        "Artstein 变换用于处理输入延迟；HPC/LPC 为两类控制配置。",
+        "Artstein 积分项纳入历史控制输入以补偿纯滞后；HPC/LPC 为两类控制配置。",
         "Follower 前向预测：由 Follower 当前动捕状态、最近输出命令和电机时间常数 τ 预测短时状态，补偿执行器响应。",
+        "控制律针对预测状态而非滞后测量状态计算控制量。",
         "Leader 命令速度前馈：可选 Leader cmd_vel 速度增量支路，直接叠加到控制输出。",
         "两者是不同支路：前馈开/关不是 Follower 前向预测开/关。",
     ], font_size=17)
