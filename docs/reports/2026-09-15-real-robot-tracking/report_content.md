@@ -12,7 +12,9 @@
 
 为减小 Leader 速度变化时仅依赖位姿反馈带来的响应滞后，控制器可订阅 Leader 的 `cmd_vel`，提取相邻命令之间的速度增量并经低通处理后叠加到 Follower 的控制输出。当命令数据超时，前馈增量不再参与控制。本实验通过开启和关闭该前馈机制，考察其对实物跟踪误差与响应过程的影响。
 
-<!-- 图 1：assets/control_pipeline.png，标题：实物跟踪控制与数据流 -->
+![图 1：实物跟踪控制与数据流](assets/control_pipeline.png)
+
+*图 1　实物跟踪控制与数据流*
 
 ## 3. 实验过程与统一条件
 
@@ -41,9 +43,13 @@
 
 末帧绝对距离误差则为 0.0355 m，高于关闭组的 0.0165 m。因此该组对比仅描述已记录的实测差异，不将其概括为所有指标的一致改善。
 
-<!-- 图 2：assets/feedforward_comparison.png，来源 A、B -->
+![图 2：Artstein-HPC 前馈开关轨迹对比（来源 A、B）](assets/feedforward_comparison.png)
 
-<!-- 图 3：assets/feedforward_distance_error.png，来源 A、B -->
+*图 2　Artstein-HPC 前馈开关轨迹对比（来源 A、B）*
+
+![图 3：Artstein-HPC 前馈开关距离误差（来源 A、B）](assets/feedforward_distance_error.png)
+
+*图 3　Artstein-HPC 前馈开关距离误差（来源 A、B）*
 
 <!-- 表 2：前馈开/关指标表，数据：metrics.csv，筛选：leader_command_feedforward -->
 
@@ -53,9 +59,13 @@ LPC 两条有效记录的平均绝对距离误差分别为 0.4001 m 与 0.4144 m
 
 LPC 在 `initial_min_lambda=1.5`、Leader 速度 0.25 m/s 的实物工况下发生碰撞，未形成可用于轨迹统计的有效记录。LPC 的 λ初值=2.0 记录同时将 Leader 速度降至 0.20 m/s；λ初值=2.5 记录使用 0.25 m/s。因此现有 HPC/LPC 结果用于说明阶段性可运行性和现象，不用于宣称严格单变量条件下的性能优劣。
 
-<!-- 图 4：assets/hpc_lpc_trajectory.png，来源 A、C、D -->
+![图 4：Artstein-HPC 与 Artstein-LPC 阶段性轨迹（来源 A、C、D）](assets/hpc_lpc_trajectory.png)
 
-<!-- 图 5：assets/hpc_lpc_distance_error.png，来源 A、C、D -->
+*图 4　Artstein-HPC 与 Artstein-LPC 阶段性轨迹（来源 A、C、D）*
+
+![图 5：Artstein-HPC 与 Artstein-LPC 阶段性距离误差（来源 A、C、D）](assets/hpc_lpc_distance_error.png)
+
+*图 5　Artstein-HPC 与 Artstein-LPC 阶段性距离误差（来源 A、C、D）*
 
 <!-- 表 3：HPC/LPC 阶段性指标表，数据：metrics.csv，筛选：hpc_lpc_stage_result -->
 
