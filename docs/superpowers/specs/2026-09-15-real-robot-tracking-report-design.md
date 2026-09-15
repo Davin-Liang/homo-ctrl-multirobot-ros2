@@ -24,6 +24,9 @@
 `enable_leader_cmd_feedforward` 区分。用于 HPC/LPC 对比的记录由 `use_hpc: true/false`
 和控制器标识区分。LPC 的两组记录须分别标明 `initial_min_lambda`（2.0、2.5）；选择
 一组作为正文代表结果时，另一组保留在参数表或附录中，不能混为同一配置。
+报告中的理想 Leader--Follower 距离统一取控制器 `radius: 1.0 m`。现有实物元数据中的
+`recording.ideal_radius_m: 2.0` 为记录器历史配置，不作为本次距离误差的评价基准；条件表
+须显式注明这一口径，避免读者将两者混用。
 LPC 未使用 `initial_min_lambda: 1.5`：该参数下实物跟随机器人会发生碰撞，不能安全地
 完成有效轨迹记录。为获得可运行结果，`initial_min_lambda: 2.0` 的试验同时将 Leader
 速度从 0.25 m/s 降至 0.20 m/s；`initial_min_lambda: 2.5` 的试验使用 0.25 m/s。因而

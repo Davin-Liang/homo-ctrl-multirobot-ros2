@@ -15,6 +15,7 @@
 - “有/无前馈”严格指 `enable_leader_cmd_feedforward` 的 Leader 命令速度前馈开关；Follower 的 `tau` 前向预测是共同基础链路，不是该对比变量。
 - Follower 链路表述固定为：Artstein 积分补偿纯滞后 → 按 `tau` 前向预测 → HPC/LPC 计算 → 速度/轮速约束 → `cmd_vel`。
 - 实验标签和参数以 `metadata.yaml` 为准；目录名与元数据不一致时，报告不得使用目录名推断前馈开关。
+- 距离误差的唯一评价基准为控制器 `radius=1.0 m`；实物 `metadata.yaml` 中的 `recording.ideal_radius_m=2.0` 是记录器历史配置，条件表必须明示其不参与本次误差计算。
 - HPC/LPC 结果属于不同实际工况下的阶段性对照，不得宣称严格的单变量算法优劣：LPC `initial_min_lambda=1.5`、Leader 速度 0.25 m/s 时发生碰撞；LPC `lambda=2.0` 使用 0.20 m/s，`lambda=2.5` 使用 0.25 m/s。
 - Word 不提及视频；PPT 只含用户后续手动填入视频的占位页。
 - 所有新生成物写入 `docs/reports/2026-09-15-real-robot-tracking/`，不修改原始实验目录。
