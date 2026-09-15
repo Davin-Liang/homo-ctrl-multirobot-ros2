@@ -116,3 +116,46 @@ python3 -m pytest -q homo_multirobot_formation_control/test/test_sim_4d_hpc_arts
 ### 后续
 
 Task 2 应实现一阶 Follower 闭式预测，将仅预测组用于两个 simulation 场景，并扩展三组 plot/summary；实现不得改变本报告所固定的 original/compensated 数值、标签和 CSV 既有行相对顺序。完成后使用上述命令验证 GREEN。
+
+---
+
+# Task 1 实施报告：可追溯实验清单
+
+日期：2026-09-15
+
+## 结果
+
+已建立四组真实机器人实验的共享清单和实验条件表：
+
+- `homo_multirobot_formation_control/analysis/real_tracking_report/experiment_manifest.yaml`
+- `docs/reports/2026-09-15-real-robot-tracking/experiment-conditions.csv`
+- `docs/reports/2026-09-15-real-robot-tracking/assets/`（报告资源目录）
+
+清单只引用 `robot_traj/real/` 下已有的 `metadata.yaml` 和 `raw.csv`，没有写入或改写任何原始实验目录。
+
+## 数据核对
+
+四组展示记录均为 `platform: real`、`mode: real`，录制时长均为 45.0 s，状态源均为 mocap。两个 HPC 条件的目录命名与元数据 controller/feedforward 参数交叉：清单中的 `leader_command_feedforward` 按元数据的 `enable_leader_cmd_feedforward` 填写，未按目录名推断。LPC 的初始 λ 与 Leader 速度按任务简报的展示条件记录；LPC λ=1.5、速度 0.25 m/s 仅记录为碰撞的非记录工况，不伪造轨迹数据。
+
+## 验证
+
+执行任务要求的验收命令，输出为：
+
+```text
+manifest OK
+```
+
+另执行 CSV 结构与来源文件核对，确认四行数据包含任务要求的十个字段，且每个原始目录同时存在 `metadata.yaml` 与 `raw.csv`，输出为：
+
+```text
+conditions OK
+```
+
+## 自审
+
+- [x] manifest 包含四个指定 id、比较组、控制器族及 HPC 前馈开关。
+- [x] 前馈开关以对应 `metadata.yaml` 为准：第一组 true，第二组 false。
+- [x] 非成功 LPC 工况标记为 collision，并明确未形成有效轨迹统计记录。
+- [x] CSV 含实验标签、原始目录、控制器、use_hpc、Leader 命令前馈、initial_min_lambda、Leader 速度、录制时长、状态源、备注。
+- [x] 未修改 `robot_traj/real/`，未生成 Word、PPT 或视频。
+- [x] 清单因既有 `.gitignore` 的 `analysis/` 规则被忽略，提交时仅对该目标文件强制加入，未修改忽略规则。

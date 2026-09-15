@@ -1,0 +1,36 @@
+schema_version: 1
+data_scope: real_robot_only
+experiments:
+  - id: hpc_feedforward_on
+    source_dir: robot_traj/real/4d_artstein_forward_8traj_20260914_204226
+    display_label: Artstein-HPC（Leader 命令前馈：开）
+    comparison: leader_command_feedforward
+    controller_family: artstein_hpc
+    leader_command_feedforward: true
+  - id: hpc_feedforward_off
+    source_dir: robot_traj/real/4d_artstein_no_forward_8traj_20260914_204546
+    display_label: Artstein-HPC（Leader 命令前馈：关）
+    comparison: leader_command_feedforward
+    controller_family: artstein_hpc
+    leader_command_feedforward: false
+  - id: lpc_lambda_20_v020
+    source_dir: robot_traj/real/4d_artstein_lpc_20260915_104805
+    display_label: Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s）
+    comparison: hpc_lpc_stage_result
+    controller_family: artstein_lpc
+    initial_min_lambda: 2.0
+    leader_speed_mps: 0.20
+  - id: lpc_lambda_25_v025
+    source_dir: robot_traj/real/4d_artstein_lpc_20260915_105440
+    display_label: Artstein-LPC（λ初值=2.5，Leader 速度=0.25 m/s）
+    comparison: hpc_lpc_stage_result
+    controller_family: artstein_lpc
+    initial_min_lambda: 2.5
+    leader_speed_mps: 0.25
+
+non_recorded_conditions:
+  - controller_family: artstein_lpc
+    initial_min_lambda: 1.5
+    leader_speed_mps: 0.25
+    outcome: collision
+    report_statement: 该工况发生碰撞，未形成可用于轨迹统计的有效记录。
