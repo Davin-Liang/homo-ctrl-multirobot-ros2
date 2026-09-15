@@ -20,6 +20,58 @@ REQUIRED_COLUMNS = [
     "leader_v_ms", "follower_x_m", "follower_y_m", "follower_vx_ms",
     "follower_vy_ms", "follower_v_ms", "distance_m",
 ]
+REPORT_ASSET_FILENAMES = (
+    "feedforward_comparison.png",
+    "feedforward_distance_error.png",
+    "hpc_lpc_trajectory.png",
+    "hpc_lpc_distance_error.png",
+    "control_pipeline.png",
+)
+LEADER_COLOR = "#1f77b4"
+FOLLOWER_COLOR = "#ff7f0e"
+IDEAL_RADIUS_COLOR = "#7f7f7f"
+PNG_DPI = 300
+
+
+def chinese_sans_serif_font():
+    """Return an installed Chinese sans-serif font name, if one is available."""
+    from matplotlib import font_manager
+
+    preferred_names = (
+        "Noto Sans CJK SC", "Noto Sans CJK", "Source Han Sans SC",
+        "Source Han Sans CN", "Microsoft YaHei", "SimHei", "WenQuanYi Zen Hei",
+        "PingFang SC", "Heiti SC",
+    )
+    available = {font.name for font in font_manager.fontManager.ttflist}
+    return next((name for name in preferred_names if name in available), None)
+
+
+def configure_report_plotting():
+    """Configure headless Matplotlib and return localized report labels."""
+    import matplotlib
+    matplotlib.use("Agg", force=True)
+    from matplotlib import pyplot as plt
+
+    font_name = chinese_sans_serif_font()
+    if font_name:
+        plt.rcParams.update({"font.family": "sans-serif", "font.sans-serif": [font_name],
+                             "axes.unicode_minus": False})
+        return True, plt
+    print("warning: Chinese sans-serif font unavailable; using English report labels.",
+          file=sys.stderr)
+    plt.rcParams.update({"font.family": "DejaVu Sans", "axes.unicode_minus": False})
+    return False, plt
+
+
+def report_label(experiment, chinese_labels):
+    """Use manifest labels when renderable, otherwise provide an ASCII equivalent."""
+    if chinese_labels:
+        return experiment["display_label"]
+    if experiment["controller_family"] == "artstein_lpc":
+        return ("Artstein-LPC (lambda={:.1f}, Leader speed={:.2f} m/s)".format(
+            experiment["initial_min_lambda"], experiment["leader_speed_mps"]))
+    state = "on" if experiment.get("leader_command_feedforward") else "off"
+    return f"Artstein-HPC (Leader command feedforward: {state})"
 
 
 def compute_distance_metrics(distances, ideal_radius_m):
@@ -131,6 +183,144 @@ def analyze_manifest(manifest_path):
     return [analyze_experiment(repository_root, experiment) for experiment in experiments]
 
 
+def load_report_series(manifest_path):
+    """Load the manifest-selected raw series without modifying the source trials."""
+    manifest = load_yaml(manifest_path)
+    experiments = manifest.get("experiments")
+    if not isinstance(experiments, list) or not experiments:
+        raise ValueError(f"{manifest_path}: experiments must be a non-empty list")
+    repository_root = manifest_path.resolve().parents[3]
+    series = []
+    for experiment in experiments:
+        experiment_id = experiment.get("id")
+        source_dir = experiment.get("source_dir")
+        if not isinstance(experiment_id, str) or not isinstance(source_dir, str):
+            raise ValueError("manifest experiment requires string id and source_dir")
+        rows = load_csv_rows(
+            repository_root / "homo_multirobot_formation_control" / source_dir / "raw.csv")
+        series.append((experiment, rows))
+    return series
+
+
+def _save_figure(figure, output_path):
+    figure.savefig(output_path, dpi=PNG_DPI, bbox_inches="tight")
+
+
+def _draw_trajectory(axis, experiment, rows, label, chinese_labels):
+    leader_x = [row["leader_x_m"] for row in rows]
+    leader_y = [row["leader_y_m"] for row in rows]
+    follower_x = [row["follower_x_m"] for row in rows]
+    follower_y = [row["follower_y_m"] for row in rows]
+    axis.plot(leader_x, leader_y, color=LEADER_COLOR, linewidth=1.3,
+              label=f"{label} — {'Leader' if not chinese_labels else '领航者'}")
+    axis.plot(follower_x, follower_y, color=FOLLOWER_COLOR, linewidth=1.3,
+              label=f"{label} — {'Follower' if not chinese_labels else '跟随者'}")
+    axis.plot(leader_x[0], leader_y[0], marker="o", markersize=4, color=LEADER_COLOR)
+    axis.plot(follower_x[0], follower_y[0], marker="o", markersize=4, color=FOLLOWER_COLOR)
+    axis.plot(leader_x[-1], leader_y[-1], marker="x", markersize=5, color=LEADER_COLOR)
+    axis.plot(follower_x[-1], follower_y[-1], marker="x", markersize=5, color=FOLLOWER_COLOR)
+    theta = [2.0 * math.pi * index / 120.0 for index in range(121)]
+    axis.plot([leader_x[0] + IDEAL_RADIUS_M * math.cos(value) for value in theta],
+              [leader_y[0] + IDEAL_RADIUS_M * math.sin(value) for value in theta],
+              color=IDEAL_RADIUS_COLOR, linestyle="--", linewidth=0.9,
+              label=("Ideal radius: 1.0 m" if not chinese_labels else "理想半径：1.0 m"))
+    axis.set_aspect("equal", adjustable="box")
+    axis.set_xlabel("x (m)")
+    axis.set_ylabel("y (m)")
+    axis.grid(True, alpha=0.25)
+    axis.set_title(label, fontsize=9)
+    axis.legend(fontsize=6.5, loc="best")
+
+
+def _draw_distance_error(axis, selected_series, chinese_labels):
+    for experiment, rows in selected_series:
+        axis.plot([row["time_s"] for row in rows],
+                  [row["distance_m"] - IDEAL_RADIUS_M for row in rows], linewidth=1.1,
+                  label=report_label(experiment, chinese_labels))
+    axis.axhline(0.0, color=IDEAL_RADIUS_COLOR, linestyle="--", linewidth=1.0,
+                 label=("Zero error" if not chinese_labels else "零误差线"))
+    axis.set_xlabel("Time (s)" if not chinese_labels else "时间 (s)")
+    axis.set_ylabel("Distance error (m)" if not chinese_labels else "距离误差 (m)")
+    axis.grid(True, alpha=0.25)
+    axis.legend(fontsize=7, loc="best")
+
+
+def _draw_control_pipeline(plt, output_path, chinese_labels):
+    figure, axis = plt.subplots(figsize=(15, 4.2))
+    axis.set_xlim(0, 16.2)
+    axis.set_ylim(0, 5.0)
+    axis.axis("off")
+    labels = (
+        ("Motion-capture\nstate", "动捕状态"),
+        ("Follower Artstein\nintegral compensation Td", "Follower Artstein\n积分补偿 Td"),
+        ("Follower forward\nprediction tau", "Follower 前向预测 tau"),
+        ("HPC or LPC\ncontrol law", "HPC 或 LPC\n控制律"),
+        ("Velocity / wheel-speed\nconstraints", "速度/轮速约束"),
+        ("Follower cmd_vel", "Follower cmd_vel"),
+    )
+    xs = (0.25, 2.8, 5.55, 8.25, 11.25, 14.1)
+    width, height, y = 1.65, 1.05, 2.0
+    for x, label_pair in zip(xs, labels):
+        text = label_pair[1] if chinese_labels else label_pair[0]
+        axis.text(x + width / 2, y + height / 2, text, ha="center", va="center", fontsize=8.5,
+                  bbox={"boxstyle": "round,pad=0.35", "fc": "#eef4fb", "ec": "#356a9a"})
+    for left, right in zip(xs, xs[1:]):
+        axis.annotate("", xy=(right - 0.08, y + height / 2), xytext=(left + width + 0.08, y + height / 2),
+                      arrowprops={"arrowstyle": "->", "lw": 1.4, "color": "#333333"})
+    sum_x, sum_y = 10.65, y + height / 2
+    axis.text(sum_x, sum_y, "+", ha="center", va="center", fontsize=15, weight="bold",
+              bbox={"boxstyle": "circle,pad=0.14", "fc": "white", "ec": "#333333"})
+    optional = ("Optional: Leader cmd_vel velocity-increment\nfeedforward (Experiment 1 on/off)"
+                if not chinese_labels else "可选：Leader cmd_vel 速度增量前馈\n（实验一开/关）")
+    axis.text(8.9, 4.1, optional, ha="center", va="center", fontsize=8,
+              bbox={"boxstyle": "round,pad=0.35", "fc": "#fff7e6", "ec": "#b36b00"})
+    axis.annotate("", xy=(sum_x, sum_y + 0.15), xytext=(9.4, 3.55),
+                  arrowprops={"arrowstyle": "->", "lw": 1.2, "ls": "--", "color": "#b36b00"})
+    _save_figure(figure, output_path)
+    plt.close(figure)
+
+
+def generate_report_assets(manifest_path, assets_dir):
+    """Generate the five report-ready, 300 dpi PNG assets from manifest raw series."""
+    chinese_labels, plt = configure_report_plotting()
+    series_by_id = {experiment["id"]: (experiment, rows)
+                    for experiment, rows in load_report_series(manifest_path)}
+    required_ids = ("hpc_feedforward_on", "hpc_feedforward_off",
+                    "lpc_lambda_20_v020", "lpc_lambda_25_v025")
+    missing = [experiment_id for experiment_id in required_ids if experiment_id not in series_by_id]
+    if missing:
+        raise ValueError("manifest missing required report experiments: " + ", ".join(missing))
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    ff_series = [series_by_id[experiment_id] for experiment_id in required_ids[:2]]
+    stage_series = [series_by_id[experiment_id] for experiment_id in
+                    ("hpc_feedforward_on", "lpc_lambda_20_v020", "lpc_lambda_25_v025")]
+
+    figure, axes = plt.subplots(1, 2, figsize=(13.4, 6.1), constrained_layout=True)
+    for axis, (experiment, rows) in zip(axes, ff_series):
+        _draw_trajectory(axis, experiment, rows, report_label(experiment, chinese_labels), chinese_labels)
+    _save_figure(figure, assets_dir / "feedforward_comparison.png")
+    plt.close(figure)
+
+    figure, axis = plt.subplots(figsize=(10.5, 4.6), constrained_layout=True)
+    _draw_distance_error(axis, ff_series, chinese_labels)
+    _save_figure(figure, assets_dir / "feedforward_distance_error.png")
+    plt.close(figure)
+
+    figure, axes = plt.subplots(1, 3, figsize=(18.0, 5.7), constrained_layout=True)
+    for axis, (experiment, rows) in zip(axes, stage_series):
+        _draw_trajectory(axis, experiment, rows, report_label(experiment, chinese_labels), chinese_labels)
+    _save_figure(figure, assets_dir / "hpc_lpc_trajectory.png")
+    plt.close(figure)
+
+    figure, axis = plt.subplots(figsize=(11.5, 4.8), constrained_layout=True)
+    _draw_distance_error(axis, stage_series, chinese_labels)
+    _save_figure(figure, assets_dir / "hpc_lpc_distance_error.png")
+    plt.close(figure)
+
+    _draw_control_pipeline(plt, assets_dir / "control_pipeline.png", chinese_labels)
+    return [assets_dir / filename for filename in REPORT_ASSET_FILENAMES]
+
+
 def write_metrics(rows, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / "metrics.csv"
@@ -157,10 +347,12 @@ def main():
     try:
         rows = analyze_manifest(args.manifest)
         output_path = write_metrics(rows, args.output)
+        assets = generate_report_assets(args.manifest, args.output / "assets")
     except ValueError as error:
         print(f"analysis failed: {error}", file=sys.stderr)
         return 2
     print(f"wrote {len(rows)} experiment rows to {output_path}")
+    print(f"wrote {len(assets)} report PNG assets to {args.output / 'assets'}")
     return 0
 
 
