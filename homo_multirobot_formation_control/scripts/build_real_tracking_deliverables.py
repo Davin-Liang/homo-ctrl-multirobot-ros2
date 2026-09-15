@@ -33,10 +33,7 @@ ASSET_NAMES = (
     "hpc_lpc_trajectory.png",
     "hpc_lpc_distance_error.png",
 )
-RADIUS_BASIS = (
-    "评价采用控制器 radius=1.0 m；recording.ideal_radius_m=2.0 为记录器历史配置，"
-    "不参与本次误差计算。"
-)
+RADIUS_BASIS = "评价采用控制器 radius=1.0 m。"
 COMMON_CONDITIONS = "共同配置：Leader /robot1；Follower /robot2；20 Hz；tau=0.43 s；Td=0.22 s。"
 EXPERIMENT_PROCEDURE = (
     "复现实验流程：准备机器人与动捕，核对状态话题和控制参数 → 启动 Follower 控制器与 "

@@ -1,5 +1,5 @@
 实验标签,原始目录,控制器,use_hpc,Leader 命令前馈,initial_min_lambda,Leader 速度,录制时长,状态源,备注
-Artstein-HPC（Leader 命令前馈：开）,robot_traj/real/4d_artstein_forward_8traj_20260914_204226,artstein_hpc,true,true,,,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m；recording.ideal_radius_m=2.0 为记录器历史配置，不参与本次误差计算；元数据 controller=4d_artstein_no_forward
-Artstein-HPC（Leader 命令前馈：关）,robot_traj/real/4d_artstein_no_forward_8traj_20260914_204546,artstein_hpc,true,false,,,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m；recording.ideal_radius_m=2.0 为记录器历史配置，不参与本次误差计算；元数据 controller=4d_artstein_forward
-Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s）,robot_traj/real/4d_artstein_lpc_20260915_104805,artstein_lpc,false,false,2.0,0.20 m/s,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m；recording.ideal_radius_m=2.0 为记录器历史配置，不参与本次误差计算
-Artstein-LPC（λ初值=2.5，Leader 速度=0.25 m/s）,robot_traj/real/4d_artstein_lpc_20260915_105440,artstein_lpc,false,false,2.5,0.25 m/s,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m；recording.ideal_radius_m=2.0 为记录器历史配置，不参与本次误差计算
+Artstein-HPC（Leader 命令前馈：开）,robot_traj/real/4d_artstein_forward_8traj_20260914_204226,artstein_hpc,true,true,,,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m；元数据 controller=4d_artstein_no_forward
+Artstein-HPC（Leader 命令前馈：关）,robot_traj/real/4d_artstein_no_forward_8traj_20260914_204546,artstein_hpc,true,false,,,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m；元数据 controller=4d_artstein_forward
+Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s）,robot_traj/real/4d_artstein_lpc_20260915_104805,artstein_lpc,false,false,2.0,0.20 m/s,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m
+Artstein-LPC（λ初值=2.5，Leader 速度=0.25 m/s）,robot_traj/real/4d_artstein_lpc_20260915_105440,artstein_lpc,false,false,2.5,0.25 m/s,45.0 s,mocap,有效 real raw.csv；评价半径=控制器 radius 1.0 m

@@ -31,13 +31,13 @@ def load_builder():
 
 
 class ReportContentTest(unittest.TestCase):
-    def test_conditions_explicitly_exclude_historical_recorder_radius(self):
+    def test_conditions_state_the_one_meter_evaluation_basis(self):
         builder = load_builder()
         conditions, _ = builder.load_report_data(
             REPOSITORY_ROOT / "docs/reports/2026-09-15-real-robot-tracking")
         for row in conditions:
-            self.assertIn("recording.ideal_radius_m=2.0", row["备注"])
-            self.assertIn("不参与本次误差计算", row["备注"])
+            self.assertNotIn("recording.ideal_radius_m=2.0", row["备注"])
+            self.assertNotIn("不参与本次误差计算", row["备注"])
             self.assertIn("控制器 radius 1.0 m", row["备注"])
 
     def test_stage_results_include_the_same_hpc_representative_as_figures(self):
@@ -72,10 +72,11 @@ class ReportContentTest(unittest.TestCase):
                 self.assertTrue(body.text_frame.word_wrap)
             for name, text in (("Word", word_text), ("PPT slide 5", slide_texts[4])):
                 with self.subTest(deliverable=name):
-                    for required in ("recording.ideal_radius_m=2.0", "不参与本次误差计算",
-                                     "radius=1.0 m", "/robot1", "/robot2", "tau=0.43 s", "Td=0.22 s",
+                    for required in ("radius=1.0 m", "/robot1", "/robot2", "tau=0.43 s", "Td=0.22 s",
                                      "准备", "启动", "录制 45 s", "停止"):
                         self.assertIn(required, text)
+                    self.assertNotIn("recording.ideal_radius_m=2.0", text)
+                    self.assertNotIn("不参与本次误差计算", text)
             for row in metrics:
                 for name, text in (("Word", word_text), ("PPT", ppt_text)):
                     with self.subTest(deliverable=name, experiment=row["experiment_id"]):
