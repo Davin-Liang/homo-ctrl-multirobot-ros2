@@ -28,30 +28,19 @@
 
 <!-- 表 1：实验条件表，数据：experiment-conditions.csv -->
 
-### 数据来源对照
-
-图表中的来源代号与原始数据对应如下：
-
-| 来源 | 实验标签 | 原始目录 / trial-ID |
-| --- | --- | --- |
-| A | Artstein-HPC（Leader 命令前馈：开） | `robot_traj/real/4d_artstein_forward_8traj_20260914_204226 / trial_02` |
-| B | Artstein-HPC（Leader 命令前馈：关） | `robot_traj/real/4d_artstein_no_forward_8traj_20260914_204546 / trial_01` |
-| C | Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s） | `robot_traj/real/4d_artstein_lpc_20260915_104805 / trial_01` |
-| D | Artstein-LPC（λ初值=2.5，Leader 速度=0.25 m/s） | `robot_traj/real/4d_artstein_lpc_20260915_105440 / trial_02` |
-
 ## 4. 实验一：Artstein-HPC 的 Leader 命令速度前馈开/关对比
 
 在两组约 45 s、Leader 平均速度约 0.246 m/s 的 Artstein-HPC 实测记录中，开启 Leader 命令速度前馈的平均绝对距离误差为 0.1202 m、RMS 距离误差为 0.2791 m；关闭时分别为 0.1282 m 和 0.2895 m。开启组在这两个汇总指标上较低。
 
 末帧绝对距离误差则为 0.0355 m，高于关闭组的 0.0165 m。因此该组对比仅描述已记录的实测差异，不将其概括为所有指标的一致改善。
 
-![图 2：Artstein-HPC 前馈开关轨迹对比（来源 A、B）](assets/feedforward_comparison.png)
+![图 2：Artstein-HPC 前馈开关轨迹对比](assets/feedforward_comparison.png)
 
-*图 2　Artstein-HPC 前馈开关轨迹对比（来源 A、B）*
+*图 2　Artstein-HPC 前馈开关轨迹对比*
 
-![图 3：Artstein-HPC 前馈开关距离误差（来源 A、B）](assets/feedforward_distance_error.png)
+![图 3：Artstein-HPC 前馈开关距离误差](assets/feedforward_distance_error.png)
 
-*图 3　Artstein-HPC 前馈开关距离误差（来源 A、B）*
+*图 3　Artstein-HPC 前馈开关距离误差*
 
 <!-- 表 2：前馈开/关指标表，数据：metrics.csv，筛选：leader_command_feedforward -->
 
@@ -61,13 +50,13 @@ LPC 两条有效记录的平均绝对距离误差分别为 0.4001 m 与 0.4144 m
 
 LPC 在 `initial_min_lambda=1.5`、Leader 速度 0.25 m/s 的实物工况下发生碰撞，未形成可用于轨迹统计的有效记录。LPC 的 λ初值=2.0 记录同时将 Leader 速度降至 0.20 m/s；λ初值=2.5 记录使用 0.25 m/s。因此现有 HPC/LPC 结果用于说明阶段性可运行性和现象，不用于宣称严格单变量条件下的性能优劣。
 
-![图 4：Artstein-HPC 与 Artstein-LPC 阶段性轨迹（来源 A、C、D）](assets/hpc_lpc_trajectory.png)
+![图 4：Artstein-HPC 与 Artstein-LPC 阶段性轨迹](assets/hpc_lpc_trajectory.png)
 
-*图 4　Artstein-HPC 与 Artstein-LPC 阶段性轨迹（来源 A、C、D）*
+*图 4　Artstein-HPC 与 Artstein-LPC 阶段性轨迹*
 
-![图 5：Artstein-HPC 与 Artstein-LPC 阶段性距离误差（来源 A、C、D）](assets/hpc_lpc_distance_error.png)
+![图 5：Artstein-HPC 与 Artstein-LPC 阶段性距离误差](assets/hpc_lpc_distance_error.png)
 
-*图 5　Artstein-HPC 与 Artstein-LPC 阶段性距离误差（来源 A、C、D）*
+*图 5　Artstein-HPC 与 Artstein-LPC 阶段性距离误差*
 
 <!-- 表 3：HPC/LPC 阶段性指标表，数据：metrics.csv，筛选：hpc_lpc_stage_result -->
 
