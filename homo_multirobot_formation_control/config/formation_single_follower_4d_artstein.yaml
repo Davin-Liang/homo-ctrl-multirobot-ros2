@@ -11,7 +11,7 @@
     # 安全圆上的离散编队点数量。
     m_p: 4
     # 期望编队圆半径（m）。
-    radius: 2.0
+    radius: 1.0
     # 编队点切换迟滞阈值（m）。
     tol: 0.2
     # 双积分器模型质量调参值，非实际质量。
@@ -27,11 +27,11 @@
     # 控制频率（Hz）。
     control_rate: 20.0
     # 是否启用齐次控制升级。
-    use_hpc: true
+    use_hpc: false
     # HPC 变换系数下限。
     hpc_c_min: 0.1
     # 初始 LPC 极点下界。
-    initial_min_lambda: 1.5
+    initial_min_lambda: 2.5
     # 切换后 LPC 极点下界。
     switch_min_lambda: 4.0
     # 领航速度低通时间常数（s）；0 为关闭。
