@@ -1,0 +1,17 @@
+case,max_distance,tail_mean_distance,tail_std_distance,final_distance
+ideal_4d_hpc_matlab,3.222052,0.051755,0.000140,0.051863
+matlab_leader_original_delay,3.178044,0.680348,0.138299,0.533177
+matlab_leader_forward_prediction_only,3.176311,0.502822,0.085304,0.435900
+matlab_leader_artstein_td_only,3.177343,0.309929,0.138377,0.369351
+matlab_leader_artstein_prediction,3.176184,0.285211,0.097963,0.203271
+matlab_leader_artstein_prediction_ideal_leader_feedforward,3.175406,0.236338,0.026774,0.207387
+circle_original_delay_clean,1.605982,0.874039,0.279230,0.513772
+circle_forward_prediction_only_clean,1.584903,0.196806,0.000015,0.196822
+circle_artstein_td_only_clean,1.584686,0.167005,0.005406,0.165088
+circle_artstein_prediction_clean,1.584263,0.070552,0.000000,0.070552
+circle_artstein_prediction_ideal_leader_feedforward_clean,1.584251,0.053170,0.000000,0.053170
+circle_original_delay_noise,1.606844,0.577573,0.045207,0.585623
+circle_forward_prediction_only_noise,1.584899,0.234400,0.008065,0.239435
+circle_artstein_td_only_noise,1.584618,0.159406,0.066028,0.049233
+circle_artstein_prediction_noise,1.584310,0.141651,0.005576,0.135832
+circle_artstein_prediction_ideal_leader_feedforward_noise,1.584298,0.109573,0.005382,0.099365
