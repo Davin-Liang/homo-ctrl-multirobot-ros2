@@ -33,6 +33,21 @@ ASSET_NAMES = (
     "hpc_lpc_trajectory.png",
     "hpc_lpc_distance_error.png",
 )
+RADIUS_BASIS = (
+    "评价采用控制器 radius=1.0 m；recording.ideal_radius_m=2.0 为记录器历史配置，"
+    "不参与本次误差计算。"
+)
+COMMON_CONDITIONS = "共同配置：Leader /robot1；Follower /robot2；20 Hz；tau=0.43 s；Td=0.22 s。"
+EXPERIMENT_PROCEDURE = (
+    "复现实验流程：准备机器人与动捕，核对状态话题和控制参数 → 启动 Follower 控制器与 "
+    "Leader 轨迹 → 录制 45 s 并保存 raw.csv、metadata.yaml → 停止轨迹和控制器，确认两车停止。"
+)
+SOURCE_IDS = {
+    "hpc_feedforward_on": "A",
+    "hpc_feedforward_off": "B",
+    "lpc_lambda_20_v020": "C",
+    "lpc_lambda_25_v025": "D",
+}
 
 
 def report_paragraphs():
@@ -43,7 +58,7 @@ def report_paragraphs():
         "本实验在双移动机器人 Leader–Follower 场景中，记录并整理 Artstein-HPC 与 "
         "Artstein-LPC 的阶段性实物跟踪结果。评价半径固定为 1.0 m，所有统计均以该理想"
         "编队半径为唯一评价基准；距离误差定义为实际两车间距减去 1.0 m，表中的末帧误差"
-        "为其绝对值。",
+        "为其绝对值。" + RADIUS_BASIS,
         "2. 实物实验平台、数据流与控制方法",
         "两台 mini_omni 全向移动机器人采用动捕状态源，Leader 的轨迹由速度命令驱动，"
         "Follower 依据相对编队误差输出速度命令。控制频率为 20 Hz，记录时长约 45 s。",
@@ -53,7 +68,8 @@ def report_paragraphs():
         "不是 Follower 前向预测的开关。",
         "3. 实验过程与统一条件",
         "四组有效记录均来自实物平台和动捕状态源。统计只使用条件表与指标表中理想半径为 "
-        "1.0 m 的数据，不根据原始目录名或元数据中的控制器字符串重新推断前馈状态。",
+        "1.0 m 的数据，不根据原始目录名或元数据中的控制器字符串重新推断前馈状态。"
+        + COMMON_CONDITIONS + EXPERIMENT_PROCEDURE,
         "4. 实验一：Artstein-HPC 的 Leader 命令速度前馈开/关对比",
         "在两组约 45 s、Leader 平均速度约 0.246 m/s 的 Artstein-HPC 实测记录中，"
         "开启 Leader 命令速度前馈的平均绝对距离误差为 0.1202 m、RMS 距离误差为 "
@@ -168,7 +184,8 @@ def metric_rows(metrics, comparison):
             f"{float(row['final_distance_error_m']):.4f}",
         )
         for row in metrics
-        if row["comparison"] == comparison
+        if row["comparison"] == comparison or (
+            comparison == "hpc_lpc_stage_result" and row["experiment_id"] == "hpc_feedforward_on")
     ]
 
 
@@ -218,19 +235,29 @@ def build_word(input_dir, word_out):
     add_table(document,
               ("实验标签", "控制器", "Leader 命令前馈", "λ初值", "Leader 速度", "时长", "状态源", "评价半径"),
               condition_rows)
+    add_body_paragraph(document, "数据来源对照（目录相对于 homo_multirobot_formation_control；"
+                       "各目录使用 raw.csv 与 metadata.yaml；图表中的 A–D 对应下表）：")
+    sources = add_table(document, ("来源", "实验标签", "原始目录 / trial-ID"), [
+        (SOURCE_IDS[row["experiment_id"]], row["display_label"],
+         f"{row['source_dir']} / {row['trial_id']}") for row in metrics
+    ])
+    sources.autofit = False
+    for row in sources.rows:
+        for cell, width in zip(row.cells, (1.0, 6.0, 18.0)):
+            cell.width = Cm(width)
 
     add_heading(document, paragraphs[8], 1)
     add_body_paragraph(document, paragraphs[9])
-    add_image(document, input_dir / "assets" / "feedforward_comparison.png", "图 2  Artstein-HPC 前馈开/关轨迹对比")
-    add_image(document, input_dir / "assets" / "feedforward_distance_error.png", "图 3  Artstein-HPC 前馈开/关距离误差")
+    add_image(document, input_dir / "assets" / "feedforward_comparison.png", "图 2  Artstein-HPC 前馈开/关轨迹对比（来源 A、B）")
+    add_image(document, input_dir / "assets" / "feedforward_distance_error.png", "图 3  Artstein-HPC 前馈开/关距离误差（来源 A、B）")
     add_table(document,
               ("实验标签", "采样数", "平均绝对误差 (m)", "RMS 误差 (m)", "末帧绝对误差 (m)"),
               metric_rows(metrics, "leader_command_feedforward"))
 
     add_heading(document, paragraphs[10], 1)
     add_body_paragraph(document, paragraphs[11])
-    add_image(document, input_dir / "assets" / "hpc_lpc_trajectory.png", "图 4  Artstein-HPC 与 Artstein-LPC 阶段性轨迹")
-    add_image(document, input_dir / "assets" / "hpc_lpc_distance_error.png", "图 5  Artstein-HPC 与 Artstein-LPC 阶段性距离误差")
+    add_image(document, input_dir / "assets" / "hpc_lpc_trajectory.png", "图 4  Artstein-HPC 与 Artstein-LPC 阶段性轨迹（来源 A、C、D）")
+    add_image(document, input_dir / "assets" / "hpc_lpc_distance_error.png", "图 5  Artstein-HPC 与 Artstein-LPC 阶段性距离误差（来源 A、C、D）")
     add_table(document,
               ("实验标签", "采样数", "平均绝对误差 (m)", "RMS 误差 (m)", "末帧绝对误差 (m)"),
               metric_rows(metrics, "hpc_lpc_stage_result"))
@@ -244,9 +271,10 @@ def build_word(input_dir, word_out):
 
 
 def _add_ppt_text(slide, text, left, top, width, height, *, size=20, bold=False,
-                  color=(31, 78, 121), align=PP_ALIGN.LEFT):
+                  color=(31, 78, 121), align=PP_ALIGN.LEFT, wrap=False):
     """Add an editable text box to a presentation slide."""
     box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+    box.text_frame.word_wrap = wrap
     paragraph = box.text_frame.paragraphs[0]
     paragraph.alignment = align
     run = paragraph.add_run()
@@ -271,6 +299,7 @@ def _add_ppt_bullets(slide, lines, *, top=1.2, font_size=18):
     box = slide.shapes.add_textbox(Inches(0.8), Inches(top), Inches(11.7), Inches(5.7))
     frame = box.text_frame
     frame.clear()
+    frame.word_wrap = True
     for index, line in enumerate(lines):
         paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
         paragraph.text = line
@@ -343,11 +372,13 @@ def build_presentation(input_dir, ppt_out):
     slide = presentation.slides.add_slide(blank)
     _add_ppt_title(slide, "实验流程与统一条件")
     _add_ppt_bullets(slide, [
-        "有效记录均来自实物平台与动捕状态源；仅使用条件表、指标表中理想半径为 1.0 m 的数据。",
-        "Artstein-HPC 前馈开/关：Leader 平均速度均约 0.246 m/s，记录时长均约 45 s。",
-        "Artstein-LPC：λ初值=2.0 对应 Leader 速度 0.20 m/s；λ初值=2.5 对应 0.25 m/s。",
-        "不根据原始目录名或元数据中的控制器字符串重新推断前馈状态。",
-    ], font_size=17)
+        COMMON_CONDITIONS + "状态源：动捕。",
+        RADIUS_BASIS,
+        EXPERIMENT_PROCEDURE,
+        "HPC 前馈开/关：Leader 均速约 0.246 m/s。LPC：λ=2.0 / 0.20 m/s；λ=2.5 / 0.25 m/s。",
+        "前馈开关按元数据 enable_leader_cmd_feedforward 核对，不依据目录名或 controller 字符串。",
+        "后续图表来源目录相对于 homo_multirobot_formation_control；使用各目录 raw.csv 与 metadata.yaml。",
+    ], font_size=15)
 
     # 6. Feedforward experiment
     on = metric_by_id["hpc_feedforward_on"]
@@ -360,7 +391,10 @@ def build_presentation(input_dir, ppt_out):
                   f"开启：平均绝对误差 {float(on['mean_abs_distance_error_m']):.4f} m；RMS {float(on['rms_distance_error_m']):.4f} m；末帧 {float(on['final_distance_error_m']):.4f} m\n"
                   f"关闭：平均绝对误差 {float(off['mean_abs_distance_error_m']):.4f} m；RMS {float(off['rms_distance_error_m']):.4f} m；末帧 {float(off['final_distance_error_m']):.4f} m\n"
                   "开启组前两项汇总指标较低，但末帧绝对误差更高；仅描述已记录实测差异。",
-                  0.72, 5.55, 11.9, 1.0, size=15, color=(45, 45, 45))
+                  0.72, 5.55, 11.9, 1.0, size=15, color=(45, 45, 45), wrap=True)
+    _add_ppt_text(slide, "两图来源 A、B（A：HPC 前馈开；B：HPC 前馈关）\n" + "\n".join(
+        f"{SOURCE_IDS[row['experiment_id']]}：{row['source_dir']} / {row['trial_id']}"
+        for row in (on, off)), 0.72, 6.65, 11.9, 0.65, size=10, color=(80, 80, 80))
 
     # 7. HPC/LPC result and caveat
     lpc20 = metric_by_id["lpc_lambda_20_v020"]
@@ -370,11 +404,15 @@ def build_presentation(input_dir, ppt_out):
     _add_ppt_image(slide, input_dir / "assets" / "hpc_lpc_trajectory.png", 0.55, 1.1, 5.9, 3.5)
     _add_ppt_image(slide, input_dir / "assets" / "hpc_lpc_distance_error.png", 6.75, 1.1, 5.9, 3.5)
     _add_ppt_text(slide,
+                  f"HPC 代表组 A（前馈开）：平均绝对误差 {float(on['mean_abs_distance_error_m']):.4f} m，RMS {float(on['rms_distance_error_m']):.4f} m。\n"
                   f"LPC λ=2.0：平均绝对误差 {float(lpc20['mean_abs_distance_error_m']):.4f} m，RMS {float(lpc20['rms_distance_error_m']):.4f} m；"
                   f"LPC λ=2.5：{float(lpc25['mean_abs_distance_error_m']):.4f} m，{float(lpc25['rms_distance_error_m']):.4f} m。\n"
                   "安全边界：λ初值=1.5、Leader 速度 0.25 m/s 时发生碰撞，未形成有效轨迹统计。λ初值与 Leader 速度同时变化，"
                   "现有 HPC/LPC 结果仅说明阶段性可运行性和现象，不宣称严格单变量性能优劣。",
-                  0.72, 4.9, 11.9, 1.25, size=15, color=(45, 45, 45))
+                  0.72, 4.78, 11.9, 1.5, size=14, color=(45, 45, 45), wrap=True)
+    _add_ppt_text(slide, "两图来源 A、C、D（A：HPC 前馈开；C：LPC λ=2.0；D：LPC λ=2.5）\n" + "\n".join(
+        f"{SOURCE_IDS[row['experiment_id']]}：{row['source_dir']} / {row['trial_id']}"
+        for row in (on, lpc20, lpc25)), 0.72, 6.4, 11.9, 0.85, size=10, color=(80, 80, 80))
 
     # 8. Manual video placeholder only: shapes and text, no media or relationships.
     slide = presentation.slides.add_slide(blank)
