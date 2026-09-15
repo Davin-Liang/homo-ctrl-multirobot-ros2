@@ -21,8 +21,27 @@ def test_default_yaml_has_all_recorder_parameters():
 
     assert defaults["leader_ns"] == "/robot1"
     assert isinstance(defaults["duration"], (int, float))
-    assert defaults["trial_id"] == "trial_01"
+    assert defaults["trial_id"] == "trial_02"
     assert set(defaults) == set(module.RECORDER_PARAMETER_DEFAULTS)
+
+
+def test_recorder_defaults_do_not_include_redundant_metadata_parameters():
+    defaults = module.load_recorder_parameters(
+        PACKAGE_DIR / "config" / "record_trajectory.yaml")
+
+    assert "platform" not in defaults
+    assert "experiment_id" not in defaults
+    assert "platform" not in module.RECORDER_PARAMETER_DEFAULTS
+    assert "experiment_id" not in module.RECORDER_PARAMETER_DEFAULTS
+
+
+def test_recorder_readme_does_not_document_removed_metadata_parameters():
+    readme = (PACKAGE_DIR / "README.md").read_text(encoding="utf-8")
+
+    assert "-p experiment_id:=" not in readme
+    assert "-p platform:=" not in readme
+    assert "| `experiment_id`" not in readme
+    assert "| `platform`" not in readme
 
 
 def test_explicit_overrides_win_over_yaml_defaults():

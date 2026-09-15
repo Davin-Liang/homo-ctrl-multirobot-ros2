@@ -61,9 +61,7 @@ RECORDER_PARAMETER_DEFAULTS = {
     'mode': 'sim',
     'tag': '',
     'controller_node_name': 'formation_control_node',
-    'experiment_id': '',
     'trial_id': 'trial_01',
-    'platform': '',
     'controller': '',
     'state_source': 'ekf_tf',
 }
@@ -246,9 +244,7 @@ class TrajectoryRecorder(Node):
         self.mode = self.get_parameter('mode').value
         self.tag = self.get_parameter('tag').value
         self.ctrl_node_name = self.get_parameter('controller_node_name').value
-        self.experiment_id = self.get_parameter('experiment_id').value
         self.trial_id = self.get_parameter('trial_id').value
-        self.platform = self.get_parameter('platform').value or self.mode
         self.controller = self.get_parameter('controller').value
         self.state_source = validate_state_source(
             self.get_parameter('state_source').value)
@@ -567,9 +563,7 @@ class TrajectoryRecorder(Node):
         yaml_path = os.path.join(experiment_dir, 'metadata.yaml')
         metadata = {
             'schema_version': 1,
-            'experiment_id': self.experiment_id or self.tag,
             'trial_id': self.trial_id,
-            'platform': self.platform,
             'mode': self.mode,
             'controller': self.controller or self.ctrl_node_name,
             'recording': {

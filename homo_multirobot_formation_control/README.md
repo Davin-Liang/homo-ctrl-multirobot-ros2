@@ -642,8 +642,7 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 # 实物 + 自定义标签
 ros2 run homo_multirobot_formation_control record_trajectory.py \
   --ros-args -p mode:=real -p tag:=hpc_mass8_r2 \
-  -p experiment_id:=chapter3_delay_compare -p trial_id:=trial_01 \
-  -p platform:=real -p controller:=artstein_hpc \
+  -p trial_id:=trial_01 -p controller:=artstein_hpc \
   -p leader_ns:=/virtual_leader -p follower_ns:=/robot2 \
   -p radius:=2.0 -p duration:=30.0
 
@@ -671,9 +670,7 @@ ros2 run homo_multirobot_formation_control record_trajectory.py \
 | `tag`           | 自动生成         | 文件名标签，留空则从控制器参数自动生成               |
 | `radius`        | 0.0              | 编队理想半径，>0 时在距离图上画参考虚线              |
 | `out_dir`       | 包内 robot_traj/ | 输出根目录                                           |
-| `experiment_id` | 自动使用 `tag` | 实验组编号                                           |
 | `trial_id`      | `trial_01`     | 重复实验编号                                         |
-| `platform`      | 使用 `mode`    | 实验平台，如 `numerical`、`gazebo`、`real`     |
 | `controller`    | 控制器节点名     | 控制器标签，如 `original_4d_hpc`、`artstein_hpc` |
 | `state_source`  | `ekf_tf`         | `ekf_tf`：EKF 里程计经 TF 转 map；`mocap`：直接订阅 `/mocap/pose` 和 `/mocap/twist` |
 

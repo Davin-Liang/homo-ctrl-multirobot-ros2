@@ -530,9 +530,7 @@ leader_age, ekf_age
 小论文的轨迹和误差类图表可以直接复用本章 CSV；可能还需要以下实验元数据，建议同步记录：
 
 ```text
-experiment_id
 trial_id
-platform
 controller
 tau, Td
 motor_tau, transport_delay
@@ -541,7 +539,7 @@ target_index
 desired_follower_x, desired_follower_y
 ```
 
-其中 `trial_id` 和 `experiment_id` 用于多次重复实验的均值、标准差、箱线图或误差带绘制；
+其中 `trial_id` 用于标识多次重复实验，便于后续计算均值、标准差、箱线图或误差带；
 `desired_follower_x/y` 用于在小论文中直接画出目标轨迹，不依赖事后重新推导。
 
 仅有 x/y 位置数据不足以完整支撑“延迟补偿机理”类小论文，因为它无法区分控制器误差、
@@ -610,7 +608,6 @@ ROS 记录器的 CSV 合并；如果后续启用可选速度诊断工具，再�
 `record_trajectory.py` 会自动生成 `metadata.yaml`，至少记录：
 
 ```text
-platform
 case
 controller
 date
