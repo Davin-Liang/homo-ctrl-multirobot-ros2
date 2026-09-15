@@ -55,7 +55,7 @@
 
 表 3 汇总了 Artstein-HPC 代表组与两条有效的 Artstein-LPC 记录。LPC 两条记录的 `initial_min_lambda` 与 Leader 速度同时变化，结果只作为阶段性观察。
 
-LPC 在 `initial_min_lambda=1.5`、Leader 速度 0.25 m/s 的实物工况下发生碰撞，未形成可用于轨迹统计的有效记录。LPC 的 λ初值=2.0 记录同时将 Leader 速度降至 0.20 m/s；λ初值=2.5 记录使用 0.25 m/s。因此现有 HPC/LPC 结果用于说明阶段性可运行性和现象，不用于宣称严格单变量条件下的性能优劣。
+LPC 在 λ初值为 1.5、Leader 速度为 0.25 m/s 的实物工况下发生碰撞，未形成可用于轨迹统计的有效记录。LPC 的 λ初值为 2.0 时，Leader 速度同时降至 0.20 m/s；λ初值为 2.5 时，Leader 速度为 0.25 m/s。因此现有 HPC/LPC 结果用于说明阶段性可运行性和现象，不用于宣称严格单变量条件下的性能优劣。
 
 ![图 4：Artstein-HPC 与 Artstein-LPC 阶段性轨迹](assets/hpc_lpc_trajectory.png)
 
