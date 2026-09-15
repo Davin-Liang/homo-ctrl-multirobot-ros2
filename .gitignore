@@ -17,5 +17,8 @@ log/
 # Local Git worktrees
 .worktrees/
 
+# Local VS Code workspace settings
+.vscode/
+
 # Locally generated analysis figures and datasets
 homo_multirobot_formation_control/analysis/
