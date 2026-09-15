@@ -1,0 +1,27 @@
+schema_version: 1
+experiment_id: "4d_artstein_no_forward"
+trial_id: "trial_01"
+platform: "sim"
+mode: "sim"
+controller: "4d_artstein_no_forward"
+recording:
+  duration_s: 45.0
+  leader_ns: "/robot1"
+  follower_ns: "/robot2"
+  state_source: "ekf_tf"
+  leader_topic: "/robot1/odometry/filtered"
+  follower_topic: "/robot2/odometry/filtered"
+  coordinate_frame: "map"
+  ideal_radius_m: 2.0
+controller_parameters:
+delay_parameters:
+  motor_tau: 0.43
+  transport_delay: 0.22
+  max_accel: 0.6
+  rate: 100.0
+target_index: null
+desired_follower_x: null
+desired_follower_y: null
+files:
+  csv: "raw.csv"
+  check_plot: "check.png"

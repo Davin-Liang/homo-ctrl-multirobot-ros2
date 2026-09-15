@@ -1,0 +1,41 @@
+schema_version: 1
+experiment_id: "m2_r2_od0.7_f20_tau0.4_cmin0.5_ilam1.5_slam4_Td0.2_mtau0.43_td0.22_da0.50"
+trial_id: "trial_01"
+platform: "sim"
+mode: "sim"
+controller: "formation_control_node_4d_artstein"
+recording:
+  duration_s: 45.0
+  leader_ns: "/robot1"
+  follower_ns: "/robot2"
+  leader_topic: "/robot1/odometry/filtered"
+  follower_topic: "/robot2/odometry/filtered"
+  coordinate_frame: "map"
+  ideal_radius_m: 0.0
+controller_parameters:
+  mass: 2.0
+  radius: 2.0
+  omega_d: 0.7
+  control_rate: 20.0
+  m_p: 4
+  Kp_yaw: 4.0
+  K_ff: 1.0
+  tol: 0.1
+  tau: 0.43
+  hpc_c_min: 0.5
+  initial_min_lambda: 1.5
+  switch_min_lambda: 4.0
+  leader_vel_lpf_tau: 0.0
+  Td: 0.22
+  max_linear_accel: 0.5
+delay_parameters:
+  motor_tau: 0.43
+  transport_delay: 0.22
+  max_accel: 0.5
+  rate: 100.0
+target_index: null
+desired_follower_x: null
+desired_follower_y: null
+files:
+  csv: "raw.csv"
+  check_plot: "check.png"
