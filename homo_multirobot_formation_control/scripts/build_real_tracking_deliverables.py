@@ -12,6 +12,11 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
+from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.text import PP_ALIGN
+from pptx.dml.color import RGBColor
+from pptx.util import Inches, Pt as PptPt
 
 
 LPC_SAFETY_BOUNDARY = (
@@ -238,18 +243,189 @@ def build_word(input_dir, word_out):
     return word_out
 
 
+def _add_ppt_text(slide, text, left, top, width, height, *, size=20, bold=False,
+                  color=(31, 78, 121), align=PP_ALIGN.LEFT):
+    """Add an editable text box to a presentation slide."""
+    box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+    paragraph = box.text_frame.paragraphs[0]
+    paragraph.alignment = align
+    run = paragraph.add_run()
+    run.text = text
+    run.font.name = "宋体"
+    run.font.size = PptPt(size)
+    run.font.bold = bold
+    run.font.color.rgb = RGBColor(*color)
+    return box
+
+
+def _add_ppt_title(slide, title):
+    _add_ppt_text(slide, title, 0.55, 0.28, 12.1, 0.48, size=26, bold=True)
+    accent = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.55), Inches(0.87),
+                                    Inches(1.55), Inches(0.05))
+    accent.fill.solid()
+    accent.fill.fore_color.rgb = RGBColor(0, 112, 192)
+    accent.line.fill.background()
+
+
+def _add_ppt_bullets(slide, lines, *, top=1.2, font_size=18):
+    box = slide.shapes.add_textbox(Inches(0.8), Inches(top), Inches(11.7), Inches(5.7))
+    frame = box.text_frame
+    frame.clear()
+    for index, line in enumerate(lines):
+        paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
+        paragraph.text = line
+        paragraph.level = 0
+        paragraph.font.name = "宋体"
+        paragraph.font.size = PptPt(font_size)
+        paragraph.font.color.rgb = RGBColor(45, 45, 45)
+        paragraph.space_after = PptPt(14)
+    return box
+
+
+def _add_ppt_image(slide, image_path, left, top, width, height):
+    slide.shapes.add_picture(str(image_path), Inches(left), Inches(top),
+                             width=Inches(width), height=Inches(height))
+
+
+def build_presentation(input_dir, ppt_out):
+    """Build the nine-slide editable PowerPoint summary without media content."""
+    input_dir = Path(input_dir)
+    ppt_out = Path(ppt_out)
+    conditions, metrics = load_report_data(input_dir)
+    metric_by_id = {row["experiment_id"]: row for row in metrics}
+    presentation = Presentation()
+    presentation.slide_width = Inches(13.333333)
+    presentation.slide_height = Inches(7.5)
+    blank = presentation.slide_layouts[6]
+
+    # 1. Title
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_text(slide, "双移动机器人实物跟踪实验汇报", 0.8, 2.1, 11.8, 0.7,
+                  size=32, bold=True, align=PP_ALIGN.CENTER)
+    _add_ppt_text(slide, "Artstein-HPC / Artstein-LPC 阶段性实物结果", 1.1, 3.0, 11.1, 0.45,
+                  size=20, color=(80, 80, 80), align=PP_ALIGN.CENTER)
+    _add_ppt_text(slide, "统一评价基准：理想编队半径 1.0 m", 1.1, 4.05, 11.1, 0.4,
+                  size=18, bold=True, color=(0, 112, 192), align=PP_ALIGN.CENTER)
+
+    # 2. Task and objectives
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "实验任务与阶段目标")
+    _add_ppt_bullets(slide, [
+        "在双 mini_omni Leader–Follower 场景中记录 Artstein-HPC 与 Artstein-LPC 实物跟踪。",
+        "统一评价：实际两车间距 − 1.0 m；末帧指标取该距离误差的绝对值。",
+        "本阶段目标：形成可复核的条件、指标与图表，并明确现有结果的适用边界。",
+    ])
+
+    # 3. Platform and data flow
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "实物平台与数据流")
+    _add_ppt_image(slide, input_dir / "assets" / "control_pipeline.png", 0.8, 1.15, 7.3, 5.5)
+    _add_ppt_bullets(slide, [
+        "两台 mini_omni 全向移动机器人；状态源为动捕。",
+        "Leader 由速度命令驱动；Follower 依据相对编队误差输出速度命令。",
+        "控制频率 20 Hz；单条有效记录约 45 s。",
+    ], top=1.45, font_size=16).left = Inches(8.35)
+    # Reset the bullet box geometry after reuse of the compact helper.
+    slide.shapes[-1].width = Inches(4.3)
+    slide.shapes[-1].height = Inches(4.8)
+
+    # 4. Method
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "控制方法：Artstein + Follower 前向预测 + HPC/LPC")
+    _add_ppt_bullets(slide, [
+        "Artstein 变换用于处理输入延迟；HPC/LPC 为两类控制配置。",
+        "Follower 前向预测：由 Follower 当前动捕状态、最近输出命令和电机时间常数 τ 预测短时状态，补偿执行器响应。",
+        "Leader 命令速度前馈：可选 Leader cmd_vel 速度增量支路，直接叠加到控制输出。",
+        "两者是不同支路：前馈开/关不是 Follower 前向预测开/关。",
+    ], font_size=17)
+
+    # 5. Conditions
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "实验流程与统一条件")
+    _add_ppt_bullets(slide, [
+        "有效记录均来自实物平台与动捕状态源；仅使用条件表、指标表中理想半径为 1.0 m 的数据。",
+        "Artstein-HPC 前馈开/关：Leader 平均速度均约 0.246 m/s，记录时长均约 45 s。",
+        "Artstein-LPC：λ初值=2.0 对应 Leader 速度 0.20 m/s；λ初值=2.5 对应 0.25 m/s。",
+        "不根据原始目录名或元数据中的控制器字符串重新推断前馈状态。",
+    ], font_size=17)
+
+    # 6. Feedforward experiment
+    on = metric_by_id["hpc_feedforward_on"]
+    off = metric_by_id["hpc_feedforward_off"]
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "实验一：Leader 命令速度前馈开/关")
+    _add_ppt_image(slide, input_dir / "assets" / "feedforward_comparison.png", 0.55, 1.12, 5.9, 4.15)
+    _add_ppt_image(slide, input_dir / "assets" / "feedforward_distance_error.png", 6.75, 1.12, 5.9, 4.15)
+    _add_ppt_text(slide,
+                  f"开启：平均绝对误差 {float(on['mean_abs_distance_error_m']):.4f} m；RMS {float(on['rms_distance_error_m']):.4f} m；末帧 {float(on['final_distance_error_m']):.4f} m\n"
+                  f"关闭：平均绝对误差 {float(off['mean_abs_distance_error_m']):.4f} m；RMS {float(off['rms_distance_error_m']):.4f} m；末帧 {float(off['final_distance_error_m']):.4f} m\n"
+                  "开启组前两项汇总指标较低，但末帧绝对误差更高；仅描述已记录实测差异。",
+                  0.72, 5.55, 11.9, 1.0, size=15, color=(45, 45, 45))
+
+    # 7. HPC/LPC result and caveat
+    lpc20 = metric_by_id["lpc_lambda_20_v020"]
+    lpc25 = metric_by_id["lpc_lambda_25_v025"]
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "实验二：HPC/LPC 阶段性结果与安全边界")
+    _add_ppt_image(slide, input_dir / "assets" / "hpc_lpc_trajectory.png", 0.55, 1.1, 5.9, 3.5)
+    _add_ppt_image(slide, input_dir / "assets" / "hpc_lpc_distance_error.png", 6.75, 1.1, 5.9, 3.5)
+    _add_ppt_text(slide,
+                  f"LPC λ=2.0：平均绝对误差 {float(lpc20['mean_abs_distance_error_m']):.4f} m，RMS {float(lpc20['rms_distance_error_m']):.4f} m；"
+                  f"LPC λ=2.5：{float(lpc25['mean_abs_distance_error_m']):.4f} m，{float(lpc25['rms_distance_error_m']):.4f} m。\n"
+                  "安全边界：λ初值=1.5、Leader 速度 0.25 m/s 时发生碰撞，未形成有效轨迹统计。λ初值与 Leader 速度同时变化，"
+                  "现有 HPC/LPC 结果仅说明阶段性可运行性和现象，不宣称严格单变量性能优劣。",
+                  0.72, 4.9, 11.9, 1.25, size=15, color=(45, 45, 45))
+
+    # 8. Manual video placeholder only: shapes and text, no media or relationships.
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "最新实物实验视频（占位页）")
+    placeholder = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1.866667), Inches(1.20),
+                                         Inches(9.6), Inches(5.4))
+    placeholder.fill.background()
+    placeholder.line.color.rgb = RGBColor(0, 112, 192)
+    placeholder.line.width = PptPt(2.25)
+    _add_ppt_text(slide, "请在此处手动插入最新实物实验视频", 1.35, 3.1, 10.6, 0.45,
+                  size=24, bold=True, align=PP_ALIGN.CENTER)
+    _add_ppt_text(slide, "建议对应：Artstein-LPC，λ初值=2.5，Leader 速度=0.25 m/s",
+                  1.35, 3.75, 10.6, 0.35, size=16, color=(80, 80, 80), align=PP_ALIGN.CENTER)
+
+    # 9. Conclusion
+    slide = presentation.slides.add_slide(blank)
+    _add_ppt_title(slide, "阶段结论与下一步工作")
+    _add_ppt_bullets(slide, [
+        "已形成统一的实物条件表、1.0 m 基准指标表及可复核图表。",
+        "HPC 前馈开/关结果存在指标间差异，应保留原始实测描述，不外推为全面改善。",
+        "LPC 结果受 λ初值与 Leader 速度共同变化以及 λ=1.5 碰撞边界限制，仅作阶段性观察。",
+        "下一步：固定 Leader 速度、初始 λ 及其他运行条件，补充可重复试验，并持续核对前馈支路标注。",
+    ], font_size=17)
+
+    ppt_out.parent.mkdir(parents=True, exist_ok=True)
+    presentation.save(ppt_out)
+    return ppt_out
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, type=Path)
-    parser.add_argument("--word-out", required=True, type=Path)
-    parser.add_argument("--skip-ppt", action="store_true", help="兼容交付命令；本脚本不生成 PPT。")
+    parser.add_argument("--word-out", type=Path)
+    parser.add_argument("--ppt-out", type=Path)
+    parser.add_argument("--skip-word", action="store_true")
+    parser.add_argument("--skip-ppt", action="store_true")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    output = build_word(args.input, args.word_out)
-    print(f"已生成 Word：{output}")
+    if args.skip_word and args.skip_ppt:
+        raise ValueError("不能同时跳过 Word 和 PPT")
+    if not args.skip_word:
+        if args.word_out is None:
+            raise ValueError("生成 Word 时必须提供 --word-out")
+        print(f"已生成 Word：{build_word(args.input, args.word_out)}")
+    if not args.skip_ppt:
+        if args.ppt_out is None:
+            raise ValueError("生成 PPT 时必须提供 --ppt-out")
+        print(f"已生成 PPT：{build_presentation(args.input, args.ppt_out)}")
 
 
 if __name__ == "__main__":

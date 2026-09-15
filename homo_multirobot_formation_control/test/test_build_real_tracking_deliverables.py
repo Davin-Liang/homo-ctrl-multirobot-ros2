@@ -4,7 +4,12 @@
 import importlib.util
 import sys
 import unittest
+import zipfile
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from xml.etree import ElementTree
+
+from pptx import Presentation
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +52,41 @@ class ReportContentTest(unittest.TestCase):
         self.assertEqual(len(conditions), 4)
         self.assertEqual(len(metrics), 4)
         self.assertEqual({row["ideal_radius_m"] for row in metrics}, {"1.0"})
+
+    def test_presentation_has_nine_editable_slides_and_a_shape_only_video_placeholder(self):
+        builder = load_builder()
+        input_dir = REPOSITORY_ROOT / "docs" / "reports" / "2026-09-15-real-robot-tracking"
+
+        with TemporaryDirectory() as temporary_directory:
+            ppt_out = Path(temporary_directory) / "report.pptx"
+            builder.build_presentation(input_dir, ppt_out)
+
+            with zipfile.ZipFile(ppt_out) as archive:
+                slide_names = sorted(
+                    name for name in archive.namelist()
+                    if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+                )
+                self.assertEqual(len(slide_names), 9)
+                video_extensions = (".mp4", ".mov", ".avi", ".wmv", ".webm", ".m4v")
+                self.assertFalse(any("video" in name.lower() or name.lower().endswith(video_extensions)
+                                     for name in archive.namelist()))
+                slide_eight_relationships = archive.read("ppt/slides/_rels/slide8.xml.rels").decode()
+                self.assertNotIn("video", slide_eight_relationships.lower())
+                self.assertNotIn("TargetMode=\"External\"", slide_eight_relationships)
+                slide_eight = ElementTree.fromstring(archive.read("ppt/slides/slide8.xml"))
+
+            namespaces = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
+            slide_eight_text = "".join(node.text or "" for node in slide_eight.findall(".//a:t", namespaces))
+            self.assertIn("请在此处手动插入最新实物实验视频", slide_eight_text)
+            self.assertIn("Artstein-LPC，λ初值=2.5，Leader 速度=0.25 m/s", slide_eight_text)
+            self.assertGreaterEqual(len(slide_eight.findall(".//p:sp", {
+                "p": "http://schemas.openxmlformats.org/presentationml/2006/main"
+            })), 3)
+            slide_eight_shapes = Presentation(ppt_out).slides[7].shapes
+            self.assertTrue(any(
+                abs((shape.width / shape.height) - (16 / 9)) < 0.001
+                for shape in slide_eight_shapes if shape.height
+            ))
 
 
 if __name__ == "__main__":
