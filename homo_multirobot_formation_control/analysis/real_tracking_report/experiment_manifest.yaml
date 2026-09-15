@@ -13,6 +13,11 @@ experiments:
     comparison: leader_command_feedforward
     controller_family: artstein_hpc
     leader_command_feedforward: false
+  - id: hpc_lpc_reference
+    source_dir: robot_traj/real/4d_artstein_20260909_173424
+    display_label: Artstein-HPC（实验二参考组）
+    comparison: hpc_lpc_stage_result
+    controller_family: artstein_hpc
   - id: lpc_lambda_20_v020
     source_dir: robot_traj/real/4d_artstein_lpc_20260915_104805
     display_label: Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s）

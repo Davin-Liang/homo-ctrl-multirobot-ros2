@@ -38,6 +38,11 @@ def test_tail_metrics_describe_the_last_ten_seconds_of_a_recording():
     assert metrics['tail_distance_error_std_m'] == pytest.approx(0.0816496580927726)
 
 
+def test_hpc_lpc_stage_uses_the_dedicated_hpc_reference_record():
+    assert module.stage_experiment_ids() == (
+        'hpc_lpc_reference', 'lpc_lambda_20_v020', 'lpc_lambda_25_v025')
+
+
 def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, capsys):
     manifest = (PACKAGE_DIR / "analysis" / "real_tracking_report" /
                 "experiment_manifest.yaml")

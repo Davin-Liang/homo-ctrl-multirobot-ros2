@@ -71,8 +71,15 @@ def report_label(experiment, chinese_labels):
     if experiment["controller_family"] == "artstein_lpc":
         return ("Artstein-LPC (lambda={:.1f}, Leader speed={:.2f} m/s)".format(
             experiment["initial_min_lambda"], experiment["leader_speed_mps"]))
+    if experiment["id"] == "hpc_lpc_reference":
+        return "Artstein-HPC (stage reference)"
     state = "on" if experiment.get("leader_command_feedforward") else "off"
     return f"Artstein-HPC (Leader command feedforward: {state})"
+
+
+def stage_experiment_ids():
+    """Return the dedicated records used for the HPC/LPC stage comparison."""
+    return ("hpc_lpc_reference", "lpc_lambda_20_v020", "lpc_lambda_25_v025")
 
 
 def compute_distance_metrics(distances, ideal_radius_m):
@@ -304,15 +311,13 @@ def generate_report_assets(manifest_path, assets_dir):
     chinese_labels, plt = configure_report_plotting()
     series_by_id = {experiment["id"]: (experiment, rows)
                     for experiment, rows in load_report_series(manifest_path)}
-    required_ids = ("hpc_feedforward_on", "hpc_feedforward_off",
-                    "lpc_lambda_20_v020", "lpc_lambda_25_v025")
+    required_ids = ("hpc_feedforward_on", "hpc_feedforward_off", *stage_experiment_ids())
     missing = [experiment_id for experiment_id in required_ids if experiment_id not in series_by_id]
     if missing:
         raise ValueError("manifest missing required report experiments: " + ", ".join(missing))
     assets_dir.mkdir(parents=True, exist_ok=True)
     ff_series = [series_by_id[experiment_id] for experiment_id in required_ids[:2]]
-    stage_series = [series_by_id[experiment_id] for experiment_id in
-                    ("hpc_feedforward_on", "lpc_lambda_20_v020", "lpc_lambda_25_v025")]
+    stage_series = [series_by_id[experiment_id] for experiment_id in stage_experiment_ids()]
 
     figure, axes = plt.subplots(1, 2, figsize=(13.4, 6.1), constrained_layout=True)
     for axis, (experiment, rows) in zip(axes, ff_series):

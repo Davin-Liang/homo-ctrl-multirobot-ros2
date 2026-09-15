@@ -6,10 +6,11 @@
 
 | 来源代号 | 实验标签 | 用途 |
 | --- | --- | --- |
-| A | Artstein-HPC（Leader 命令前馈：开） | 前馈开/关对比、HPC/LPC 阶段性图表的 HPC 代表组 |
+| A | Artstein-HPC（Leader 命令前馈：开） | 前馈开/关对比 |
 | B | Artstein-HPC（Leader 命令前馈：关） | 前馈开/关对比 |
 | C | Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s） | HPC/LPC 阶段性图表 |
 | D | Artstein-LPC（λ初值=2.5，Leader 速度=0.25 m/s） | HPC/LPC 阶段性图表及最新可运行结果 |
+| E | Artstein-HPC（实验二参考组） | HPC/LPC 阶段性图表的 HPC 参考组 |
 
 ## 原始记录定位
 
@@ -19,6 +20,7 @@
 | B | `robot_traj/real/4d_artstein_no_forward_8traj_20260914_204546` | `trial_01` | `use_hpc=true`、`enable_leader_cmd_feedforward=false` |
 | C | `robot_traj/real/4d_artstein_lpc_20260915_104805` | `trial_01` | `use_hpc=false`、`initial_min_lambda=2.0`、Leader 速度 0.20 m/s |
 | D | `robot_traj/real/4d_artstein_lpc_20260915_105440` | `trial_02` | `use_hpc=false`、`initial_min_lambda=2.5`、Leader 速度 0.25 m/s |
+| E | `robot_traj/real/4d_artstein_20260909_173424` | `trial_03` | 用户指定为 Artstein-HPC 实验二参考组；动捕实物记录 |
 
 实验配置以各目录的 `metadata.yaml` 为依据，轨迹与误差计算以 `raw.csv` 为依据。报告中的距离评价基准统一为控制器 `radius=1.0 m`。
 
@@ -28,4 +30,4 @@
 | --- | --- |
 | 图 1：实物跟踪控制与数据流 | 控制器实现与参数配置 |
 | 图 2、图 3：Leader 命令速度前馈开/关对比 | A、B |
-| 图 4、图 5：Artstein-HPC 与 Artstein-LPC 阶段性结果 | A、C、D |
+| 图 4、图 5：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、C、D |
