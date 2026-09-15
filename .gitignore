@@ -16,3 +16,6 @@ log/
 
 # Local Git worktrees
 .worktrees/
+
+# Locally generated analysis figures and datasets
+homo_multirobot_formation_control/analysis/
