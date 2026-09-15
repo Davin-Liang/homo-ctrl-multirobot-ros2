@@ -15,6 +15,7 @@ import yaml
 
 
 IDEAL_RADIUS_M = 1.0
+TAIL_WINDOW_S = 10.0
 REQUIRED_COLUMNS = [
     "time_s", "leader_x_m", "leader_y_m", "leader_vx_ms", "leader_vy_ms",
     "leader_v_ms", "follower_x_m", "follower_y_m", "follower_vx_ms",
@@ -94,7 +95,24 @@ def compute_distance_metrics(distances, ideal_radius_m):
             sum(abs(error) for error in distance_errors) / len(distance_errors)),
         "rms_distance_error_m": float(
             (sum(error ** 2 for error in distance_errors) / len(distance_errors)).sqrt()),
-        "final_distance_error_m": float(abs(distance_errors[-1])),
+    }
+
+
+def compute_tail_distance_metrics(rows, ideal_radius_m, window_s):
+    """Return stability metrics over the final time window of a trajectory."""
+    if window_s <= 0 or not math.isfinite(window_s):
+        raise ValueError("window_s must be a positive finite number")
+    if not rows:
+        raise ValueError("trajectory rows are empty")
+    end_time = rows[-1]["time_s"]
+    tail_distances = [row["distance_m"] for row in rows
+                      if row["time_s"] >= end_time - window_s]
+    base_metrics = compute_distance_metrics(tail_distances, ideal_radius_m)
+    errors = [distance - ideal_radius_m for distance in tail_distances]
+    return {
+        "tail_window_s": window_s,
+        "tail_mean_abs_distance_error_m": base_metrics["mean_abs_distance_error_m"],
+        "tail_distance_error_std_m": statistics.pstdev(errors),
     }
 
 
@@ -155,6 +173,7 @@ def analyze_experiment(repository_root, experiment):
     rows = load_csv_rows(directory / "raw.csv")
     distances = [row["distance_m"] for row in rows]
     metrics = compute_distance_metrics(distances, IDEAL_RADIUS_M)
+    metrics.update(compute_tail_distance_metrics(rows, IDEAL_RADIUS_M, TAIL_WINDOW_S))
     metrics.update({
         "experiment_id": experiment_id,
         "display_label": experiment.get("display_label", ""),
@@ -329,7 +348,7 @@ def write_metrics(rows, output_dir):
             "w", newline="", encoding="utf-8", dir=output_dir, delete=False) as handle:
         temporary_path = Path(handle.name)
         try:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
         except Exception:
