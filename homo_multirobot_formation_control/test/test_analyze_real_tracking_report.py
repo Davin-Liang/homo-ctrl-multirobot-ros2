@@ -38,6 +38,26 @@ def test_tail_metrics_describe_the_last_ten_seconds_of_a_recording():
     assert metrics['tail_distance_error_std_m'] == pytest.approx(0.0816496580927726)
 
 
+def test_velocity_metrics_measure_leader_follower_velocity_mismatch():
+    rows = [
+        {'time_s': 0.0, 'leader_vx_ms': 1.0, 'leader_vy_ms': 0.0,
+         'follower_vx_ms': 0.0, 'follower_vy_ms': 0.0},
+        {'time_s': 5.0, 'leader_vx_ms': 1.0, 'leader_vy_ms': 0.0,
+         'follower_vx_ms': 1.0, 'follower_vy_ms': 0.0},
+        {'time_s': 10.0, 'leader_vx_ms': 0.0, 'leader_vy_ms': 1.0,
+         'follower_vx_ms': 0.0, 'follower_vy_ms': 1.0},
+        {'time_s': 15.0, 'leader_vx_ms': 0.0, 'leader_vy_ms': 1.0,
+         'follower_vx_ms': 0.0, 'follower_vy_ms': 2.0},
+    ]
+
+    metrics = module.compute_velocity_tracking_metrics(rows, window_s=10.0)
+
+    assert metrics == {
+        'mean_relative_velocity_error_mps': 0.5,
+        'tail_mean_relative_velocity_error_mps': pytest.approx(1.0 / 3.0),
+    }
+
+
 def test_hpc_lpc_stage_uses_the_dedicated_hpc_reference_record():
     assert module.stage_experiment_ids() == (
         'hpc_lpc_reference', 'lpc_lambda_25_v025')

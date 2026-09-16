@@ -125,6 +125,24 @@ def compute_tail_distance_metrics(rows, ideal_radius_m, window_s):
     }
 
 
+def compute_velocity_tracking_metrics(rows, window_s):
+    """Return Leader--Follower velocity consistency metrics from measured velocities."""
+    if window_s <= 0 or not math.isfinite(window_s):
+        raise ValueError("window_s must be a positive finite number")
+    if not rows:
+        raise ValueError("trajectory rows are empty")
+    relative_errors = [math.hypot(row["follower_vx_ms"] - row["leader_vx_ms"],
+                                  row["follower_vy_ms"] - row["leader_vy_ms"])
+                       for row in rows]
+    end_time = rows[-1]["time_s"]
+    tail_errors = [error for row, error in zip(rows, relative_errors)
+                   if row["time_s"] >= end_time - window_s]
+    return {
+        "mean_relative_velocity_error_mps": statistics.mean(relative_errors),
+        "tail_mean_relative_velocity_error_mps": statistics.mean(tail_errors),
+    }
+
+
 def load_yaml(path):
     try:
         with path.open(encoding="utf-8") as handle:
@@ -183,6 +201,7 @@ def analyze_experiment(repository_root, experiment):
     distances = [row["distance_m"] for row in rows]
     metrics = compute_distance_metrics(distances, IDEAL_RADIUS_M)
     metrics.update(compute_tail_distance_metrics(rows, IDEAL_RADIUS_M, TAIL_WINDOW_S))
+    metrics.update(compute_velocity_tracking_metrics(rows, TAIL_WINDOW_S))
     metrics.update({
         "experiment_id": experiment_id,
         "display_label": experiment.get("display_label", ""),
