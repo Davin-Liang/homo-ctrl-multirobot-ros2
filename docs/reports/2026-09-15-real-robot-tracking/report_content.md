@@ -12,10 +12,6 @@
 
 为减小 Leader 速度变化时仅依赖位姿反馈带来的响应滞后，控制器可订阅 Leader 的 `cmd_vel`，提取相邻命令之间的速度增量并经低通处理后叠加到 Follower 的控制输出。当命令数据超时，前馈增量不再参与控制。本实验通过开启和关闭该前馈机制，考察其对实物跟踪误差与响应过程的影响。
 
-![图 1：实物跟踪控制与数据流](assets/control_pipeline.png)
-
-*图 1　实物跟踪控制与数据流*
-
 ## 3. 实验过程与统一条件
 
 四组有效记录均来自实物平台和动捕状态源，并采用统一的轨迹记录方式，保存 Leader 与 Follower 的位置、速度及相对距离等时序数据。每组实验结束后均保存原始轨迹数据和参数快照，作为后续误差统计、图表绘制和对比分析的依据。
@@ -32,21 +28,21 @@
 
 表 2 汇总了两组约 45 s、Leader 平均速度约 0.246 m/s 的 Artstein-HPC 实物跟踪指标，包括全过程误差和末 10 s 的跟踪误差与波动。
 
-![图 2：Artstein-HPC 前馈开关轨迹对比](assets/feedforward_trajectory.png)
+![图 1：Artstein-HPC 前馈开关轨迹对比](assets/feedforward_trajectory.png)
 
-*图 2　Artstein-HPC 前馈开关轨迹对比*
+*图 1　Artstein-HPC 前馈开关轨迹对比*
 
-![图 3：Artstein-HPC 前馈开关 Vx/Vy 速度对比](assets/feedforward_velocity_components.png)
+![图 2：Artstein-HPC 前馈开关 Vx/Vy 速度对比](assets/feedforward_velocity_components.png)
 
-*图 3　Artstein-HPC 前馈开关 Vx/Vy 速度对比*
+*图 2　Artstein-HPC 前馈开关 Vx/Vy 速度对比*
 
-![图 4：Artstein-HPC 前馈开关 X 坐标对比](assets/feedforward_x_position.png)
+![图 3：Artstein-HPC 前馈开关 X 坐标对比](assets/feedforward_x_position.png)
 
-*图 4　Artstein-HPC 前馈开关 X 坐标对比*
+*图 3　Artstein-HPC 前馈开关 X 坐标对比*
 
-![图 5：Artstein-HPC 前馈开关 Y 坐标对比](assets/feedforward_y_position.png)
+![图 4：Artstein-HPC 前馈开关 Y 坐标对比](assets/feedforward_y_position.png)
 
-*图 5　Artstein-HPC 前馈开关 Y 坐标对比*
+*图 4　Artstein-HPC 前馈开关 Y 坐标对比*
 
 | 工况 | 全程平均绝对距离误差 (m) | 全程 RMS 距离误差 (m) | 末 10 s 平均绝对距离误差 (m) | 末 10 s 距离误差标准差 (m) |
 | --- | ---: | ---: | ---: | ---: |
@@ -67,21 +63,21 @@
 
 LPC 在 λ初值为 1.5 的实物工况下发生碰撞，未形成可用于轨迹统计的有效记录；λ初值为 2.5 时可完成有效跟踪记录。因此现有 HPC/LPC 结果用于说明阶段性可运行性和现象，不用于宣称严格单变量条件下的性能优劣。
 
-![图 6：Artstein-HPC 与 Artstein-LPC 阶段性轨迹](assets/hpc_lpc_trajectory.png)
+![图 5：Artstein-HPC 与 Artstein-LPC 阶段性轨迹](assets/hpc_lpc_trajectory.png)
 
-*图 6　Artstein-HPC 与 Artstein-LPC 阶段性轨迹*
+*图 5　Artstein-HPC 与 Artstein-LPC 阶段性轨迹*
 
-![图 7：Artstein-HPC 与 Artstein-LPC Vx/Vy 速度对比](assets/hpc_lpc_velocity_components.png)
+![图 6：Artstein-HPC 与 Artstein-LPC Vx/Vy 速度对比](assets/hpc_lpc_velocity_components.png)
 
-*图 7　Artstein-HPC 与 Artstein-LPC Vx/Vy 速度对比*
+*图 6　Artstein-HPC 与 Artstein-LPC Vx/Vy 速度对比*
 
-![图 8：Artstein-HPC 与 Artstein-LPC X 坐标对比](assets/hpc_lpc_x_position.png)
+![图 7：Artstein-HPC 与 Artstein-LPC X 坐标对比](assets/hpc_lpc_x_position.png)
 
-*图 8　Artstein-HPC 与 Artstein-LPC X 坐标对比*
+*图 7　Artstein-HPC 与 Artstein-LPC X 坐标对比*
 
-![图 9：Artstein-HPC 与 Artstein-LPC Y 坐标对比](assets/hpc_lpc_y_position.png)
+![图 8：Artstein-HPC 与 Artstein-LPC Y 坐标对比](assets/hpc_lpc_y_position.png)
 
-*图 9　Artstein-HPC 与 Artstein-LPC Y 坐标对比*
+*图 8　Artstein-HPC 与 Artstein-LPC Y 坐标对比*
 
 | 工况 | 全程平均绝对距离误差 (m) | 全程 RMS 距离误差 (m) | 末 10 s 平均绝对距离误差 (m) | 末 10 s 距离误差标准差 (m) |
 | --- | ---: | ---: | ---: | ---: |

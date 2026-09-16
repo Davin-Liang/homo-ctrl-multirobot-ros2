@@ -28,6 +28,5 @@
 
 | 报告图表 | 对应来源 |
 | --- | --- |
-| 图 1：实物跟踪控制与数据流 | 控制器实现与参数配置 |
-| 图 2--图 5：Leader 命令速度前馈开/关对比 | A、B |
-| 图 6--图 9：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、D |
+| 图 1--图 4：Leader 命令速度前馈开/关对比 | A、B |
+| 图 5--图 8：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、D |

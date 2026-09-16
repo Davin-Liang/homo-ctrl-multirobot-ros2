@@ -30,7 +30,6 @@ REPORT_ASSET_FILENAMES = (
     "hpc_lpc_velocity_components.png",
     "hpc_lpc_x_position.png",
     "hpc_lpc_y_position.png",
-    "control_pipeline.png",
 )
 LEADER_COLOR = "#1f77b4"
 FOLLOWER_COLOR = "#ff7f0e"
@@ -386,10 +385,9 @@ def generate_report_assets(manifest_path, assets_dir):
             _save_figure(figure, assets_dir / f"{prefix}_{suffix}.png")
             plt.close(figure)
 
-    _draw_control_pipeline(plt, assets_dir / "control_pipeline.png", chinese_labels)
     for obsolete_name in (
             "feedforward_comparison.png", "feedforward_distance_error.png",
-            "hpc_lpc_distance_error.png"):
+            "hpc_lpc_distance_error.png", "control_pipeline.png"):
         (assets_dir / obsolete_name).unlink(missing_ok=True)
     return [assets_dir / filename for filename in REPORT_ASSET_FILENAMES]
 

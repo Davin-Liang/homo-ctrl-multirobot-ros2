@@ -59,7 +59,6 @@ def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, c
     assets = module.generate_report_assets(manifest, tmp_path)
 
     expected = {
-        "control_pipeline.png",
         "feedforward_trajectory.png",
         "feedforward_velocity_components.png",
         "feedforward_x_position.png",
