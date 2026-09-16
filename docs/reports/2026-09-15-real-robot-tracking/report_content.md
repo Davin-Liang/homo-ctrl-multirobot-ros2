@@ -32,13 +32,21 @@
 
 表 2 汇总了两组约 45 s、Leader 平均速度约 0.246 m/s 的 Artstein-HPC 实物跟踪指标，包括全过程误差和末 10 s 的跟踪误差与波动。
 
-![图 2：Artstein-HPC 前馈开关轨迹对比](assets/feedforward_comparison.png)
+![图 2：Artstein-HPC 前馈开关轨迹对比](assets/feedforward_trajectory.png)
 
 *图 2　Artstein-HPC 前馈开关轨迹对比*
 
-![图 3：Artstein-HPC 前馈开关距离误差](assets/feedforward_distance_error.png)
+![图 3：Artstein-HPC 前馈开关 Vx/Vy 速度对比](assets/feedforward_velocity_components.png)
 
-*图 3　Artstein-HPC 前馈开关距离误差*
+*图 3　Artstein-HPC 前馈开关 Vx/Vy 速度对比*
+
+![图 4：Artstein-HPC 前馈开关 X 坐标对比](assets/feedforward_x_position.png)
+
+*图 4　Artstein-HPC 前馈开关 X 坐标对比*
+
+![图 5：Artstein-HPC 前馈开关 Y 坐标对比](assets/feedforward_y_position.png)
+
+*图 5　Artstein-HPC 前馈开关 Y 坐标对比*
 
 | 工况 | 全程平均绝对距离误差 (m) | 全程 RMS 距离误差 (m) | 末 10 s 平均绝对距离误差 (m) | 末 10 s 距离误差标准差 (m) |
 | --- | ---: | ---: | ---: | ---: |
@@ -59,13 +67,21 @@
 
 LPC 在 λ初值为 1.5 的实物工况下发生碰撞，未形成可用于轨迹统计的有效记录；λ初值为 2.5 时可完成有效跟踪记录。因此现有 HPC/LPC 结果用于说明阶段性可运行性和现象，不用于宣称严格单变量条件下的性能优劣。
 
-![图 4：Artstein-HPC 与 Artstein-LPC 阶段性轨迹](assets/hpc_lpc_trajectory.png)
+![图 6：Artstein-HPC 与 Artstein-LPC 阶段性轨迹](assets/hpc_lpc_trajectory.png)
 
-*图 4　Artstein-HPC 与 Artstein-LPC 阶段性轨迹*
+*图 6　Artstein-HPC 与 Artstein-LPC 阶段性轨迹*
 
-![图 5：Artstein-HPC 与 Artstein-LPC 阶段性距离误差](assets/hpc_lpc_distance_error.png)
+![图 7：Artstein-HPC 与 Artstein-LPC Vx/Vy 速度对比](assets/hpc_lpc_velocity_components.png)
 
-*图 5　Artstein-HPC 与 Artstein-LPC 阶段性距离误差*
+*图 7　Artstein-HPC 与 Artstein-LPC Vx/Vy 速度对比*
+
+![图 8：Artstein-HPC 与 Artstein-LPC X 坐标对比](assets/hpc_lpc_x_position.png)
+
+*图 8　Artstein-HPC 与 Artstein-LPC X 坐标对比*
+
+![图 9：Artstein-HPC 与 Artstein-LPC Y 坐标对比](assets/hpc_lpc_y_position.png)
+
+*图 9　Artstein-HPC 与 Artstein-LPC Y 坐标对比*
 
 | 工况 | 全程平均绝对距离误差 (m) | 全程 RMS 距离误差 (m) | 末 10 s 平均绝对距离误差 (m) | 末 10 s 距离误差标准差 (m) |
 | --- | ---: | ---: | ---: | ---: |

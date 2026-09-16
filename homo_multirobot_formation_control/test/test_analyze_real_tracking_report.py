@@ -43,6 +43,15 @@ def test_hpc_lpc_stage_uses_the_dedicated_hpc_reference_record():
         'hpc_lpc_reference', 'lpc_lambda_25_v025')
 
 
+def test_lpc_plot_label_omits_leader_speed_from_the_stage_report():
+    assert module.report_label({
+        'id': 'lpc_lambda_25_v025',
+        'controller_family': 'artstein_lpc',
+        'initial_min_lambda': 2.5,
+        'leader_speed_mps': 0.25,
+    }, chinese_labels=False) == 'Artstein-LPC (lambda=2.5)'
+
+
 def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, capsys):
     manifest = (PACKAGE_DIR / "analysis" / "real_tracking_report" /
                 "experiment_manifest.yaml")
@@ -50,11 +59,15 @@ def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, c
     assets = module.generate_report_assets(manifest, tmp_path)
 
     expected = {
-        "feedforward_comparison.png",
-        "feedforward_distance_error.png",
-        "hpc_lpc_trajectory.png",
-        "hpc_lpc_distance_error.png",
         "control_pipeline.png",
+        "feedforward_trajectory.png",
+        "feedforward_velocity_components.png",
+        "feedforward_x_position.png",
+        "feedforward_y_position.png",
+        "hpc_lpc_trajectory.png",
+        "hpc_lpc_velocity_components.png",
+        "hpc_lpc_x_position.png",
+        "hpc_lpc_y_position.png",
     }
     assert {path.name for path in assets} == expected
     assert {path.name for path in tmp_path.glob("*.png")} == expected

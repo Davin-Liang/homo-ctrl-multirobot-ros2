@@ -22,10 +22,14 @@ REQUIRED_COLUMNS = [
     "follower_vy_ms", "follower_v_ms", "distance_m",
 ]
 REPORT_ASSET_FILENAMES = (
-    "feedforward_comparison.png",
-    "feedforward_distance_error.png",
+    "feedforward_trajectory.png",
+    "feedforward_velocity_components.png",
+    "feedforward_x_position.png",
+    "feedforward_y_position.png",
     "hpc_lpc_trajectory.png",
-    "hpc_lpc_distance_error.png",
+    "hpc_lpc_velocity_components.png",
+    "hpc_lpc_x_position.png",
+    "hpc_lpc_y_position.png",
     "control_pipeline.png",
 )
 LEADER_COLOR = "#1f77b4"
@@ -69,8 +73,7 @@ def report_label(experiment, chinese_labels):
     if chinese_labels:
         return experiment["display_label"]
     if experiment["controller_family"] == "artstein_lpc":
-        return ("Artstein-LPC (lambda={:.1f}, Leader speed={:.2f} m/s)".format(
-            experiment["initial_min_lambda"], experiment["leader_speed_mps"]))
+        return "Artstein-LPC (lambda={:.1f})".format(experiment["initial_min_lambda"])
     if experiment["id"] == "hpc_lpc_reference":
         return "Artstein-HPC (stage reference)"
     state = "on" if experiment.get("leader_command_feedforward") else "off"
@@ -232,43 +235,69 @@ def _save_figure(figure, output_path):
     figure.savefig(output_path, dpi=PNG_DPI, bbox_inches="tight")
 
 
-def _draw_trajectory(axis, experiment, rows, label, chinese_labels):
-    leader_x = [row["leader_x_m"] for row in rows]
-    leader_y = [row["leader_y_m"] for row in rows]
-    follower_x = [row["follower_x_m"] for row in rows]
-    follower_y = [row["follower_y_m"] for row in rows]
-    axis.plot(leader_x, leader_y, color=LEADER_COLOR, linewidth=1.3,
-              label=f"{label} — {'Leader' if not chinese_labels else '领航者'}")
-    axis.plot(follower_x, follower_y, color=FOLLOWER_COLOR, linewidth=1.3,
-              label=f"{label} — {'Follower' if not chinese_labels else '跟随者'}")
-    axis.plot(leader_x[0], leader_y[0], marker="o", markersize=4, color=LEADER_COLOR)
-    axis.plot(follower_x[0], follower_y[0], marker="o", markersize=4, color=FOLLOWER_COLOR)
-    axis.plot(leader_x[-1], leader_y[-1], marker="x", markersize=5, color=LEADER_COLOR)
-    axis.plot(follower_x[-1], follower_y[-1], marker="x", markersize=5, color=FOLLOWER_COLOR)
-    theta = [2.0 * math.pi * index / 120.0 for index in range(121)]
-    axis.plot([leader_x[0] + IDEAL_RADIUS_M * math.cos(value) for value in theta],
-              [leader_y[0] + IDEAL_RADIUS_M * math.sin(value) for value in theta],
-              color=IDEAL_RADIUS_COLOR, linestyle="--", linewidth=0.9,
-              label=("Ideal radius: 1.0 m" if not chinese_labels else "理想半径：1.0 m"))
+def _draw_trajectory(axis, selected_series, chinese_labels):
+    """Draw one XY trajectory comparison without an ideal-radius reference."""
+    for index, (experiment, rows) in enumerate(selected_series):
+        label = report_label(experiment, chinese_labels)
+        line_style = ("-", "--", ":")[index]
+        leader_name = "Leader" if not chinese_labels else "领航者"
+        follower_name = "Follower" if not chinese_labels else "跟随者"
+        leader_x = [row["leader_x_m"] for row in rows]
+        leader_y = [row["leader_y_m"] for row in rows]
+        follower_x = [row["follower_x_m"] for row in rows]
+        follower_y = [row["follower_y_m"] for row in rows]
+        axis.plot(leader_x, leader_y, color=LEADER_COLOR, linestyle=line_style, linewidth=1.3,
+                  label=f"{label} — {leader_name}")
+        axis.plot(follower_x, follower_y, color=FOLLOWER_COLOR, linestyle=line_style, linewidth=1.3,
+                  label=f"{label} — {follower_name}")
+        axis.plot(leader_x[0], leader_y[0], marker="o", markersize=3.5, color=LEADER_COLOR)
+        axis.plot(follower_x[0], follower_y[0], marker="o", markersize=3.5, color=FOLLOWER_COLOR)
+        axis.plot(leader_x[-1], leader_y[-1], marker="x", markersize=4.5, color=LEADER_COLOR)
+        axis.plot(follower_x[-1], follower_y[-1], marker="x", markersize=4.5, color=FOLLOWER_COLOR)
     axis.set_aspect("equal", adjustable="box")
     axis.set_xlabel("x (m)")
     axis.set_ylabel("y (m)")
     axis.grid(True, alpha=0.25)
-    axis.set_title(label, fontsize=9)
     axis.legend(fontsize=6.5, loc="best")
 
 
-def _draw_distance_error(axis, selected_series, chinese_labels):
-    for experiment, rows in selected_series:
-        axis.plot([row["time_s"] for row in rows],
-                  [row["distance_m"] - IDEAL_RADIUS_M for row in rows], linewidth=1.1,
-                  label=report_label(experiment, chinese_labels))
-    axis.axhline(0.0, color=IDEAL_RADIUS_COLOR, linestyle="--", linewidth=1.0,
-                 label=("Zero error" if not chinese_labels else "零误差线"))
+def _draw_velocity_components(axis, selected_series, chinese_labels):
+    """Draw Vx and Vy traces for each Leader--Follower experiment pair."""
+    for index, (experiment, rows) in enumerate(selected_series):
+        label = report_label(experiment, chinese_labels)
+        line_style = ("-", "--", ":")[index]
+        time_s = [row["time_s"] for row in rows]
+        axis.plot(time_s, [row["leader_vx_ms"] for row in rows], color=LEADER_COLOR,
+                  linestyle=line_style, linewidth=1.0, label=f"{label} — Leader Vx")
+        axis.plot(time_s, [row["follower_vx_ms"] for row in rows], color=FOLLOWER_COLOR,
+                  linestyle=line_style, linewidth=1.0, label=f"{label} — Follower Vx")
+        axis.plot(time_s, [row["leader_vy_ms"] for row in rows], color="#4fa3d1",
+                  linestyle=line_style, linewidth=1.0, label=f"{label} — Leader Vy")
+        axis.plot(time_s, [row["follower_vy_ms"] for row in rows], color="#c99a00",
+                  linestyle=line_style, linewidth=1.0, label=f"{label} — Follower Vy")
     axis.set_xlabel("Time (s)" if not chinese_labels else "时间 (s)")
-    axis.set_ylabel("Distance error (m)" if not chinese_labels else "距离误差 (m)")
+    axis.set_ylabel("Velocity (m/s)" if not chinese_labels else "速度 (m/s)")
     axis.grid(True, alpha=0.25)
-    axis.legend(fontsize=7, loc="best")
+    axis.legend(fontsize=6.2, loc="best", ncol=2)
+
+
+def _draw_position_component(axis, selected_series, component, chinese_labels):
+    """Draw the selected map-position component against time."""
+    column = f"{component.lower()}_m"
+    leader_column = f"leader_{column}"
+    follower_column = f"follower_{column}"
+    for index, (experiment, rows) in enumerate(selected_series):
+        label = report_label(experiment, chinese_labels)
+        line_style = ("-", "--", ":")[index]
+        time_s = [row["time_s"] for row in rows]
+        axis.plot(time_s, [row[leader_column] for row in rows], color=LEADER_COLOR,
+                  linestyle=line_style, linewidth=1.1, label=f"{label} — Leader")
+        axis.plot(time_s, [row[follower_column] for row in rows], color=FOLLOWER_COLOR,
+                  linestyle=line_style, linewidth=1.1, label=f"{label} — Follower")
+    axis.set_xlabel("Time (s)" if not chinese_labels else "时间 (s)")
+    axis.set_ylabel(f"{component} (m)")
+    axis.grid(True, alpha=0.25)
+    axis.legend(fontsize=6.5, loc="best")
 
 
 def _draw_control_pipeline(plt, output_path, chinese_labels):
@@ -307,7 +336,7 @@ def _draw_control_pipeline(plt, output_path, chinese_labels):
 
 
 def generate_report_assets(manifest_path, assets_dir):
-    """Generate the five report-ready, 300 dpi PNG assets from manifest raw series."""
+    """Generate separate 300 dpi report figures from manifest-selected raw series."""
     chinese_labels, plt = configure_report_plotting()
     series_by_id = {experiment["id"]: (experiment, rows)
                     for experiment, rows in load_report_series(manifest_path)}
@@ -319,29 +348,28 @@ def generate_report_assets(manifest_path, assets_dir):
     ff_series = [series_by_id[experiment_id] for experiment_id in required_ids[:2]]
     stage_series = [series_by_id[experiment_id] for experiment_id in stage_experiment_ids()]
 
-    figure, axes = plt.subplots(1, 2, figsize=(13.4, 6.1), constrained_layout=True)
-    for axis, (experiment, rows) in zip(axes, ff_series):
-        _draw_trajectory(axis, experiment, rows, report_label(experiment, chinese_labels), chinese_labels)
-    _save_figure(figure, assets_dir / "feedforward_comparison.png")
-    plt.close(figure)
+    for prefix, selected_series in (("feedforward", ff_series), ("hpc_lpc", stage_series)):
+        figure, axis = plt.subplots(figsize=(7.4, 6.2), constrained_layout=True)
+        _draw_trajectory(axis, selected_series, chinese_labels)
+        _save_figure(figure, assets_dir / f"{prefix}_trajectory.png")
+        plt.close(figure)
 
-    figure, axis = plt.subplots(figsize=(10.5, 4.6), constrained_layout=True)
-    _draw_distance_error(axis, ff_series, chinese_labels)
-    _save_figure(figure, assets_dir / "feedforward_distance_error.png")
-    plt.close(figure)
+        figure, axis = plt.subplots(figsize=(10.8, 5.4), constrained_layout=True)
+        _draw_velocity_components(axis, selected_series, chinese_labels)
+        _save_figure(figure, assets_dir / f"{prefix}_velocity_components.png")
+        plt.close(figure)
 
-    figure, axes = plt.subplots(1, 3, figsize=(18.0, 5.7), constrained_layout=True)
-    for axis, (experiment, rows) in zip(axes, stage_series):
-        _draw_trajectory(axis, experiment, rows, report_label(experiment, chinese_labels), chinese_labels)
-    _save_figure(figure, assets_dir / "hpc_lpc_trajectory.png")
-    plt.close(figure)
-
-    figure, axis = plt.subplots(figsize=(11.5, 4.8), constrained_layout=True)
-    _draw_distance_error(axis, stage_series, chinese_labels)
-    _save_figure(figure, assets_dir / "hpc_lpc_distance_error.png")
-    plt.close(figure)
+        for component, suffix in (("X", "x_position"), ("Y", "y_position")):
+            figure, axis = plt.subplots(figsize=(10.8, 5.0), constrained_layout=True)
+            _draw_position_component(axis, selected_series, component, chinese_labels)
+            _save_figure(figure, assets_dir / f"{prefix}_{suffix}.png")
+            plt.close(figure)
 
     _draw_control_pipeline(plt, assets_dir / "control_pipeline.png", chinese_labels)
+    for obsolete_name in (
+            "feedforward_comparison.png", "feedforward_distance_error.png",
+            "hpc_lpc_distance_error.png"):
+        (assets_dir / obsolete_name).unlink(missing_ok=True)
     return [assets_dir / filename for filename in REPORT_ASSET_FILENAMES]
 
 
