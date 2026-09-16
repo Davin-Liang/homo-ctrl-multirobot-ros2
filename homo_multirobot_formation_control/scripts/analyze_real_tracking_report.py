@@ -301,9 +301,12 @@ def _draw_position_component(axis, selected_series, component, chinese_labels):
 
 
 def _draw_control_pipeline(plt, output_path, chinese_labels):
-    figure, axis = plt.subplots(figsize=(15, 4.2))
-    axis.set_xlim(0, 16.2)
-    axis.set_ylim(0, 5.0)
+    """Draw an aligned control-flow diagram with one consistent arrow baseline."""
+    from matplotlib.patches import FancyBboxPatch
+
+    figure, axis = plt.subplots(figsize=(15, 4.6))
+    axis.set_xlim(0, 15.7)
+    axis.set_ylim(0, 5.2)
     axis.axis("off")
     labels = (
         ("Motion-capture\nstate", "动捕状态"),
@@ -313,24 +316,42 @@ def _draw_control_pipeline(plt, output_path, chinese_labels):
         ("Velocity / wheel-speed\nconstraints", "速度/轮速约束"),
         ("Follower cmd_vel", "Follower cmd_vel"),
     )
-    xs = (0.25, 2.8, 5.55, 8.25, 11.25, 14.1)
-    width, height, y = 1.65, 1.05, 2.0
+    xs = (0.25, 2.7, 5.15, 7.6, 10.65, 13.1)
+    width, height, y = 1.85, 0.92, 1.95
+    line_y = y + height / 2
     for x, label_pair in zip(xs, labels):
         text = label_pair[1] if chinese_labels else label_pair[0]
-        axis.text(x + width / 2, y + height / 2, text, ha="center", va="center", fontsize=8.5,
-                  bbox={"boxstyle": "round,pad=0.35", "fc": "#eef4fb", "ec": "#356a9a"})
-    for left, right in zip(xs, xs[1:]):
-        axis.annotate("", xy=(right - 0.08, y + height / 2), xytext=(left + width + 0.08, y + height / 2),
-                      arrowprops={"arrowstyle": "->", "lw": 1.4, "color": "#333333"})
-    sum_x, sum_y = 10.65, y + height / 2
+        patch = FancyBboxPatch((x, y), width, height, boxstyle="round,pad=0.05,rounding_size=0.08",
+                               facecolor="#eef4fb", edgecolor="#356a9a", linewidth=1.25)
+        axis.add_patch(patch)
+        axis.text(x + width / 2, line_y, text, ha="center", va="center", fontsize=8.4)
+
+    sum_x, sum_y, sum_radius = 9.95, line_y, 0.18
     axis.text(sum_x, sum_y, "+", ha="center", va="center", fontsize=15, weight="bold",
               bbox={"boxstyle": "circle,pad=0.14", "fc": "white", "ec": "#333333"})
+    flow_segments = (
+        (xs[0] + width, xs[1]),
+        (xs[1] + width, xs[2]),
+        (xs[2] + width, xs[3]),
+        (xs[3] + width, sum_x - sum_radius),
+        (sum_x + sum_radius, xs[4]),
+        (xs[4] + width, xs[5]),
+    )
+    for start_x, end_x in flow_segments:
+        axis.annotate("", xy=(end_x, line_y), xytext=(start_x, line_y),
+                      arrowprops={"arrowstyle": "->", "lw": 1.45, "color": "#333333"})
     optional = ("Optional: Leader cmd_vel velocity-increment\nfeedforward (Experiment 1 on/off)"
                 if not chinese_labels else "可选：Leader cmd_vel 速度增量前馈\n（实验一开/关）")
-    axis.text(8.9, 4.1, optional, ha="center", va="center", fontsize=8,
-              bbox={"boxstyle": "round,pad=0.35", "fc": "#fff7e6", "ec": "#b36b00"})
-    axis.annotate("", xy=(sum_x, sum_y + 0.15), xytext=(9.4, 3.55),
-                  arrowprops={"arrowstyle": "->", "lw": 1.2, "ls": "--", "color": "#b36b00"})
+    optional_y = 4.0
+    optional_width, optional_height = 4.1, 0.8
+    optional_x = sum_x - optional_width / 2
+    patch = FancyBboxPatch((optional_x, optional_y), optional_width, optional_height,
+                           boxstyle="round,pad=0.05,rounding_size=0.08", facecolor="#fff7e6",
+                           edgecolor="#b36b00", linewidth=1.25)
+    axis.add_patch(patch)
+    axis.text(sum_x, optional_y + optional_height / 2, optional, ha="center", va="center", fontsize=8)
+    axis.annotate("", xy=(sum_x, sum_y + sum_radius), xytext=(sum_x, optional_y),
+                  arrowprops={"arrowstyle": "->", "lw": 1.25, "ls": "--", "color": "#b36b00"})
     _save_figure(figure, output_path)
     plt.close(figure)
 
