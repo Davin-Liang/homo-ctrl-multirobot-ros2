@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | A | Artstein-HPC（Leader 命令前馈：开） | 前馈开/关对比 |
 | B | Artstein-HPC（Leader 命令前馈：关） | 前馈开/关对比 |
-| C | Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s） | HPC/LPC 阶段性图表 |
+| C | Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s） | 调参记录，不纳入报告图表与指标表 |
 | D | Artstein-LPC（λ初值=2.5，Leader 速度=0.25 m/s） | HPC/LPC 阶段性图表及最新可运行结果 |
 | E | Artstein-HPC（实验二参考组） | HPC/LPC 阶段性图表的 HPC 参考组 |
 
@@ -30,4 +30,4 @@
 | --- | --- |
 | 图 1：实物跟踪控制与数据流 | 控制器实现与参数配置 |
 | 图 2、图 3：Leader 命令速度前馈开/关对比 | A、B |
-| 图 4、图 5：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、C、D |
+| 图 4、图 5：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、D |

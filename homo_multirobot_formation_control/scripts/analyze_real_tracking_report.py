@@ -79,7 +79,7 @@ def report_label(experiment, chinese_labels):
 
 def stage_experiment_ids():
     """Return the dedicated records used for the HPC/LPC stage comparison."""
-    return ("hpc_lpc_reference", "lpc_lambda_20_v020", "lpc_lambda_25_v025")
+    return ("hpc_lpc_reference", "lpc_lambda_25_v025")
 
 
 def compute_distance_metrics(distances, ideal_radius_m):

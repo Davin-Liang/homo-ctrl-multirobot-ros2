@@ -40,7 +40,7 @@ def test_tail_metrics_describe_the_last_ten_seconds_of_a_recording():
 
 def test_hpc_lpc_stage_uses_the_dedicated_hpc_reference_record():
     assert module.stage_experiment_ids() == (
-        'hpc_lpc_reference', 'lpc_lambda_20_v020', 'lpc_lambda_25_v025')
+        'hpc_lpc_reference', 'lpc_lambda_25_v025')
 
 
 def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, capsys):
