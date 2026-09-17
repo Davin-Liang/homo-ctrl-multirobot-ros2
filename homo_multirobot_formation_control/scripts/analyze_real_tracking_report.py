@@ -221,6 +221,8 @@ def analyze_experiment(repository_root, experiment):
         "source_dir": source_dir,
         "trial_id": metadata.get("trial_id", ""),
         "ideal_radius_m": IDEAL_RADIUS_M,
+        "initial_distance_m": distances[0],
+        "initial_abs_distance_error_m": abs(distances[0] - IDEAL_RADIUS_M),
         "duration_s": rows[-1]["time_s"] - rows[0]["time_s"],
         "leader_path_length_m": path_length(rows, "leader_x_m", "leader_y_m"),
         "follower_path_length_m": path_length(rows, "follower_x_m", "follower_y_m"),
