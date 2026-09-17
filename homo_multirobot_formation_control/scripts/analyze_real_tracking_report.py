@@ -131,8 +131,10 @@ def compute_tail_distance_metrics(rows, ideal_radius_m, window_s):
     errors = [distance - ideal_radius_m for distance in tail_distances]
     return {
         "tail_window_s": window_s,
+        "tail_mean_signed_distance_error_m": statistics.mean(errors),
         "tail_mean_abs_distance_error_m": base_metrics["mean_abs_distance_error_m"],
         "tail_distance_error_std_m": statistics.pstdev(errors),
+        "tail_max_abs_distance_error_m": max(abs(error) for error in errors),
     }
 
 

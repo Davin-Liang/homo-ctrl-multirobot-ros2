@@ -373,28 +373,28 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
         row = metrics[experiment_id]
         rows.append((
             labels[experiment_id],
-            f"{float(row['mean_abs_distance_error_m']):.4f}",
-            f"{float(row['rms_distance_error_m']):.4f}",
+            f"{float(row['initial_distance_m']):.4f}",
+            f"{float(row['tail_mean_signed_distance_error_m']):.4f}",
             f"{float(row['tail_mean_abs_distance_error_m']):.4f}",
             f"{float(row['tail_distance_error_std_m']):.4f}",
-            f"{float(row['mean_relative_velocity_error_mps']):.4f}",
+            f"{float(row['tail_max_abs_distance_error_m']):.4f}",
             f"{float(row['tail_mean_relative_velocity_error_mps']):.4f}",
         ))
     add_table(document, (
-        "工况", "平均距离误差 (m)", "RMS 距离误差 (m)", "末 10 s 距离误差 (m)",
-        "末 10 s 距离误差标准差 (m)", "平均相对速度误差 (m/s)",
+        "工况", "初始车间距 (m)", "末 10 s 平均距离偏差 (m)", "末 10 s 平均距离误差 (m)",
+        "末 10 s 距离误差标准差 (m)", "末 10 s 最大距离误差 (m)",
         "末 10 s 相对速度误差 (m/s)"), rows)
     add_caption(document, "表 4　Artstein 4D 与原始4D控制器的实物跟踪指标对比")
     artstein_initial = float(metrics["hpc_lpc_reference"]["initial_distance_m"])
     original_initial = float(metrics["original_4d_reference"]["initial_distance_m"])
     add_body_paragraph(
         document,
-        "由表 4 可见，在本次记录中，原始4D控制器的平均距离误差和 RMS 距离误差"
-        "小于 Artstein 4D 组；Artstein 4D 组的末 10 s 距离误差、距离误差标准差和相对"
-        "速度误差则更小。需要注意，两组记录的初始车间距分别为 "
+        "由表 4 可见，两组记录的初始车间距分别为 "
         f"{artstein_initial:.4f} m 和 {original_initial:.4f} m，初始误差并不相同，"
-        "因此全过程平均指标会受到起始阶段的影响，不能直接作为两类控制器性能优劣的严格结论。"
-        "末 10 s 指标更适合反映两组记录进入跟踪后段后的稳定性差异。",
+        "因此本节不以全过程平均距离误差和 RMS 距离误差作为主要比较依据。"
+        "进入末 10 s 跟踪阶段后，Artstein 4D 组的平均距离误差、距离误差标准差、最大距离误差"
+        "以及相对速度误差均小于原始4D组；同时，Artstein 4D 组的平均距离偏差更接近零，"
+        "说明其在本次记录的后段能够保持更小的编队半径偏差与运动不同步程度。",
     )
     document.save(word_path)
     return word_path

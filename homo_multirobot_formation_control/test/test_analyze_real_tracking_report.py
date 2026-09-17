@@ -34,8 +34,10 @@ def test_tail_metrics_describe_the_last_ten_seconds_of_a_recording():
                                                    window_s=10.0)
 
     assert metrics['tail_window_s'] == 10.0
+    assert metrics['tail_mean_signed_distance_error_m'] == pytest.approx(0.1)
     assert metrics['tail_mean_abs_distance_error_m'] == 0.1
     assert metrics['tail_distance_error_std_m'] == pytest.approx(0.0816496580927726)
+    assert metrics['tail_max_abs_distance_error_m'] == pytest.approx(0.2)
 
 
 def test_velocity_metrics_measure_leader_follower_velocity_mismatch():
