@@ -79,6 +79,8 @@ class MarkdownWordReportTest(unittest.TestCase):
             builder.build_word(REPORT_DIR, output)
             builder.append_artstein_original_4d_comparison(REPORT_DIR, output)
             builder.append_artstein_original_4d_comparison(REPORT_DIR, output)
+            builder.append_experiment_summary(output)
+            builder.append_experiment_summary(output)
 
             document = Document(output)
             text = "\n".join(
@@ -92,6 +94,8 @@ class MarkdownWordReportTest(unittest.TestCase):
             self.assertIn("初始车间距分别为 1.9112 m 和 1.5333 m", text)
             self.assertIn("不宜作为两类控制器性能优劣的主要依据", text)
             self.assertIn("状态预测与时滞补偿对编队稳定性具有积极作用", text)
+            self.assertIn("8. 本阶段实验小结", text)
+            self.assertEqual(text.count("8. 本阶段实验小结"), 1)
 
 
 if __name__ == "__main__":

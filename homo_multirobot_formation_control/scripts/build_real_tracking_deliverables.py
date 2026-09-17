@@ -399,6 +399,40 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
     return word_path
 
 
+def append_experiment_summary(word_path):
+    """Append an idempotent, concise summary section to the assembled Word report."""
+    word_path = Path(word_path)
+    document = Document(word_path)
+    heading_text = "8. 本阶段实验小结"
+    for paragraph in document.paragraphs:
+        if paragraph.text == heading_text:
+            body = paragraph._p.getparent()
+            start = list(body).index(paragraph._p)
+            for element in list(body)[start:]:
+                if element.tag.endswith("sectPr"):
+                    break
+                body.remove(element)
+            break
+    add_heading(document, heading_text, 1)
+    add_body_paragraph(
+        document,
+        "（1）完成双全向移动机器人的 Leader–Follower 实物闭环编队跟踪，建立了动捕状态反馈、"
+        "延迟补偿与轨迹记录链路。",
+    )
+    add_body_paragraph(
+        document,
+        "（2）在本次实物记录中，开启 Leader 命令速度前馈后，距离误差、速度一致性和后段波动"
+        "均有所改善。",
+    )
+    add_body_paragraph(
+        document,
+        "（3）在 Artstein 4D 与原始4D控制器对比中，考虑初始条件差异后，以末 10 s 指标为主，"
+        "Artstein 4D 在后段距离保持、波动和速度一致性上表现更好。",
+    )
+    document.save(word_path)
+    return word_path
+
+
 def _add_ppt_text(slide, text, left, top, width, height, *, size=20, bold=False,
                   color=(31, 78, 121), align=PP_ALIGN.LEFT, wrap=False):
     """Add an editable text box to a presentation slide."""
