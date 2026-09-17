@@ -278,8 +278,9 @@ def build_word(input_dir, word_out):
     blocks = parse_markdown_report(input_dir / "report_content.md")
     document = Document()
     section = document.sections[0]
-    section.orientation = WD_ORIENT.LANDSCAPE
-    section.page_width, section.page_height = section.page_height, section.page_width
+    section.orientation = WD_ORIENT.PORTRAIT
+    section.page_width = Cm(21.0)
+    section.page_height = Cm(29.7)
     section.top_margin = Cm(1.6)
     section.bottom_margin = Cm(1.6)
     section.left_margin = Cm(1.8)

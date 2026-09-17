@@ -56,6 +56,9 @@ class MarkdownWordReportTest(unittest.TestCase):
             builder.build_word(REPORT_DIR, output)
 
             document = Document(output)
+            section = document.sections[0]
+            self.assertAlmostEqual(section.page_width.cm, 21.0, places=1)
+            self.assertAlmostEqual(section.page_height.cm, 29.7, places=1)
             text = "\n".join(
                 [paragraph.text for paragraph in document.paragraphs]
                 + [cell.text for table in document.tables for row in table.rows for cell in row.cells]
