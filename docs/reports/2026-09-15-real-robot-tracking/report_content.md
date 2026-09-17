@@ -2,7 +2,7 @@
 
 ## 1. 实验任务说明
 
-本实验在双移动机器人 Leader–Follower 场景中，记录并整理采用 Artstein 输入时滞补偿的齐次比例控制（Artstein-HPC）与线性比例控制（Artstein-LPC）的阶段性实物跟踪结果。
+本实验面向双移动机器人 Leader–Follower 编队跟踪任务，记录并整理采用 Artstein 输入时滞补偿的齐次比例控制（Artstein-HPC）与线性比例控制（Artstein-LPC）的阶段性实物跟踪结果。本阶段包括两项实验：比较 Leader 命令速度前馈开启与关闭时的跟踪效果，以及开展 Artstein-HPC 与 Artstein-LPC 的初步实物对照。
 
 ## 2. 数据流与控制方法
 
