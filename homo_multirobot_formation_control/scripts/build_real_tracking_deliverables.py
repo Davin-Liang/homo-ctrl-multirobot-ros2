@@ -391,10 +391,9 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
         document,
         "由表 4 可见，两组记录的初始车间距分别为 "
         f"{artstein_initial:.4f} m 和 {original_initial:.4f} m，初始误差并不相同，"
-        "因此本节不以全过程平均距离误差和 RMS 距离误差作为主要比较依据。"
-        "进入末 10 s 跟踪阶段后，Artstein 4D 组的平均距离误差、距离误差标准差、最大距离误差"
-        "以及相对速度误差均小于原始4D组；同时，Artstein 4D 组的平均距离偏差更接近零，"
-        "说明其在本次记录的后段能够保持更小的编队半径偏差与运动不同步程度。",
+        "两组记录的初始车间距不同，故全程平均距离误差和 RMS 距离误差会受到起始阶段误差大小的显著影响，"
+        "不宜作为两类控制器性能优劣的主要依据。以末 10 s 指标观察，Artstein 4D 组的距离保持误差、"
+        "波动幅度和相对速度误差均更小，说明在进入后段跟踪后，其状态预测与时滞补偿对编队稳定性具有积极作用。",
     )
     document.save(word_path)
     return word_path

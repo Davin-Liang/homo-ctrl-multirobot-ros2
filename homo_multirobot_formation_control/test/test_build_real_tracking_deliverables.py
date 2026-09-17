@@ -90,7 +90,8 @@ class MarkdownWordReportTest(unittest.TestCase):
             self.assertIn("0.0722", text)
             self.assertEqual(text.count("7. 实验三：Artstein 4D 与原始4D控制器实物对比"), 1)
             self.assertIn("初始车间距分别为 1.9112 m 和 1.5333 m", text)
-            self.assertIn("不以全过程平均距离误差和 RMS 距离误差作为主要比较依据", text)
+            self.assertIn("不宜作为两类控制器性能优劣的主要依据", text)
+            self.assertIn("状态预测与时滞补偿对编队稳定性具有积极作用", text)
 
 
 if __name__ == "__main__":
