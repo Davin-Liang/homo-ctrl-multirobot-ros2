@@ -28,5 +28,5 @@
 
 | 报告图表 | 对应来源 |
 | --- | --- |
-| 图 1--图 4：Leader 命令速度前馈开/关对比 | A、B |
-| 图 5--图 8：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、D |
+| 图 3--图 6：Leader 命令速度前馈开/关对比 | A、B |
+| 图 7--图 10：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、D |
