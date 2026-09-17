@@ -97,7 +97,7 @@ class MarkdownWordReportTest(unittest.TestCase):
             self.assertIn("8. 本阶段实验小结", text)
             self.assertEqual(text.count("8. 本阶段实验小结"), 1)
             self.assertIn("Artstein-HPC 与 Artstein-LPC 的初步实物对比", text)
-            self.assertIn("采用 Artstein 时滞补偿的控制器与原始控制器", text)
+            self.assertIn("Artstein-HPC 与原始控制器对比", text)
 
 
 if __name__ == "__main__":
