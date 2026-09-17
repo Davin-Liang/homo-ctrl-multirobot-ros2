@@ -22,7 +22,7 @@
 | C | `robot_traj/real/4d_artstein_lpc_20260915_104805` | `trial_01` | `use_hpc=false`、`initial_min_lambda=2.0`、Leader 速度 0.20 m/s |
 | D | `robot_traj/real/4d_artstein_lpc_20260915_105440` | `trial_02` | `use_hpc=false`、`initial_min_lambda=2.5`、Leader 速度 0.25 m/s |
 | E | `robot_traj/real/4d_artstein_20260909_173424` | `trial_03` | 用户确认 λ初值=2.5 的 Artstein-HPC 实验二参考组；动捕实物记录 |
-| F | `robot_traj/real/4d_20260909_185103` | `trial_01` | 原始4D控制器实物记录；未进行Artstein时滞补偿 |
+| F | `robot_traj/real/4d_20260909_184701` | `trial_01` | 原始4D控制器实物记录；未进行Artstein时滞补偿 |
 
 实验配置以各目录的 `metadata.yaml` 为依据，轨迹与误差计算以 `raw.csv` 为依据。报告中的距离评价基准统一为控制器 `radius=1.0 m`。
 

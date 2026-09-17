@@ -20,7 +20,7 @@ experiments:
     controller_family: artstein_hpc
     initial_min_lambda: 2.5
   - id: original_4d_reference
-    source_dir: robot_traj/real/4d_20260909_185103
+    source_dir: robot_traj/real/4d_20260909_184701
     display_label: 原始4D控制器（未进行Artstein时滞补偿）
     comparison: artstein_original_4d_compare
     controller_family: original_4d

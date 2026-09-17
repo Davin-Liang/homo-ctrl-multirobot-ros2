@@ -336,7 +336,17 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
     if missing:
         raise ValueError("缺少实验三指标：" + ", ".join(missing))
     document = Document(word_path)
-    add_heading(document, "7. 实验三：Artstein 4D 与原始4D控制器实物对比", 1)
+    heading_text = "7. 实验三：Artstein 4D 与原始4D控制器实物对比"
+    for paragraph in document.paragraphs:
+        if paragraph.text == heading_text:
+            body = paragraph._p.getparent()
+            start = list(body).index(paragraph._p)
+            for element in list(body)[start:]:
+                if element.tag.endswith("sectPr"):
+                    break
+                body.remove(element)
+            break
+    add_heading(document, heading_text, 1)
     add_body_paragraph(
         document,
         "本实验比较采用 Artstein 输入时滞补偿与 Follower 状态前向预测的 4D 控制器，"

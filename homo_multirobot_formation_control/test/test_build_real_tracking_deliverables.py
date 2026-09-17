@@ -78,6 +78,7 @@ class MarkdownWordReportTest(unittest.TestCase):
             output = Path(temporary_directory) / "report.docx"
             builder.build_word(REPORT_DIR, output)
             builder.append_artstein_original_4d_comparison(REPORT_DIR, output)
+            builder.append_artstein_original_4d_comparison(REPORT_DIR, output)
 
             document = Document(output)
             text = "\n".join(
@@ -86,7 +87,8 @@ class MarkdownWordReportTest(unittest.TestCase):
             )
             self.assertIn("7. 实验三：Artstein 4D 与原始4D控制器实物对比", text)
             self.assertIn("原始4D控制器（未进行Artstein时滞补偿）", text)
-            self.assertIn("0.0596", text)
+            self.assertIn("0.0732", text)
+            self.assertEqual(text.count("7. 实验三：Artstein 4D 与原始4D控制器实物对比"), 1)
 
 
 if __name__ == "__main__":
