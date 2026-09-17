@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import re
 from pathlib import Path
 
 from docx import Document
@@ -188,11 +189,93 @@ def metric_rows(metrics, comparison):
     ]
 
 
+IMAGE_PATTERN = re.compile(r"!\[[^]]*\]\(([^)]+)\)")
+
+
+def _table_cells(line):
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def parse_markdown_report(source_path):
+    """Parse the limited Markdown subset used by the editable report source."""
+    lines = Path(source_path).read_text(encoding="utf-8").splitlines()
+    blocks, index = [], 0
+    while index < len(lines):
+        line = lines[index].strip()
+        if not line or line.startswith("<!--"):
+            index += 1
+            continue
+        if line.startswith("# "):
+            blocks.append({"kind": "title", "text": line[2:].strip()})
+            index += 1
+            continue
+        if line.startswith("## "):
+            blocks.append({"kind": "heading", "text": line[3:].strip()})
+            index += 1
+            continue
+        image_match = IMAGE_PATTERN.fullmatch(line)
+        if image_match:
+            blocks.append({"kind": "image", "path": Path(image_match.group(1))})
+            index += 1
+            continue
+        if line.startswith("*") and line.endswith("*"):
+            blocks.append({"kind": "caption", "text": line.strip("*").strip()})
+            index += 1
+            continue
+        if line.startswith("|"):
+            table_lines = []
+            while index < len(lines) and lines[index].strip().startswith("|"):
+                table_lines.append(lines[index].strip())
+                index += 1
+            headers = _table_cells(table_lines[0])
+            rows = [_table_cells(table_line) for table_line in table_lines[2:]]
+            image_rows = [row for row in rows if any(IMAGE_PATTERN.fullmatch(cell) for cell in row)]
+            if image_rows:
+                images = [Path(IMAGE_PATTERN.fullmatch(cell).group(1)) for cell in image_rows[0]]
+                captions = next((row for row in rows if row is not image_rows[0]), [""] * len(images))
+                blocks.append({"kind": "image_table", "headers": headers,
+                               "images": images, "captions": captions})
+            else:
+                blocks.append({"kind": "table", "headers": headers, "rows": rows})
+            continue
+        paragraph_lines = []
+        while index < len(lines):
+            candidate = lines[index].strip()
+            if (not candidate or candidate.startswith("#") or candidate.startswith("|")
+                    or candidate.startswith("<!--") or IMAGE_PATTERN.fullmatch(candidate)
+                    or (candidate.startswith("*") and candidate.endswith("*"))):
+                break
+            paragraph_lines.append(candidate)
+            index += 1
+        blocks.append({"kind": "paragraph", "text": " ".join(paragraph_lines).replace("`", "")})
+    return blocks
+
+
+def add_image_table(document, headers, images, captions, base_dir):
+    table = document.add_table(rows=2, cols=len(images))
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for cell, header in zip(table.rows[0].cells, headers):
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = cell.paragraphs[0].add_run(header)
+        set_run_font(run, size=9, bold=True)
+    for cell, image, caption in zip(table.rows[1].cells, images, captions):
+        image_path = base_dir / image
+        if not image_path.is_file():
+            raise FileNotFoundError(image_path)
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cell.paragraphs[0].add_run().add_picture(str(image_path), width=Cm(9.4))
+        caption_paragraph = cell.add_paragraph()
+        caption_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = caption_paragraph.add_run(caption.strip("*").strip())
+        set_run_font(run, size=8)
+    document.add_paragraph()
+
+
 def build_word(input_dir, word_out):
-    """Build the report document and return its output path."""
+    """Build the Word report directly from the editable Markdown source."""
     input_dir = Path(input_dir)
     word_out = Path(word_out)
-    conditions, metrics = load_report_data(input_dir)
+    blocks = parse_markdown_report(input_dir / "report_content.md")
     document = Document()
     section = document.sections[0]
     section.orientation = WD_ORIENT.LANDSCAPE
@@ -206,64 +289,32 @@ def build_word(input_dir, word_out):
     normal._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
     normal.font.size = Pt(10)
 
-    title = document.add_paragraph()
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title.paragraph_format.space_after = Pt(14)
-    title_run = title.add_run(report_paragraphs()[0])
-    set_run_font(title_run, size=18, bold=True)
-
-    paragraphs = report_paragraphs()
-    add_heading(document, paragraphs[1], 1)
-    add_body_paragraph(document, paragraphs[2])
-
-    add_heading(document, paragraphs[3], 1)
-    add_body_paragraph(document, paragraphs[4])
-    add_body_paragraph(document, paragraphs[5])
-    add_image(document, input_dir / "assets" / "control_pipeline.png", "图 1  实物跟踪控制与数据流")
-
-    add_heading(document, paragraphs[6], 1)
-    add_body_paragraph(document, paragraphs[7])
-    condition_rows = [
-        (
-            row["实验标签"], row["控制器"], row["Leader 命令前馈"] or "—",
-            row["initial_min_lambda"] or "—", row["Leader 速度"] or "—",
-            row["录制时长"], row["状态源"], "1.0 m",
-        )
-        for row in conditions
-    ]
-    add_table(document,
-              ("实验标签", "控制器", "Leader 命令前馈", "λ初值", "Leader 速度", "时长", "状态源", "评价半径"),
-              condition_rows)
-    add_body_paragraph(document, "数据来源对照（目录相对于 homo_multirobot_formation_control；"
-                       "各目录使用 raw.csv 与 metadata.yaml；图表中的 A–D 对应下表）：")
-    sources = add_table(document, ("来源", "实验标签", "原始目录 / trial-ID"), [
-        (SOURCE_IDS[row["experiment_id"]], row["display_label"],
-         f"{row['source_dir']} / {row['trial_id']}") for row in metrics
-    ])
-    sources.autofit = False
-    for row in sources.rows:
-        for cell, width in zip(row.cells, (1.0, 6.0, 18.0)):
-            cell.width = Cm(width)
-
-    add_heading(document, paragraphs[8], 1)
-    add_body_paragraph(document, paragraphs[9])
-    add_image(document, input_dir / "assets" / "feedforward_comparison.png", "图 2  Artstein-HPC 前馈开/关轨迹对比（来源 A、B）")
-    add_image(document, input_dir / "assets" / "feedforward_distance_error.png", "图 3  Artstein-HPC 前馈开/关距离误差（来源 A、B）")
-    add_table(document,
-              ("实验标签", "采样数", "平均绝对误差 (m)", "RMS 误差 (m)", "末帧绝对误差 (m)"),
-              metric_rows(metrics, "leader_command_feedforward"))
-
-    add_heading(document, paragraphs[10], 1)
-    add_body_paragraph(document, paragraphs[11])
-    add_image(document, input_dir / "assets" / "hpc_lpc_trajectory.png", "图 4  Artstein-HPC 与 Artstein-LPC 阶段性轨迹（来源 A、C、D）")
-    add_image(document, input_dir / "assets" / "hpc_lpc_distance_error.png", "图 5  Artstein-HPC 与 Artstein-LPC 阶段性距离误差（来源 A、C、D）")
-    add_table(document,
-              ("实验标签", "采样数", "平均绝对误差 (m)", "RMS 误差 (m)", "末帧绝对误差 (m)"),
-              metric_rows(metrics, "hpc_lpc_stage_result"))
-    add_body_paragraph(document, paragraphs[12])
-
-    add_heading(document, paragraphs[13], 1)
-    add_body_paragraph(document, paragraphs[14])
+    for block in blocks:
+        kind = block["kind"]
+        if kind == "title":
+            title = document.add_paragraph()
+            title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            title.paragraph_format.space_after = Pt(14)
+            title_run = title.add_run(block["text"])
+            set_run_font(title_run, size=18, bold=True)
+        elif kind == "heading":
+            add_heading(document, block["text"], 1)
+        elif kind == "paragraph":
+            add_body_paragraph(document, block["text"])
+        elif kind == "caption":
+            add_caption(document, block["text"])
+        elif kind == "image":
+            image_path = input_dir / block["path"]
+            if not image_path.is_file():
+                raise FileNotFoundError(image_path)
+            paragraph = document.add_paragraph()
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            width = Cm(10.2) if image_path.suffix.lower() in {".jpg", ".jpeg"} else Cm(22.5)
+            paragraph.add_run().add_picture(str(image_path), width=width)
+        elif kind == "image_table":
+            add_image_table(document, block["headers"], block["images"], block["captions"], input_dir)
+        elif kind == "table":
+            add_table(document, block["headers"], block["rows"])
     word_out.parent.mkdir(parents=True, exist_ok=True)
     document.save(word_out)
     return word_out
