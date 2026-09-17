@@ -426,8 +426,13 @@ def append_experiment_summary(word_path):
     )
     add_body_paragraph(
         document,
-        "（3）在 Artstein 4D 与原始4D控制器对比中，考虑初始条件差异后，以末 10 s 指标为主，"
-        "Artstein 4D 在后段距离保持、波动和速度一致性上表现更好。",
+        "（3）在 Artstein-HPC 与 Artstein-LPC 的初步实物对比中，Artstein-HPC 参考组的"
+        "距离保持和速度一致性指标更小，表现出更稳定的跟踪效果。",
+    )
+    add_body_paragraph(
+        document,
+        "（4）在采用 Artstein 时滞补偿的控制器与原始控制器对比中，考虑初始条件差异后，"
+        "以末 10 s 指标为主，采用 Artstein 时滞补偿的控制器在后段距离保持、波动和速度一致性上表现更好。",
     )
     document.save(word_path)
     return word_path
