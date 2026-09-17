@@ -87,10 +87,10 @@ class MarkdownWordReportTest(unittest.TestCase):
                 [paragraph.text for paragraph in document.paragraphs]
                 + [cell.text for table in document.tables for row in table.rows for cell in row.cells]
             )
-            self.assertIn("7. 实验三：Artstein 4D 与原始4D控制器实物对比", text)
-            self.assertIn("原始4D控制器（未进行Artstein时滞补偿）", text)
+            self.assertIn("7. 实验三：Artstein-HPC 与原始控制器实物对比", text)
+            self.assertIn("原始控制器（未进行Artstein时滞补偿）", text)
             self.assertIn("0.0722", text)
-            self.assertEqual(text.count("7. 实验三：Artstein 4D 与原始4D控制器实物对比"), 1)
+            self.assertEqual(text.count("7. 实验三：Artstein-HPC 与原始控制器实物对比"), 1)
             self.assertIn("初始车间距分别为 1.9112 m 和 1.5333 m", text)
             self.assertIn("不宜作为两类控制器性能优劣的主要依据", text)
             self.assertIn("状态预测与时滞补偿对编队稳定性具有积极作用", text)

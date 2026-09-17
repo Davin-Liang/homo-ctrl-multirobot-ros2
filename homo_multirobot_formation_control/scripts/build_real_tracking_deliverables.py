@@ -327,7 +327,7 @@ def _load_metric_rows(input_dir):
 
 
 def append_artstein_original_4d_comparison(input_dir, word_path):
-    """Append the requested Artstein 4D vs original 4D experiment to an existing Word report."""
+    """Append the requested Artstein-HPC vs original-controller experiment."""
     input_dir = Path(input_dir)
     word_path = Path(word_path)
     metrics = _load_metric_rows(input_dir)
@@ -336,9 +336,10 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
     if missing:
         raise ValueError("缺少实验三指标：" + ", ".join(missing))
     document = Document(word_path)
-    heading_text = "7. 实验三：Artstein 4D 与原始4D控制器实物对比"
+    heading_text = "7. 实验三：Artstein-HPC 与原始控制器实物对比"
+    legacy_headings = (heading_text, "7. 实验三：Artstein 4D 与原始4D控制器实物对比")
     for paragraph in document.paragraphs:
-        if paragraph.text == heading_text:
+        if paragraph.text in legacy_headings:
             body = paragraph._p.getparent()
             start = list(body).index(paragraph._p)
             for element in list(body)[start:]:
@@ -349,15 +350,15 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
     add_heading(document, heading_text, 1)
     add_body_paragraph(
         document,
-        "本实验比较采用 Artstein 输入时滞补偿与 Follower 状态前向预测的 4D 控制器，"
-        "以及未使用 Artstein 时滞补偿的原始4D控制器。两组记录均来自动捕实物实验，"
+        "本实验比较采用 Artstein 输入时滞补偿与 Follower 状态前向预测的 Artstein-HPC，"
+        "以及未使用 Artstein 时滞补偿的原始控制器。两组记录均来自动捕实物实验，"
         "Leader 平均速度分别约为 0.252 m/s 和 0.250 m/s。",
     )
     images = (
-        ("artstein_original_4d_trajectory.png", "图 11　Artstein 4D 与原始4D控制器轨迹对比"),
-        ("artstein_original_4d_velocity_components.png", "图 12　Artstein 4D 与原始4D控制器 Vx/Vy 速度对比"),
-        ("artstein_original_4d_x_position.png", "图 13　Artstein 4D 与原始4D控制器 X 坐标对比"),
-        ("artstein_original_4d_y_position.png", "图 14　Artstein 4D 与原始4D控制器 Y 坐标对比"),
+        ("artstein_original_4d_trajectory.png", "图 11　Artstein-HPC 与原始控制器轨迹对比"),
+        ("artstein_original_4d_velocity_components.png", "图 12　Artstein-HPC 与原始控制器 Vx/Vy 速度对比"),
+        ("artstein_original_4d_x_position.png", "图 13　Artstein-HPC 与原始控制器 X 坐标对比"),
+        ("artstein_original_4d_y_position.png", "图 14　Artstein-HPC 与原始控制器 Y 坐标对比"),
     )
     for filename, caption in images:
         path = input_dir / "assets" / filename
@@ -365,8 +366,8 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
             raise FileNotFoundError(path)
         add_image(document, path, caption)
     labels = {
-        "hpc_lpc_reference": "Artstein 4D（Artstein时滞补偿）",
-        "original_4d_reference": "原始4D控制器（未进行Artstein时滞补偿）",
+        "hpc_lpc_reference": "Artstein-HPC（Artstein时滞补偿）",
+        "original_4d_reference": "原始控制器（未进行Artstein时滞补偿）",
     }
     rows = []
     for experiment_id in required:
@@ -384,7 +385,7 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
         "工况", "初始车间距 (m)", "末 10 s 平均距离偏差 (m)", "末 10 s 平均距离误差 (m)",
         "末 10 s 距离误差标准差 (m)", "末 10 s 最大距离误差 (m)",
         "末 10 s 相对速度误差 (m/s)"), rows)
-    add_caption(document, "表 4　Artstein 4D 与原始4D控制器的实物跟踪指标对比")
+    add_caption(document, "表 4　Artstein-HPC 与原始控制器的实物跟踪指标对比")
     artstein_initial = float(metrics["hpc_lpc_reference"]["initial_distance_m"])
     original_initial = float(metrics["original_4d_reference"]["initial_distance_m"])
     add_body_paragraph(
@@ -392,7 +393,7 @@ def append_artstein_original_4d_comparison(input_dir, word_path):
         "由表 4 可见，两组记录的初始车间距分别为 "
         f"{artstein_initial:.4f} m 和 {original_initial:.4f} m，初始误差并不相同，"
         "两组记录的初始车间距不同，故全程平均距离误差和 RMS 距离误差会受到起始阶段误差大小的显著影响，"
-        "不宜作为两类控制器性能优劣的主要依据。以末 10 s 指标观察，Artstein 4D 组的距离保持误差、"
+        "不宜作为两类控制器性能优劣的主要依据。以末 10 s 指标观察，Artstein-HPC 组的距离保持误差、"
         "波动幅度和相对速度误差均更小，说明在进入后段跟踪后，其状态预测与时滞补偿对编队稳定性具有积极作用。",
     )
     document.save(word_path)

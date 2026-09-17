@@ -87,6 +87,13 @@ def test_hpc_stage_plot_label_exposes_the_common_lambda_setting():
     }, chinese_labels=False) == 'Artstein-HPC (lambda=2.5)'
 
 
+def test_original_controller_plot_label_omits_the_4d_implementation_name():
+    assert module.report_label({
+        'id': 'original_4d_reference',
+        'controller_family': 'original_4d',
+    }, chinese_labels=False) == 'Original controller'
+
+
 def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, capsys):
     manifest = (PACKAGE_DIR / "analysis" / "real_tracking_report" /
                 "experiment_manifest.yaml")
