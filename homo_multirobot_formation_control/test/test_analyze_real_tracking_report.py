@@ -72,6 +72,14 @@ def test_lpc_plot_label_omits_leader_speed_from_the_stage_report():
     }, chinese_labels=False) == 'Artstein-LPC (lambda=2.5)'
 
 
+def test_hpc_stage_plot_label_exposes_the_common_lambda_setting():
+    assert module.report_label({
+        'id': 'hpc_lpc_reference',
+        'controller_family': 'artstein_hpc',
+        'initial_min_lambda': 2.5,
+    }, chinese_labels=False) == 'Artstein-HPC (lambda=2.5)'
+
+
 def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, capsys):
     manifest = (PACKAGE_DIR / "analysis" / "real_tracking_report" /
                 "experiment_manifest.yaml")

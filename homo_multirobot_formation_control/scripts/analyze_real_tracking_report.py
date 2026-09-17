@@ -74,7 +74,7 @@ def report_label(experiment, chinese_labels):
     if experiment["controller_family"] == "artstein_lpc":
         return "Artstein-LPC (lambda={:.1f})".format(experiment["initial_min_lambda"])
     if experiment["id"] == "hpc_lpc_reference":
-        return "Artstein-HPC (stage reference)"
+        return "Artstein-HPC (lambda={:.1f})".format(experiment["initial_min_lambda"])
     state = "on" if experiment.get("leader_command_feedforward") else "off"
     return f"Artstein-HPC (Leader command feedforward: {state})"
 
