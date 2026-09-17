@@ -19,6 +19,11 @@ experiments:
     comparison: hpc_lpc_stage_result
     controller_family: artstein_hpc
     initial_min_lambda: 2.5
+  - id: original_4d_reference
+    source_dir: robot_traj/real/4d_20260909_185103
+    display_label: 原始4D控制器（未进行Artstein时滞补偿）
+    comparison: artstein_original_4d_compare
+    controller_family: original_4d
   - id: lpc_lambda_20_v020
     source_dir: robot_traj/real/4d_artstein_lpc_20260915_104805
     display_label: Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s）

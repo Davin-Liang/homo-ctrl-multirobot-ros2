@@ -30,6 +30,10 @@ REPORT_ASSET_FILENAMES = (
     "hpc_lpc_velocity_components.png",
     "hpc_lpc_x_position.png",
     "hpc_lpc_y_position.png",
+    "artstein_original_4d_trajectory.png",
+    "artstein_original_4d_velocity_components.png",
+    "artstein_original_4d_x_position.png",
+    "artstein_original_4d_y_position.png",
 )
 LEADER_COLOR = "#1f77b4"
 FOLLOWER_COLOR = "#ff7f0e"
@@ -75,6 +79,8 @@ def report_label(experiment, chinese_labels):
         return "Artstein-LPC (lambda={:.1f})".format(experiment["initial_min_lambda"])
     if experiment["id"] == "hpc_lpc_reference":
         return "Artstein-HPC (lambda={:.1f})".format(experiment["initial_min_lambda"])
+    if experiment["controller_family"] == "original_4d":
+        return "Original 4D controller"
     state = "on" if experiment.get("leader_command_feedforward") else "off"
     return f"Artstein-HPC (Leader command feedforward: {state})"
 
@@ -82,6 +88,11 @@ def report_label(experiment, chinese_labels):
 def stage_experiment_ids():
     """Return the dedicated records used for the HPC/LPC stage comparison."""
     return ("hpc_lpc_reference", "lpc_lambda_25_v025")
+
+
+def artstein_original_4d_ids():
+    """Return the records used for the Artstein 4D vs original 4D comparison."""
+    return ("hpc_lpc_reference", "original_4d_reference")
 
 
 def compute_distance_metrics(distances, ideal_radius_m):
@@ -379,15 +390,21 @@ def generate_report_assets(manifest_path, assets_dir):
     chinese_labels, plt = configure_report_plotting()
     series_by_id = {experiment["id"]: (experiment, rows)
                     for experiment, rows in load_report_series(manifest_path)}
-    required_ids = ("hpc_feedforward_on", "hpc_feedforward_off", *stage_experiment_ids())
+    required_ids = (
+        "hpc_feedforward_on", "hpc_feedforward_off", *stage_experiment_ids(),
+        *artstein_original_4d_ids())
     missing = [experiment_id for experiment_id in required_ids if experiment_id not in series_by_id]
     if missing:
         raise ValueError("manifest missing required report experiments: " + ", ".join(missing))
     assets_dir.mkdir(parents=True, exist_ok=True)
     ff_series = [series_by_id[experiment_id] for experiment_id in required_ids[:2]]
     stage_series = [series_by_id[experiment_id] for experiment_id in stage_experiment_ids()]
+    artstein_original_series = [series_by_id[experiment_id]
+                                for experiment_id in artstein_original_4d_ids()]
 
-    for prefix, selected_series in (("feedforward", ff_series), ("hpc_lpc", stage_series)):
+    for prefix, selected_series in (
+            ("feedforward", ff_series), ("hpc_lpc", stage_series),
+            ("artstein_original_4d", artstein_original_series)):
         figure, axis = plt.subplots(figsize=(7.4, 6.2), constrained_layout=True)
         _draw_trajectory(axis, selected_series, chinese_labels)
         _save_figure(figure, assets_dir / f"{prefix}_trajectory.png")

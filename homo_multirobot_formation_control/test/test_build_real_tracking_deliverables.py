@@ -72,6 +72,22 @@ class MarkdownWordReportTest(unittest.TestCase):
                 media = [name for name in archive.namelist() if name.startswith("word/media/")]
             self.assertGreaterEqual(len(media), 10)
 
+    def test_artstein_original_4d_comparison_can_be_appended_to_a_word_report(self):
+        builder = load_builder()
+        with TemporaryDirectory() as temporary_directory:
+            output = Path(temporary_directory) / "report.docx"
+            builder.build_word(REPORT_DIR, output)
+            builder.append_artstein_original_4d_comparison(REPORT_DIR, output)
+
+            document = Document(output)
+            text = "\n".join(
+                [paragraph.text for paragraph in document.paragraphs]
+                + [cell.text for table in document.tables for row in table.rows for cell in row.cells]
+            )
+            self.assertIn("7. 实验三：Artstein 4D 与原始4D控制器实物对比", text)
+            self.assertIn("原始4D控制器（未进行Artstein时滞补偿）", text)
+            self.assertIn("0.0596", text)
+
 
 if __name__ == "__main__":
     unittest.main()

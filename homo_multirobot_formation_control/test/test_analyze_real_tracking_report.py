@@ -63,6 +63,11 @@ def test_hpc_lpc_stage_uses_the_dedicated_hpc_reference_record():
         'hpc_lpc_reference', 'lpc_lambda_25_v025')
 
 
+def test_artstein_original_4d_comparison_uses_the_requested_records():
+    assert module.artstein_original_4d_ids() == (
+        'hpc_lpc_reference', 'original_4d_reference')
+
+
 def test_lpc_plot_label_omits_leader_speed_from_the_stage_report():
     assert module.report_label({
         'id': 'lpc_lambda_25_v025',
@@ -95,6 +100,10 @@ def test_generate_report_assets_writes_the_five_high_resolution_pngs(tmp_path, c
         "hpc_lpc_velocity_components.png",
         "hpc_lpc_x_position.png",
         "hpc_lpc_y_position.png",
+        "artstein_original_4d_trajectory.png",
+        "artstein_original_4d_velocity_components.png",
+        "artstein_original_4d_x_position.png",
+        "artstein_original_4d_y_position.png",
     }
     assert {path.name for path in assets} == expected
     assert {path.name for path in tmp_path.glob("*.png")} == expected

@@ -11,6 +11,7 @@
 | C | Artstein-LPC（λ初值=2.0，Leader 速度=0.20 m/s） | 调参记录，不纳入报告图表与指标表 |
 | D | Artstein-LPC（λ初值=2.5，Leader 速度=0.25 m/s） | HPC/LPC 阶段性图表及最新可运行结果 |
 | E | Artstein-HPC（实验二参考组） | HPC/LPC 阶段性图表的 HPC 参考组 |
+| F | 原始4D控制器（未进行Artstein时滞补偿） | Artstein 4D 与原始4D控制器实物对比 |
 
 ## 原始记录定位
 
@@ -21,6 +22,7 @@
 | C | `robot_traj/real/4d_artstein_lpc_20260915_104805` | `trial_01` | `use_hpc=false`、`initial_min_lambda=2.0`、Leader 速度 0.20 m/s |
 | D | `robot_traj/real/4d_artstein_lpc_20260915_105440` | `trial_02` | `use_hpc=false`、`initial_min_lambda=2.5`、Leader 速度 0.25 m/s |
 | E | `robot_traj/real/4d_artstein_20260909_173424` | `trial_03` | 用户确认 λ初值=2.5 的 Artstein-HPC 实验二参考组；动捕实物记录 |
+| F | `robot_traj/real/4d_20260909_185103` | `trial_01` | 原始4D控制器实物记录；未进行Artstein时滞补偿 |
 
 实验配置以各目录的 `metadata.yaml` 为依据，轨迹与误差计算以 `raw.csv` 为依据。报告中的距离评价基准统一为控制器 `radius=1.0 m`。
 
@@ -30,3 +32,4 @@
 | --- | --- |
 | 图 3--图 6：Leader 命令速度前馈开/关对比 | A、B |
 | 图 7--图 10：Artstein-HPC 与 Artstein-LPC 阶段性结果 | E、D |
+| 图 11--图 14：Artstein 4D 与原始4D控制器实物对比 | E、F |
