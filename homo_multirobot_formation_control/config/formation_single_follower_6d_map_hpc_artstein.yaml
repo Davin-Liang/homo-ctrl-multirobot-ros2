@@ -26,6 +26,10 @@
     control_rate: 20.0
     # HPC 变换系数下限。
     hpc_c_min: 0.1
+    # 是否强制使用指定齐次度；false 时自动使用理论 nu_min。
+    use_hpc_nu_override: true
+    # 高级实验参数：指定的齐次度。启用后必须位于自动理论区间 [nu_min, nu_max]。
+    hpc_nu_override: -0.4
     # 初始 LPC 极点下界。
     initial_min_lambda: 1.5
     # 离散编队点切换后重建 HPC 使用的 LPC 极点下界。
@@ -59,7 +63,7 @@
     # Leader 命令速度增量低通时间常数（s）；0 表示关闭低通。
     leader_cmd_delta_lpf_tau: 0.10
     # 是否启用仿真电机延迟。
-    use_motor_delay: false
+    use_motor_delay: true
     # 电机一阶滞后时间常数（s）。
     motor_tau: 0.43
     # 传输延迟（s）。

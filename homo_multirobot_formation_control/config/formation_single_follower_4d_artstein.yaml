@@ -25,9 +25,9 @@
     # 偏航微分增益（Leader-Follower 相对角速度误差）。
     Kd_yaw: 1.0
     # 控制频率（Hz）。
-    control_rate: 20.0
+    control_rate: 40.0
     # 是否启用齐次控制升级。
-    use_hpc: false
+    use_hpc: true
     # HPC 变换系数下限。
     hpc_c_min: 0.1
     # 是否强制使用指定齐次度；false 时自动使用理论 nu_min。
@@ -35,7 +35,7 @@
     # 高级实验参数：指定的齐次度。启用后必须位于自动理论区间 [nu_min, nu_max]。
     hpc_nu_override: -0.30
     # 初始 LPC 极点下界。
-    initial_min_lambda: 2.5
+    initial_min_lambda: 1.5
     # 切换后 LPC 极点下界。
     switch_min_lambda: 4.0
     # 领航速度低通时间常数（s）；0 为关闭。

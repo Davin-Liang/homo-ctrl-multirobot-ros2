@@ -4,15 +4,17 @@
     follower_ns: "/robot2"
     duration: 45.0
     out_dir: ""
-    radius: 2.0
-    mode: "real"
-    tag: "4d_artstein_lpc"
+    radius: 1.0
+    mode: "sim"
+    tag: "6d_artstein_no_forward_nu-0.4"
     # 控制器节点名：用于读取参数并写入 metadata.yaml；可直接取消下列任一行的注释。
     # 原版 4D: "formation_control_node"
     # 4D Artstein: "formation_control_node_4d_artstein"
     # 6D Map-HPC Artstein: "formation_control_node_6d_map_hpc_artstein"
     # 6D Artstein Disc: "formation_control_node_6d_artstein_disc"
-    controller_node_name: "formation_control_node_4d_artstein"
-    trial_id: "trial_02"
-    controller: "4d_artstein_lpc"
-    state_source: "mocap"
+    controller_node_name: "formation_control_node_6d_map_hpc_artstein"
+    trial_id: "trial_01"
+    controller: "6d_artstein_no_forward"
+    # ekf_tf 
+    # mocap
+    state_source: "ekf_tf"
