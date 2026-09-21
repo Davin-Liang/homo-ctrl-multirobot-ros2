@@ -29,9 +29,12 @@ public:
                           double control_period = 0.05, double hpc_c_min = 0.1,
                           double Td = 0.22,
                           double initial_min_lambda = 1.0,
-                          double switch_min_lambda = 4.0)
+                          double switch_min_lambda = 4.0,
+                          bool use_nu_override = false,
+                          double nu_override = -0.30)
     : hpc_(m_p, radius, tol, mass, use_hpc, hpc_c_min, control_period,
-           initial_min_lambda, switch_min_lambda),
+           initial_min_lambda, switch_min_lambda,
+           use_nu_override, nu_override),
       tau_(tau_nominal), h_(control_period), Td_(Td)
   {
     if (tau_ <= 0.0) {
@@ -130,6 +133,11 @@ public:
   {
     return hpc_.selected_error(leader_hpc_state, follower_hpc_state);
   }
+
+  double nu() const { return hpc_.nu(); }
+  double nu_min() const { return hpc_.nu_min(); }
+  double nu_max() const { return hpc_.nu_max(); }
+  bool uses_nu_override() const { return hpc_.uses_nu_override(); }
 
 private:
   void build_actuator_kernels()

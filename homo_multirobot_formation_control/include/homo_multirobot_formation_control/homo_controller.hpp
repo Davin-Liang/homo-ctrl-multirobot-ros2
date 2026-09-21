@@ -23,11 +23,13 @@ public:
   LpcController(int m_p = 4, double radius = 2.0, double tol = 0.1, double mass = 2.0,
                bool use_hpc = true, double hpc_c_min = 0.5,
                double control_period = 0.1, double initial_min_lambda = 1.5,
-               double switch_min_lambda = 4.0)
+               double switch_min_lambda = 4.0,
+               bool use_nu_override = false, double nu_override = -0.30)
     : m_p_(m_p), radius_(radius), tol_(tol), mass_(mass), use_hpc_(use_hpc),
       hpc_c_min_(hpc_c_min), h_(control_period),
       initial_min_lambda_(initial_min_lambda),
-      switch_min_lambda_(switch_min_lambda)
+      switch_min_lambda_(switch_min_lambda),
+      use_nu_override_(use_nu_override), nu_override_(nu_override)
   {
     // 2D 双重积分器: x = [px, py, vx, vy]
     A_ << 0, 0, 1, 0,
@@ -85,13 +87,13 @@ public:
       if (res.G0.isZero(1e-12)) {
         throw std::runtime_error("控制器初始化失败: lpc2hpc 返回零结果。");
       }
-      G0_ = res.G0;
-      P_  = res.P;
-      nu_ = res.nu_min;
-      Gd_ = Mat4d::Identity() + nu_ * G0_;
+      apply_hpc_parameters(res.G0, res.P, res.nu_min, res.nu_max);
 
       Eigen::EigenSolver<Eigen::Matrix4d> es_g0(G0_);
-      std::cout << "[HPC 4D init] nu=" << nu_ << " nu_max=" << res.nu_max
+      std::cout << "[HPC 4D init] nu_mode="
+                << (use_nu_override_ ? "override" : "auto")
+                << " nu_used=" << nu_ << " feasible=[" << nu_min_
+                << ", " << nu_max_ << "]"
                 << " G0_eig=[" << es_g0.eigenvalues()(0).real()
                 << "," << es_g0.eigenvalues()(1).real()
                 << "," << es_g0.eigenvalues()(2).real()
@@ -222,7 +224,28 @@ public:
     return switch_min_lambda_;
   }
 
+  double nu() const { return nu_; }
+  double nu_min() const { return nu_min_; }
+  double nu_max() const { return nu_max_; }
+  bool uses_nu_override() const { return use_nu_override_; }
+
 private:
+  void apply_hpc_parameters(const Mat4d& G0, const Mat4d& P,
+                            double nu_min, double nu_max)
+  {
+    nu_min_ = nu_min;
+    nu_max_ = nu_max;
+    nu_ = use_nu_override_ ? nu_override_ : nu_min_;
+    constexpr double kNuTolerance = 1e-12;
+    if (!std::isfinite(nu_) || nu_ < nu_min_ - kNuTolerance ||
+        nu_ > nu_max_ + kNuTolerance) {
+      throw std::runtime_error("4D HPC nu override outside feasible interval");
+    }
+    G0_ = G0;
+    P_ = P;
+    Gd_ = Mat4d::Identity() + nu_ * G0_;
+  }
+
   // --------------------------------------------------------------------------
   // 编队点切换（带 tol_ 滞后避免频繁跳动）
   // --------------------------------------------------------------------------
@@ -249,10 +272,7 @@ private:
       if (use_hpc_) {
         auto res = lpc2hpc(A_, B_, k_lin_);
         if (!res.G0.isZero(1e-12)) {
-          G0_ = res.G0;
-          P_  = res.P;
-          nu_ = res.nu_min;
-          Gd_ = Mat4d::Identity() + nu_ * G0_;
+          apply_hpc_parameters(res.G0, res.P, res.nu_min, res.nu_max);
         }
       }
     }
@@ -310,11 +330,15 @@ private:
   Mat4d         G0_;          // 齐次生成元
   Mat4d         Gd_;          // 膨胀生成元 (I + nu * G0)
   double        nu_;          // 齐次度
+  double        nu_min_ = 0.0;
+  double        nu_max_ = 0.0;
   bool          use_hpc_;     // false 时退化为纯 LPC
   double        hpc_c_min_;   // hnorm clamp 下界
   double        h_;           // 控制周期 (s)
   double        initial_min_lambda_;  // 初始增益下界
   double        switch_min_lambda_;   // 编队点切换后增益下界
+  bool          use_nu_override_;
+  double        nu_override_;
 
   Eigen::Vector2d last_cmd_vel_;
 };
