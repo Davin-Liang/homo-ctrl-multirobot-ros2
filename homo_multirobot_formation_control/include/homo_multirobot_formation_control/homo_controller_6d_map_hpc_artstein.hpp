@@ -23,7 +23,9 @@ public:
     min_lambda_(initial_min_lambda), tol_(tol)
   {
     if (m_p < 1 || radius <= 0.0 || tol_ < 0.0 || mass_ <= 0.0 || inertia_ <= 0.0 ||
-        period_ <= 0.0 || c_min_ <= 0.0 || c_min_ > 1.0) {
+        period_ <= 0.0 || c_min_ <= 0.0 || c_min_ > 1.0 ||
+        !std::isfinite(initial_min_lambda_) || initial_min_lambda_ <= 0.0 ||
+        !std::isfinite(switch_min_lambda_) || switch_min_lambda_ <= 0.0) {
       throw std::invalid_argument("invalid 6D map HPC parameters");
     }
     for (int j = 0; j < m_p; ++j) {

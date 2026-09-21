@@ -7,6 +7,21 @@
 
 int main()
 {
+  auto rejects_invalid_lambda = [](double initial_min_lambda,
+                                   double switch_min_lambda) {
+    try {
+      formation_control::MapHpcController6DArtstein invalid_controller(
+          1, 1.0, 0.0, 2.0, 1.0, 0.5, true, 0.05,
+          initial_min_lambda, switch_min_lambda);
+    } catch (const std::invalid_argument&) {
+      return true;
+    }
+    return false;
+  };
+  assert(rejects_invalid_lambda(0.0, 4.0));
+  assert(rejects_invalid_lambda(1.0, -1.0));
+  assert(rejects_invalid_lambda(1.0, std::numeric_limits<double>::infinity()));
+
   formation_control::MapHpcController6DArtstein bandwidth_controller(
       4, 1.0, 0.0, 2.0, 1.0, 0.5, true, 0.05, 1.0, 4.0);
   Eigen::VectorXd bandwidth_leader = Eigen::VectorXd::Zero(6);
@@ -16,9 +31,15 @@ int main()
   bandwidth_controller.initialize(
       bandwidth_leader, bandwidth_follower, false);
   assert(std::abs(bandwidth_controller.min_lambda() - 1.0) < 1e-12);
+  bandwidth_follower(0) = 1.5;
+  const Eigen::Vector3d initial_bandwidth_command =
+      bandwidth_controller.command(bandwidth_leader, bandwidth_follower);
   bandwidth_controller.initialize(
       bandwidth_leader, bandwidth_follower, true);
   assert(std::abs(bandwidth_controller.min_lambda() - 4.0) < 1e-12);
+  const Eigen::Vector3d switch_bandwidth_command =
+      bandwidth_controller.command(bandwidth_leader, bandwidth_follower);
+  assert((initial_bandwidth_command - switch_bandwidth_command).norm() > 1e-6);
 
   formation_control::MapHpcController6DArtstein controller(
       1, 1.0, 0.0, 2.0, 1.0, 0.5, true, 0.05, 1.0);

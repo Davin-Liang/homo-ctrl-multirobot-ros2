@@ -444,8 +444,9 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 ### 启动（6D Map HPC Artstein，固定 map 编队偏移）
 
 该节点与数值 map-frame 模型一致：Follower 目标为 `p_leader + offset_map`。
-Leader 原地自转时，Follower 只跟随 yaw，不绕 Leader 旋转。固定偏移没有离散选点，
-因此 `k_lin`、`P`、`Gd` 和 `nu` 仅在控制器初始化时同步计算一次。
+候选 `offset_map` 是固定在 map 系的离散多边形顶点；Leader 原地自转时，Follower
+只跟随 yaw，不绕 Leader 旋转。`k_lin`、`P`、`Gd` 和 `nu` 在控制器初始化及离散
+编队点切换时同步计算。
 
 首次初始化使用 `initial_min_lambda`；离散编队点切换时以
 `switch_min_lambda` 重建 `K_lin`、`P`、`Gd` 和 `nu`，使切换后的闭环带宽可独立配置。
