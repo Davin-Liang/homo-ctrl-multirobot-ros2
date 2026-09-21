@@ -447,6 +447,13 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 Leader 原地自转时，Follower 只跟随 yaw，不绕 Leader 旋转。固定偏移没有离散选点，
 因此 `k_lin`、`P`、`Gd` 和 `nu` 仅在控制器初始化时同步计算一次。
 
+首次初始化使用 `initial_min_lambda`；离散编队点切换时以
+`switch_min_lambda` 重建 `K_lin`、`P`、`Gd` 和 `nu`，使切换后的闭环带宽可独立配置。
+可选的 `enable_leader_cmd_feedforward` 默认关闭；开启后仅将 Leader `/cmd_vel`
+线速度变化的一次性增量叠加到 map 系平移命令，增量由
+`leader_cmd_delta_lpf_tau` 低通且在 `leader_cmd_timeout` 后失效。Leader 的角速度
+命令不会绕过 6D Artstein/HPC yaw 通道。
+
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_map_hpc_artstein.launch.py \
   leader_ns:=/robot1 follower_ns:=/robot2 \
