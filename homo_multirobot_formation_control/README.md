@@ -450,6 +450,10 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 
 首次初始化使用 `initial_min_lambda`；离散编队点切换时以
 `switch_min_lambda` 重建 `K_lin`、`P`、`Gd` 和 `nu`，使切换后的闭环带宽可独立配置。
+默认时 `nu` 自动使用 `lpc2hpc_nd()` 给出的理论下界 `nu_min`。研究不同齐次度时，可设置
+`use_hpc_nu_override:=true hpc_nu_override:=<value>`；每次初始化及目标切换都会将该值与
+自动计算的闭区间 `[nu_min, nu_max]` 校验，越界或非有限值会令控制器拒绝初始化。日志会输出
+`nu_mode`、`nu_used` 和实际可行区间，便于记录实验条件。
 可选的 `enable_leader_cmd_feedforward` 默认关闭；开启后仅将 Leader `/cmd_vel`
 线速度变化的一次性增量叠加到 map 系平移命令，增量由
 `leader_cmd_delta_lpf_tau` 低通且在 `leader_cmd_timeout` 后失效。Leader 的角速度

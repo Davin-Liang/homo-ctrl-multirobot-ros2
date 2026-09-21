@@ -38,6 +38,18 @@ int main()
   }
   assert(invalid_nu_rejected);
 
+  formation_control::MapHpcController6DArtstein nonfinite_nu_controller(
+      1, 1.0, 0.0, 2.0, 1.0, 0.5, true, 0.05, 1.0, 4.0,
+      true, std::numeric_limits<double>::quiet_NaN());
+  assert(nonfinite_nu_controller.select_target(nu_leader, nu_follower));
+  bool nonfinite_nu_rejected = false;
+  try {
+    nonfinite_nu_controller.initialize(nu_leader, nu_follower);
+  } catch (const std::runtime_error&) {
+    nonfinite_nu_rejected = true;
+  }
+  assert(nonfinite_nu_rejected);
+
   auto rejects_invalid_lambda = [](double initial_min_lambda,
                                    double switch_min_lambda) {
     try {

@@ -52,6 +52,8 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   double hpc_c_min = declare_parameter("hpc_c_min", 0.5);
   double initial_min_lambda = declare_parameter("initial_min_lambda", 1.0);
   double switch_min_lambda = declare_parameter("switch_min_lambda", 4.0);
+  bool use_hpc_nu_override = declare_parameter("use_hpc_nu_override", false);
+  double hpc_nu_override = declare_parameter("hpc_nu_override", -0.30);
 
   tau_v_ = declare_parameter("tau", 0.43);
   tau_w_ = declare_parameter("tau_yaw", tau_v_);
@@ -89,7 +91,8 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
 
   ctrl_ = std::make_unique<MapHpcController6DArtstein>(
       m_p, radius, tol, mass, inertia, hpc_c_min, use_hpc, dt,
-      initial_min_lambda, switch_min_lambda);
+      initial_min_lambda, switch_min_lambda,
+      use_hpc_nu_override, hpc_nu_override);
 
   if (enable_leader_cmd_feedforward_) {
     leader_cmd_feedforward_ =
@@ -331,6 +334,10 @@ void FormationController6DMapHpcArtstein::timer_cb()
     try {
       ctrl_->initialize(x1_h, x2_h);
       controller_initialized_ = true;
+      RCLCPP_INFO(get_logger(),
+          "HPC nu_mode=%s nu_used=%.6f feasible=[%.6f, %.6f]",
+          ctrl_->uses_nu_override() ? "override" : "auto",
+          ctrl_->nu(), ctrl_->nu_min(), ctrl_->nu_max());
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "6D Map HPC initialization failed: %s", e.what());
       return;
@@ -341,6 +348,10 @@ void FormationController6DMapHpcArtstein::timer_cb()
     Eigen::VectorXd x2_h = predict_follower_state(follower);
     ctrl_->initialize(x1_h, x2_h, true);
     RCLCPP_INFO(get_logger(), "6D Map HPC switched polygon target to %d.", ctrl_->target_index());
+    RCLCPP_INFO(get_logger(),
+        "HPC nu_mode=%s nu_used=%.6f feasible=[%.6f, %.6f]",
+        ctrl_->uses_nu_override() ? "override" : "auto",
+        ctrl_->nu(), ctrl_->nu_min(), ctrl_->nu_max());
   }
 
   Eigen::VectorXd x1_h = predict_leader_state(

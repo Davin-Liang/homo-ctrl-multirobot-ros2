@@ -48,6 +48,8 @@ def generate_launch_description():
     use_hpc = LaunchConfiguration("use_hpc")
     control_rate = LaunchConfiguration("control_rate")
     hpc_c_min = LaunchConfiguration("hpc_c_min")
+    use_hpc_nu_override = LaunchConfiguration("use_hpc_nu_override")
+    hpc_nu_override = LaunchConfiguration("hpc_nu_override")
     initial_min_lambda = LaunchConfiguration("initial_min_lambda")
     switch_min_lambda = LaunchConfiguration("switch_min_lambda")
 
@@ -99,6 +101,8 @@ def generate_launch_description():
                 "use_hpc": use_hpc,
                 "control_rate": control_rate,
                 "hpc_c_min": hpc_c_min,
+                "use_hpc_nu_override": use_hpc_nu_override,
+                "hpc_nu_override": hpc_nu_override,
                 "initial_min_lambda": initial_min_lambda,
                 "switch_min_lambda": switch_min_lambda,
                 "tau": tau,
@@ -153,6 +157,8 @@ def generate_launch_description():
             DeclareLaunchArgument("use_hpc", default_value="true"),
             DeclareLaunchArgument("control_rate", default_value="20.0"),
             DeclareLaunchArgument("hpc_c_min", default_value="0.5"),
+            DeclareLaunchArgument("use_hpc_nu_override", default_value="false"),
+            DeclareLaunchArgument("hpc_nu_override", default_value="-0.30"),
             DeclareLaunchArgument("initial_min_lambda", default_value="1.0"),
             DeclareLaunchArgument("switch_min_lambda", default_value="4.0"),
             DeclareLaunchArgument("tau", default_value="0.43"),
