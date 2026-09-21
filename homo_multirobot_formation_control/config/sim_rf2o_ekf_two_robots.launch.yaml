@@ -5,17 +5,17 @@ launch_defaults:
   server: true
   verbose: false
   software_rendering: false
-  use_rviz: true
+  use_rviz: false
   publish_world_tf: false
   robot1_namespace: /robot1
   robot2_namespace: /robot2
   robot1_prefix: robot1_
   robot2_prefix: robot2_
-  robot1_x: 0.0
+  robot1_x: -3.0
   robot1_y: 0.0
   robot1_z: 0.0
   robot1_yaw: 0.0
-  robot2_x: 1.0
+  robot2_x: 3.0
   robot2_y: 0.0
   robot2_z: 0.0
   robot2_yaw: 0.0

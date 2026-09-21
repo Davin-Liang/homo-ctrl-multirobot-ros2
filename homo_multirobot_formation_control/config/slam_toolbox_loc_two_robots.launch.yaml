@@ -9,9 +9,9 @@ launch_defaults:
   robot2_namespace: /robot2
   robot1_prefix: robot1_
   robot2_prefix: robot2_
-  robot1_map_start_x: 0.0
+  robot1_map_start_x: -3.0
   robot1_map_start_y: 0.0
   robot1_map_start_yaw: 0.0
-  robot2_map_start_x: 0.0
+  robot2_map_start_x: 3.0
   robot2_map_start_y: 0.0
   robot2_map_start_yaw: 0.0
