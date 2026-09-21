@@ -87,6 +87,15 @@ ros2 launch homo_multirobot_nav amcl_two_robots.launch.py
 ros2 launch homo_multirobot_nav slam_toolbox_loc_two_robots.launch.py
 ```
 
+双机 launch 默认值集中在
+`homo_multirobot_formation_control/config/slam_toolbox_loc_two_robots.launch.yaml`；
+命令行参数可覆盖 YAML 默认值，例如：
+
+```bash
+ros2 launch homo_multirobot_nav slam_toolbox_loc_two_robots.launch.py \
+  robot2_map_start_x:=2.0 use_rviz:=false
+```
+
 与 AMCL 不同，slam_toolbox 纯定位直接通过启动参数设置初始位姿：
 
 ```bash
@@ -111,4 +120,3 @@ ros2 topic list | grep -E "/robot1/(amcl_pose|particle_cloud)"
 ros2 run tf2_ros tf2_echo map robot1_odom
 ros2 run tf2_ros tf2_echo robot1_odom robot1_base_footprint
 ```
-

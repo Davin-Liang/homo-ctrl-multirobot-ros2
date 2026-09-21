@@ -1,0 +1,17 @@
+launch_defaults:
+  use_sim_time: true
+  map_name: sim_room1
+  use_rviz: true
+  initialpose_to: robot1
+  global_frame_id: map
+  scan_topic: scan
+  robot1_namespace: /robot1
+  robot2_namespace: /robot2
+  robot1_prefix: robot1_
+  robot2_prefix: robot2_
+  robot1_map_start_x: 0.0
+  robot1_map_start_y: 0.0
+  robot1_map_start_yaw: 0.0
+  robot2_map_start_x: 0.0
+  robot2_map_start_y: 0.0
+  robot2_map_start_yaw: 0.0

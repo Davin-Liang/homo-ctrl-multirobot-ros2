@@ -88,6 +88,15 @@ ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py
 
 默认 `world_name:=sim_room1.world`（带结构的世界更利于 rf2o 稳定；如需切换可设为 `test_world.world` 或 `empty.world`）。
 
+双机 launch 默认值集中在
+`homo_multirobot_formation_control/config/sim_rf2o_ekf_two_robots.launch.yaml`。
+命令行参数可覆盖其中任意一项，例如：
+
+```bash
+ros2 launch homo_multirobot_localization sim_rf2o_ekf_two_robots.launch.py \
+  robot2_x:=2.0 use_rviz:=false
+```
+
 ### 单机版（只起一台车，联调/建图更稳）
 
 当你希望仿真环境中只有一台车（例如只让 `robot1` 建图，避免 `robot2` 的实体进入激光视野影响建图）：
