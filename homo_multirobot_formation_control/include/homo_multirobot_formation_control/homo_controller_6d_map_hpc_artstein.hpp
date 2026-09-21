@@ -17,8 +17,10 @@ class MapHpcController6DArtstein {
 public:
   MapHpcController6DArtstein(int m_p, double radius, double tol,
       double mass, double inertia, double c_min, bool use_hpc, double period,
-      double initial_min_lambda)
-  : mass_(mass), inertia_(inertia), c_min_(c_min), use_hpc_(use_hpc), period_(period), min_lambda_(initial_min_lambda), tol_(tol)
+      double initial_min_lambda, double switch_min_lambda = 4.0)
+  : mass_(mass), inertia_(inertia), c_min_(c_min), use_hpc_(use_hpc), period_(period),
+    initial_min_lambda_(initial_min_lambda), switch_min_lambda_(switch_min_lambda),
+    min_lambda_(initial_min_lambda), tol_(tol)
   {
     if (m_p < 1 || radius <= 0.0 || tol_ < 0.0 || mass_ <= 0.0 || inertia_ <= 0.0 ||
         period_ <= 0.0 || c_min_ <= 0.0 || c_min_ > 1.0) {
@@ -46,12 +48,16 @@ public:
     return false;
   }
 
-  void initialize(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower) {
+  void initialize(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower,
+                  bool use_switch_bandwidth = false) {
+    min_lambda_ = use_switch_bandwidth ? switch_min_lambda_ : initial_min_lambda_;
     k_ = calculate_klin(error_of(leader, follower));
     auto res = lpc2hpc_nd(a_, b_, k_);
     if (res.G0.isZero(1e-12)) throw std::runtime_error("6D map HPC initialization failed");
     p_ = res.P; gd_ = Eigen::MatrixXd::Identity(6,6) + res.nu_min * res.G0; nu_ = res.nu_min; initialized_ = true;
   }
+
+  double min_lambda() const { return min_lambda_; }
 
   Eigen::Vector3d command(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower)
   {
@@ -114,7 +120,8 @@ private:
     return std::pow(c, 1.0 + nu_) * k_ * (gd_ * (1.0 - std::log(c))).exp() * error;
   }
   std::vector<Eigen::Vector2d> offsets_; int target_index_ = -1;
-  double mass_, inertia_, c_min_, period_, min_lambda_, nu_=0.0, tol_;
+  double mass_, inertia_, c_min_, period_, initial_min_lambda_, switch_min_lambda_,
+      min_lambda_, nu_=0.0, tol_;
   bool use_hpc_, initialized_=false; Eigen::Matrix<double, 3, 6> k_; Eigen::MatrixXd a_, b_, gd_, p_;
 };
 }  // namespace formation_control
