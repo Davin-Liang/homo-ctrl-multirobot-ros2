@@ -273,6 +273,10 @@ private:
         auto res = lpc2hpc(A_, B_, k_lin_);
         if (!res.G0.isZero(1e-12)) {
           apply_hpc_parameters(res.G0, res.P, res.nu_min, res.nu_max);
+          std::cout << "[HPC 4D switch] nu_mode="
+                    << (use_nu_override_ ? "override" : "auto")
+                    << " nu_used=" << nu_ << " feasible=[" << nu_min_
+                    << ", " << nu_max_ << "]" << std::endl;
         }
       }
     }

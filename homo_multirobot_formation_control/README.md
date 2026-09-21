@@ -139,6 +139,11 @@ measured follower [p, v_real]
 
 该版本不把 `-1/tau` 电机极点增广进 HPC 系统矩阵，而是在进入 HPC 前完成状态预测映射。因此 HPC 仍直接使用原始 4D 双积分模型、`A_h^2=0` 幂零结构和 4D 齐次权重。`Td` 是纯输入/传输延迟补偿参数；`tau` 是一阶电机响应预测参数。做严格消融实验时，若要测试“不使用延迟预测器”，不能只设置 `tau:=0.0 Td:=0.0`，还必须让仿真注入参数同步关断，例如 `transport_delay:=0.0`，必要时 `motor_tau` 也要对应设置。
 
+默认时 4D HPC 自动使用 `lpc2hpc()` 计算的 `nu_min`。研究不同齐次度时，可设置
+`use_hpc_nu_override:=true hpc_nu_override:=<value>`；该值会在初始化和离散编队点切换时与
+自动计算的 `[nu_min, nu_max]` 校验，越界或非有限值会令控制器拒绝初始化。日志输出
+`nu_mode`、`nu_used` 与实际可行区间。
+
 ## 算法原理 (6D Artstein Disc)
 
 6D Artstein Disc 的数据流为：

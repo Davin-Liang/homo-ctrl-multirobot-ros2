@@ -30,6 +30,10 @@
     use_hpc: false
     # HPC 变换系数下限。
     hpc_c_min: 0.1
+    # 是否强制使用指定齐次度；false 时自动使用理论 nu_min。
+    use_hpc_nu_override: false
+    # 高级实验参数：指定的齐次度。启用后必须位于自动理论区间 [nu_min, nu_max]。
+    hpc_nu_override: -0.30
     # 初始 LPC 极点下界。
     initial_min_lambda: 2.5
     # 切换后 LPC 极点下界。
