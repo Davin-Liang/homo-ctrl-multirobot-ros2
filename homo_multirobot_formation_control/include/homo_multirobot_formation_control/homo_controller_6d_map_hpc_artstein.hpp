@@ -17,10 +17,12 @@ class MapHpcController6DArtstein {
 public:
   MapHpcController6DArtstein(int m_p, double radius, double tol,
       double mass, double inertia, double c_min, bool use_hpc, double period,
-      double initial_min_lambda, double switch_min_lambda = 4.0)
+      double initial_min_lambda, double switch_min_lambda = 4.0,
+      bool use_nu_override = false, double nu_override = -0.30)
   : mass_(mass), inertia_(inertia), c_min_(c_min), use_hpc_(use_hpc), period_(period),
     initial_min_lambda_(initial_min_lambda), switch_min_lambda_(switch_min_lambda),
-    min_lambda_(initial_min_lambda), tol_(tol)
+    min_lambda_(initial_min_lambda), nu_override_(nu_override),
+    use_nu_override_(use_nu_override), tol_(tol)
   {
     if (m_p < 1 || radius <= 0.0 || tol_ < 0.0 || mass_ <= 0.0 || inertia_ <= 0.0 ||
         period_ <= 0.0 || c_min_ <= 0.0 || c_min_ > 1.0 ||
@@ -56,10 +58,24 @@ public:
     k_ = calculate_klin(error_of(leader, follower));
     auto res = lpc2hpc_nd(a_, b_, k_);
     if (res.G0.isZero(1e-12)) throw std::runtime_error("6D map HPC initialization failed");
-    p_ = res.P; gd_ = Eigen::MatrixXd::Identity(6,6) + res.nu_min * res.G0; nu_ = res.nu_min; initialized_ = true;
+    nu_min_ = res.nu_min;
+    nu_max_ = res.nu_max;
+    nu_ = use_nu_override_ ? nu_override_ : nu_min_;
+    constexpr double kNuTolerance = 1e-12;
+    if (!std::isfinite(nu_) || nu_ < nu_min_ - kNuTolerance ||
+        nu_ > nu_max_ + kNuTolerance) {
+      throw std::runtime_error("6D map HPC nu override outside feasible interval");
+    }
+    p_ = res.P;
+    gd_ = Eigen::MatrixXd::Identity(6,6) + nu_ * res.G0;
+    initialized_ = true;
   }
 
   double min_lambda() const { return min_lambda_; }
+  double nu() const { return nu_; }
+  double nu_min() const { return nu_min_; }
+  double nu_max() const { return nu_max_; }
+  bool uses_nu_override() const { return use_nu_override_; }
 
   Eigen::Vector3d command(const Eigen::VectorXd& leader, const Eigen::VectorXd& follower)
   {
@@ -123,7 +139,8 @@ private:
   }
   std::vector<Eigen::Vector2d> offsets_; int target_index_ = -1;
   double mass_, inertia_, c_min_, period_, initial_min_lambda_, switch_min_lambda_,
-      min_lambda_, nu_=0.0, tol_;
-  bool use_hpc_, initialized_=false; Eigen::Matrix<double, 3, 6> k_; Eigen::MatrixXd a_, b_, gd_, p_;
+      min_lambda_, nu_=0.0, nu_min_=0.0, nu_max_=0.0, nu_override_, tol_;
+  bool use_hpc_, use_nu_override_, initialized_=false;
+  Eigen::Matrix<double, 3, 6> k_; Eigen::MatrixXd a_, b_, gd_, p_;
 };
 }  // namespace formation_control

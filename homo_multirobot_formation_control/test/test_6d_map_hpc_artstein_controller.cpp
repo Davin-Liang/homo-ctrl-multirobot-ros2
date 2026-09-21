@@ -7,6 +7,37 @@
 
 int main()
 {
+  Eigen::VectorXd nu_leader = Eigen::VectorXd::Zero(6);
+  Eigen::VectorXd nu_follower = Eigen::VectorXd::Zero(6);
+  nu_follower(0) = 1.0;
+  formation_control::MapHpcController6DArtstein automatic_nu_controller(
+      1, 1.0, 0.0, 2.0, 1.0, 0.5, true, 0.05, 1.0, 4.0);
+  assert(automatic_nu_controller.select_target(nu_leader, nu_follower));
+  automatic_nu_controller.initialize(nu_leader, nu_follower);
+  assert(std::abs(automatic_nu_controller.nu() -
+                  automatic_nu_controller.nu_min()) < 1e-12);
+
+  const double nu_override = 0.5 * (automatic_nu_controller.nu_min() +
+                                    automatic_nu_controller.nu_max());
+  formation_control::MapHpcController6DArtstein overridden_nu_controller(
+      1, 1.0, 0.0, 2.0, 1.0, 0.5, true, 0.05, 1.0, 4.0,
+      true, nu_override);
+  assert(overridden_nu_controller.select_target(nu_leader, nu_follower));
+  overridden_nu_controller.initialize(nu_leader, nu_follower);
+  assert(std::abs(overridden_nu_controller.nu() - nu_override) < 1e-12);
+
+  formation_control::MapHpcController6DArtstein invalid_nu_controller(
+      1, 1.0, 0.0, 2.0, 1.0, 0.5, true, 0.05, 1.0, 4.0,
+      true, automatic_nu_controller.nu_min() - 1e-3);
+  assert(invalid_nu_controller.select_target(nu_leader, nu_follower));
+  bool invalid_nu_rejected = false;
+  try {
+    invalid_nu_controller.initialize(nu_leader, nu_follower);
+  } catch (const std::runtime_error&) {
+    invalid_nu_rejected = true;
+  }
+  assert(invalid_nu_rejected);
+
   auto rejects_invalid_lambda = [](double initial_min_lambda,
                                    double switch_min_lambda) {
     try {
