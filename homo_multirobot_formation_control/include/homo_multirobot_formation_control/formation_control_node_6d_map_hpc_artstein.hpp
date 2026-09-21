@@ -13,6 +13,7 @@
 #include <deque>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -31,6 +32,7 @@
 
 #include "homo_multirobot_formation_control/homo_controller_6d_map_hpc_artstein.hpp"
 #include "homo_multirobot_formation_control/kinematic_constraint.hpp"
+#include "homo_multirobot_formation_control/leader_command_delta_feedforward.hpp"
 
 namespace formation_control {
 
@@ -142,6 +144,9 @@ private:
   double max_linear_vel_ = 1.0;
   double max_angular_vel_ = 0.5;
   double min_cmd_vel_ = 0.0;
+  double leader_cmd_timeout_ = 0.15;
+  double leader_cmd_delta_lpf_tau_ = 0.10;
+  bool enable_leader_cmd_feedforward_ = false;
 
   std::unique_ptr<formation_control::MapHpcController6DArtstein> ctrl_;
   formation_control::KinematicConstraint constraint_;
@@ -158,18 +163,21 @@ private:
 
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr leader_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr follower_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr leader_cmd_sub_;
   nav_msgs::msg::Odometry::SharedPtr leader_odom_;
   nav_msgs::msg::Odometry::SharedPtr follower_odom_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr leader_mocap_pose_sub_, follower_mocap_pose_sub_;
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr leader_mocap_twist_sub_, follower_mocap_twist_sub_;
   geometry_msgs::msg::PoseStamped::SharedPtr leader_mocap_pose_, follower_mocap_pose_;
   geometry_msgs::msg::TwistStamped::SharedPtr leader_mocap_twist_, follower_mocap_twist_;
+  geometry_msgs::msg::Twist::SharedPtr leader_cmd_;
   rclcpp::Time leader_mocap_received_{0, 0, RCL_ROS_TIME}, follower_mocap_received_{0, 0, RCL_ROS_TIME};
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   rclcpp::Time leader_odom_stamp_{0, 0, RCL_ROS_TIME};
   rclcpp::Time follower_odom_stamp_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time leader_cmd_received_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_diag_time_{0, 0, RCL_ROS_TIME};
   int diag_tick_ = 0;
   double sum_leader_age_ = 0.0;
@@ -178,4 +186,8 @@ private:
   bool leader_ok_ = false;
   bool follower_ok_ = false;
   bool controller_initialized_ = false;
+  uint64_t leader_cmd_sequence_ = 0;
+  uint64_t processed_leader_cmd_sequence_ = 0;
+  std::unique_ptr<formation_control::LeaderCommandDeltaFeedforward>
+      leader_cmd_feedforward_;
 };

@@ -51,6 +51,7 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   control_rate_ = declare_parameter("control_rate", 20.0);
   double hpc_c_min = declare_parameter("hpc_c_min", 0.5);
   double initial_min_lambda = declare_parameter("initial_min_lambda", 1.0);
+  double switch_min_lambda = declare_parameter("switch_min_lambda", 4.0);
 
   tau_v_ = declare_parameter("tau", 0.43);
   tau_w_ = declare_parameter("tau_yaw", tau_v_);
@@ -64,6 +65,11 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   max_linear_vel_ = declare_parameter("max_linear_vel", 1.0);
   max_angular_vel_ = declare_parameter("max_angular_vel", 0.5);
   min_cmd_vel_ = declare_parameter("min_cmd_vel", 0.0);
+  enable_leader_cmd_feedforward_ =
+      declare_parameter("enable_leader_cmd_feedforward", false);
+  leader_cmd_timeout_ = declare_parameter("leader_cmd_timeout", 0.15);
+  leader_cmd_delta_lpf_tau_ =
+      declare_parameter("leader_cmd_delta_lpf_tau", 0.10);
 
   if (control_rate_ <= 0.0) {
     throw std::invalid_argument("6D Artstein Disc: control_rate must be positive");
@@ -82,7 +88,14 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   build_predictors(tau_v_, tau_w_, Td_, dt);
 
   ctrl_ = std::make_unique<MapHpcController6DArtstein>(
-      m_p, radius, tol, mass, inertia, hpc_c_min, use_hpc, dt, initial_min_lambda);
+      m_p, radius, tol, mass, inertia, hpc_c_min, use_hpc, dt,
+      initial_min_lambda, switch_min_lambda);
+
+  if (enable_leader_cmd_feedforward_) {
+    leader_cmd_feedforward_ =
+        std::make_unique<LeaderCommandDeltaFeedforward>(
+            true, leader_cmd_delta_lpf_tau_, max_linear_accel / control_rate_);
+  }
 
   constraint_ = KinematicConstraint(wheel_radius, base_radius, wheel_max_omega,
                                     max_linear_accel, max_angular_accel);
@@ -111,6 +124,16 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
     follower_mocap_pose_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(follower_ns_ + "/mocap/pose", qos, [this](geometry_msgs::msg::PoseStamped::SharedPtr m) { follower_mocap_pose_ = m; follower_mocap_received_ = now(); follower_ok_ = true; });
     leader_mocap_twist_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(leader_ns_ + "/mocap/twist", qos, [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { leader_mocap_twist_ = m; });
     follower_mocap_twist_sub_ = create_subscription<geometry_msgs::msg::TwistStamped>(follower_ns_ + "/mocap/twist", qos, [this](geometry_msgs::msg::TwistStamped::SharedPtr m) { follower_mocap_twist_ = m; });
+  }
+
+  if (enable_leader_cmd_feedforward_) {
+    leader_cmd_sub_ = create_subscription<geometry_msgs::msg::Twist>(
+        leader_ns_ + "/cmd_vel", 10,
+        [this](geometry_msgs::msg::Twist::SharedPtr m) {
+          leader_cmd_ = m;
+          leader_cmd_received_ = get_clock()->now();
+          ++leader_cmd_sequence_;
+        });
   }
 
   cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
@@ -273,6 +296,15 @@ void FormationController6DMapHpcArtstein::timer_cb()
   }
   const bool target_switched = ctrl_->select_target(leader.x, follower.x);
 
+  if (enable_leader_cmd_feedforward_ && leader_cmd_ &&
+      leader_cmd_sequence_ != processed_leader_cmd_sequence_) {
+    leader_cmd_feedforward_->ingest(
+        body_to_map(leader.x(2), Eigen::Vector2d(
+            leader_cmd_->linear.x, leader_cmd_->linear.y)),
+        leader_cmd_received_.seconds());
+    processed_leader_cmd_sequence_ = leader_cmd_sequence_;
+  }
+
   int trans_buf_size = trans_predictor_.buffer_size();
   int yaw_buf_size = yaw_predictor_.buffer_size();
 
@@ -307,7 +339,7 @@ void FormationController6DMapHpcArtstein::timer_cb()
     Eigen::VectorXd x1_h = predict_leader_state(
         leader.x, Td_ + std::max(tau_v_, tau_w_));
     Eigen::VectorXd x2_h = predict_follower_state(follower);
-    ctrl_->initialize(x1_h, x2_h);
+    ctrl_->initialize(x1_h, x2_h, true);
     RCLCPP_INFO(get_logger(), "6D Map HPC switched polygon target to %d.", ctrl_->target_index());
   }
 
@@ -316,6 +348,10 @@ void FormationController6DMapHpcArtstein::timer_cb()
   Eigen::VectorXd x2_h = predict_follower_state(follower);
 
   Eigen::Vector3d map_out = ctrl_->command(x1_h, x2_h);
+  if (enable_leader_cmd_feedforward_) {
+    map_out.head<2>() += leader_cmd_feedforward_->consume(
+        get_clock()->now().seconds(), leader_cmd_timeout_);
+  }
   Eigen::Vector2d body_out = map_to_body(follower.x(2), map_out.head<2>());
   const double raw_linear_mag = body_out.norm();
 

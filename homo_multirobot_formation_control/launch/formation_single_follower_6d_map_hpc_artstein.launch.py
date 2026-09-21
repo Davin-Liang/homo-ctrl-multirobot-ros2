@@ -49,6 +49,7 @@ def generate_launch_description():
     control_rate = LaunchConfiguration("control_rate")
     hpc_c_min = LaunchConfiguration("hpc_c_min")
     initial_min_lambda = LaunchConfiguration("initial_min_lambda")
+    switch_min_lambda = LaunchConfiguration("switch_min_lambda")
 
     tau = LaunchConfiguration("tau")
     tau_yaw = LaunchConfiguration("tau_yaw")
@@ -62,6 +63,9 @@ def generate_launch_description():
     max_linear_vel = LaunchConfiguration("max_linear_vel")
     max_angular_vel = LaunchConfiguration("max_angular_vel")
     min_cmd_vel = LaunchConfiguration("min_cmd_vel")
+    enable_leader_cmd_feedforward = LaunchConfiguration("enable_leader_cmd_feedforward")
+    leader_cmd_timeout = LaunchConfiguration("leader_cmd_timeout")
+    leader_cmd_delta_lpf_tau = LaunchConfiguration("leader_cmd_delta_lpf_tau")
 
     use_motor_delay = LaunchConfiguration("use_motor_delay")
     motor_tau = LaunchConfiguration("motor_tau")
@@ -96,6 +100,7 @@ def generate_launch_description():
                 "control_rate": control_rate,
                 "hpc_c_min": hpc_c_min,
                 "initial_min_lambda": initial_min_lambda,
+                "switch_min_lambda": switch_min_lambda,
                 "tau": tau,
                 "tau_yaw": tau_yaw,
                 "Td": Td,
@@ -107,6 +112,9 @@ def generate_launch_description():
                 "max_linear_vel": max_linear_vel,
                 "max_angular_vel": max_angular_vel,
                 "min_cmd_vel": min_cmd_vel,
+                "enable_leader_cmd_feedforward": enable_leader_cmd_feedforward,
+                "leader_cmd_timeout": leader_cmd_timeout,
+                "leader_cmd_delta_lpf_tau": leader_cmd_delta_lpf_tau,
             },
         ],
     )
@@ -146,6 +154,7 @@ def generate_launch_description():
             DeclareLaunchArgument("control_rate", default_value="20.0"),
             DeclareLaunchArgument("hpc_c_min", default_value="0.5"),
             DeclareLaunchArgument("initial_min_lambda", default_value="1.0"),
+            DeclareLaunchArgument("switch_min_lambda", default_value="4.0"),
             DeclareLaunchArgument("tau", default_value="0.43"),
             DeclareLaunchArgument("tau_yaw", default_value="0.43"),
             DeclareLaunchArgument("Td", default_value="0.22"),
@@ -157,6 +166,9 @@ def generate_launch_description():
             DeclareLaunchArgument("max_linear_vel", default_value="1.0"),
             DeclareLaunchArgument("max_angular_vel", default_value="0.5"),
             DeclareLaunchArgument("min_cmd_vel", default_value="0.0"),
+            DeclareLaunchArgument("enable_leader_cmd_feedforward", default_value="false"),
+            DeclareLaunchArgument("leader_cmd_timeout", default_value="0.15"),
+            DeclareLaunchArgument("leader_cmd_delta_lpf_tau", default_value="0.10"),
             DeclareLaunchArgument("use_motor_delay", default_value="false"),
             DeclareLaunchArgument("motor_tau", default_value="0.43"),
             DeclareLaunchArgument("transport_delay", default_value="0.22"),
