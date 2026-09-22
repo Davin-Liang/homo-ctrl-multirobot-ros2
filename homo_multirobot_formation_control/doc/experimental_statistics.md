@@ -33,8 +33,16 @@ homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.7(no_fora)_20
 ## 齐次度 -0.6
 homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.6_20260921_211438
 
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.6(no_fora)_20260922_165110
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.6(no_fora)_20260922_165453
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.6(no_fora)_20260922_165759
+
 ## 齐次度 -0.5
 homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.5_20260921_211740
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.5(no_fora)_20260922_170125
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.5(no_fora)_20260922_170509
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.5(no_fora)_20260922_170816
 
 # Leader 前馈开/关对比
 ## 开
