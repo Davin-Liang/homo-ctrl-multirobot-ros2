@@ -30,6 +30,8 @@ CSV 中保存未展开的原始 yaw，供 MATLAB 或其他后处理工具按需�
 - `distance.png`：两车间距离与可选理想编队半径。
 - `speed.png`：两车线速度模长。
 - `map_velocity.png`：Leader/Follower 的 map-frame `vx`、`vy` 和 `omega` 跟踪曲线。
+- `x.png`：Leader/Follower 的 map-frame x 坐标随时间变化。
+- `y.png`：Leader/Follower 的 map-frame y 坐标随时间变化。
 - `yaw.png`：Leader/Follower yaw 跟踪曲线。
 
 `yaw.png` 在绘图阶段对两条曲线独立执行 unwrap，以消除跨越 `+pi/-pi` 边界产生的视觉跳变；这不改变 CSV 原始 yaw。
