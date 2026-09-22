@@ -14,7 +14,7 @@
     -p radius:=2.0 -p duration:=30.0
 
 输出:
-  {out_dir}/{mode}/{tag}_{timestamp}/check.png     ← 六子图
+  {out_dir}/{mode}/{tag}_{timestamp}/*.png         ← 独立检查图
   {out_dir}/{mode}/{tag}_{timestamp}/raw.csv       ← MATLAB 可用
   {out_dir}/{mode}/{tag}_{timestamp}/metadata.yaml ← 实验元数据
 """
@@ -51,6 +51,10 @@ PARAMETER_VALUE_FIELDS = {
 }
 
 VALID_STATE_SOURCES = ('ekf_tf', 'mocap')
+PLOT_FILENAMES = (
+    'trajectory.png', 'distance.png', 'map_velocity.png', 'speed.png',
+    'x.png', 'y.png', 'yaw.png',
+)
 
 RECORDER_PARAMETER_DEFAULTS = {
     'leader_ns': '/robot1',
@@ -98,10 +102,42 @@ def validate_state_source(value):
     return value
 
 
+def yaw_from_quaternion(quaternion):
+    """从四元数提取绕 z 轴的航向角。"""
+    siny = 2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y)
+    cosy = 1.0 - 2.0 * (quaternion.y * quaternion.y + quaternion.z * quaternion.z)
+    return math.atan2(siny, cosy)
+
+
+def body_velocity_to_map(vx_body, vy_body, yaw):
+    """将车体坐标系的平面线速度转换至 map 坐标系。"""
+    return (vx_body * math.cos(yaw) - vy_body * math.sin(yaw),
+            vx_body * math.sin(yaw) + vy_body * math.cos(yaw))
+
+
+def map_yaw_from_odom(odom_yaw, map_to_odom_yaw):
+    """组合 map→odom 与 odom→base 的平面朝向，并归一化至 [-pi, pi]。"""
+    yaw = odom_yaw + map_to_odom_yaw
+    return math.atan2(math.sin(yaw), math.cos(yaw))
+
+
+def unwrap_yaw_series(yaws):
+    """展开 yaw 序列，消除跨越 +/-pi 时的绘图跳变。"""
+    if not yaws:
+        return []
+    result = [yaws[0]]
+    for yaw in yaws[1:]:
+        delta = (yaw - result[-1] + math.pi) % (2.0 * math.pi) - math.pi
+        result.append(result[-1] + delta)
+    return result
+
+
 def mocap_sample(pose, twist):
     """从动捕适配器的 map 系消息中提取平面状态。"""
     return (pose.pose.position.x, pose.pose.position.y,
-            twist.twist.linear.x, twist.twist.linear.y)
+            yaw_from_quaternion(pose.pose.orientation),
+            twist.twist.linear.x, twist.twist.linear.y,
+            twist.twist.angular.z)
 
 
 def recording_topics(leader_ns, follower_ns, state_source):
@@ -121,7 +157,7 @@ def recording_topics(leader_ns, follower_ns, state_source):
 
 def velocity_frame_label(state_source):
     """返回当前记录线速度所在参考系的图表标签。"""
-    return 'Map-frame' if state_source == 'mocap' else 'Body-frame'
+    return 'Map-frame'
 
 
 def merge_parameter_overrides(defaults, overrides):
@@ -262,8 +298,10 @@ class TrajectoryRecorder(Node):
 
         self.t1_x = []; self.t1_y = []; self.t1_t = []
         self.t1_vx = []; self.t1_vy = []; self.t1_v = []
+        self.t1_yaw = []; self.t1_omega = []
         self.t2_x = []; self.t2_y = []; self.t2_t = []
         self.t2_vx = []; self.t2_vy = []; self.t2_v = []
+        self.t2_yaw = []; self.t2_omega = []
 
         self.t0 = None
         self.done = False
@@ -417,9 +455,10 @@ class TrajectoryRecorder(Node):
         ekf_x = msg.pose.pose.position.x
         ekf_y = msg.pose.pose.position.y
         return (tf_x + ekf_x * math.cos(tf_yaw) - ekf_y * math.sin(tf_yaw),
-                tf_y + ekf_x * math.sin(tf_yaw) + ekf_y * math.cos(tf_yaw))
+                tf_y + ekf_x * math.sin(tf_yaw) + ekf_y * math.cos(tf_yaw),
+                tf_yaw)
 
-    def _record(self, msg, ns, xl, yl, tl, vxl, vyl, vl):
+    def _record(self, msg, ns, xl, yl, tl, vxl, vyl, vl, yawl, omegal):
         if self.done:
             return
         pos = self._odom_to_map(ns, msg)
@@ -432,14 +471,20 @@ class TrajectoryRecorder(Node):
         tl.append(now - self.t0)
         xl.append(pos[0])
         yl.append(pos[1])
-        vxl.append(msg.twist.twist.linear.x)
-        vyl.append(msg.twist.twist.linear.y)
-        vl.append(math.hypot(msg.twist.twist.linear.x, msg.twist.twist.linear.y))
+        yaw = map_yaw_from_odom(
+            yaw_from_quaternion(msg.pose.pose.orientation), pos[2])
+        vx_map, vy_map = body_velocity_to_map(
+            msg.twist.twist.linear.x, msg.twist.twist.linear.y, yaw)
+        vxl.append(vx_map)
+        vyl.append(vy_map)
+        vl.append(math.hypot(vx_map, vy_map))
+        yawl.append(yaw)
+        omegal.append(msg.twist.twist.angular.z)
 
-    def _record_mocap(self, pose, twist, xl, yl, tl, vxl, vyl, vl):
+    def _record_mocap(self, pose, twist, xl, yl, tl, vxl, vyl, vl, yawl, omegal):
         if self.done:
             return
-        x, y, vx, vy = mocap_sample(pose, twist)
+        x, y, yaw, vx, vy, omega = mocap_sample(pose, twist)
         now = time.time()
         if self.t0 is None:
             self.t0 = now
@@ -450,13 +495,15 @@ class TrajectoryRecorder(Node):
         vxl.append(vx)
         vyl.append(vy)
         vl.append(math.hypot(vx, vy))
+        yawl.append(yaw)
+        omegal.append(omega)
 
     def cb_leader(self, msg):
         self._record(msg, self.leader_ns, self.t1_x, self.t1_y, self.t1_t,
-                     self.t1_vx, self.t1_vy, self.t1_v)
+                     self.t1_vx, self.t1_vy, self.t1_v, self.t1_yaw, self.t1_omega)
     def cb_follower(self, msg):
         self._record(msg, self.follower_ns, self.t2_x, self.t2_y, self.t2_t,
-                     self.t2_vx, self.t2_vy, self.t2_v)
+                     self.t2_vx, self.t2_vy, self.t2_v, self.t2_yaw, self.t2_omega)
 
     def _mocap_ready(self):
         return all((self.leader_mocap_pose, self.leader_mocap_twist,
@@ -467,7 +514,7 @@ class TrajectoryRecorder(Node):
         if self._mocap_ready():
             self._record_mocap(
                 msg, self.leader_mocap_twist, self.t1_x, self.t1_y, self.t1_t,
-                self.t1_vx, self.t1_vy, self.t1_v)
+                self.t1_vx, self.t1_vy, self.t1_v, self.t1_yaw, self.t1_omega)
 
     def cb_leader_mocap_twist(self, msg):
         self.leader_mocap_twist = msg
@@ -477,7 +524,7 @@ class TrajectoryRecorder(Node):
         if self._mocap_ready():
             self._record_mocap(
                 msg, self.follower_mocap_twist, self.t2_x, self.t2_y, self.t2_t,
-                self.t2_vx, self.t2_vy, self.t2_v)
+                self.t2_vx, self.t2_vy, self.t2_v, self.t2_yaw, self.t2_omega)
 
     def cb_follower_mocap_twist(self, msg):
         self.follower_mocap_twist = msg
@@ -510,9 +557,11 @@ class TrajectoryRecorder(Node):
         with open(csv_path, 'w', newline='') as f:
             w = csv.writer(f)
             w.writerow(['time_s', 'leader_x_m', 'leader_y_m',
-                        'leader_vx_ms', 'leader_vy_ms', 'leader_v_ms',
+                        'leader_vx_map_ms', 'leader_vy_map_ms', 'leader_v_ms',
+                        'leader_yaw_rad', 'leader_omega_rads',
                         'follower_x_m', 'follower_y_m',
-                        'follower_vx_ms', 'follower_vy_ms', 'follower_v_ms',
+                        'follower_vx_map_ms', 'follower_vy_map_ms', 'follower_v_ms',
+                        'follower_yaw_rad', 'follower_omega_rads',
                         'distance_m'])
             n2 = len(self.t2_t)
             n1 = len(self.t1_t)
@@ -522,17 +571,23 @@ class TrajectoryRecorder(Node):
                 fy = self.t2_y[i2]
                 fvx = self.t2_vx[i2]
                 fvy = self.t2_vy[i2]
+                fyaw = self.t2_yaw[i2]
+                fomega = self.t2_omega[i2]
                 # 找最接近的 leader 点
                 i1 = min(range(n1), key=lambda j: abs(self.t1_t[j] - t))
                 lx = self.t1_x[i1]
                 ly = self.t1_y[i1]
                 lvx = self.t1_vx[i1]
                 lvy = self.t1_vy[i1]
+                lyaw = self.t1_yaw[i1]
+                lomega = self.t1_omega[i1]
                 dist = math.hypot(lx - fx, ly - fy)
                 w.writerow([f'{t:.4f}', f'{lx:.4f}', f'{ly:.4f}',
                             f'{lvx:.4f}', f'{lvy:.4f}', f'{math.hypot(lvx,lvy):.4f}',
+                            f'{lyaw:.4f}', f'{lomega:.4f}',
                             f'{fx:.4f}', f'{fy:.4f}',
                             f'{fvx:.4f}', f'{fvy:.4f}', f'{math.hypot(fvx,fvy):.4f}',
+                            f'{fyaw:.4f}', f'{fomega:.4f}',
                             f'{dist:.4f}'])
         self.get_logger().info(f'CSV 已保存: {csv_path}')
 
@@ -556,6 +611,8 @@ class TrajectoryRecorder(Node):
             if isinstance(value, dict):
                 stream.write(f'{prefix}{key}:\n')
                 self._write_yaml_mapping(stream, value, indent + 2)
+            elif isinstance(value, list):
+                stream.write(f'{prefix}{key}: {json.dumps(value, ensure_ascii=False)}\n')
             else:
                 stream.write(f'{prefix}{key}: {self._yaml_scalar(value)}\n')
 
@@ -585,7 +642,7 @@ class TrajectoryRecorder(Node):
             'desired_follower_y': None,
             'files': {
                 'csv': 'raw.csv',
-                'check_plot': 'check.png',
+                'plots': list(PLOT_FILENAMES),
             },
         }
         with open(yaml_path, 'w', encoding='utf-8') as f:
@@ -599,99 +656,106 @@ class TrajectoryRecorder(Node):
         ax.plot(tl, vl, linewidth=0.8, label=name, color=c)
 
     def _plot_and_save(self, experiment_dir):
+        """分别保存轨迹、位置、速度与姿态检查图。"""
         elapsed = time.time() - self.t0 if self.t0 else 0
-        velocity_frame = velocity_frame_label(self.state_source)
-        fig, axes = plt.subplots(3, 2, figsize=(16, 14))
+        paths = []
 
-        # ---- 子图 1: 轨迹 ----
-        ax = axes[0][0]
-        for xl, yl, name, c in [
-            (self.t1_x, self.t1_y, self.leader_label, 'tab:blue'),
-            (self.t2_x, self.t2_y, self.follower_label, 'tab:orange'),
-        ]:
-            if not xl:
-                continue
-            ax.plot(xl, yl, linewidth=0.8, label=name, color=c)
-            ax.scatter(xl[0], yl[0], c=c, marker='o', s=60, zorder=5)
-            ax.scatter(xl[-1], yl[-1], c=c, marker='s', s=60, zorder=5)
-        ax.set_xlabel('X (m)'); ax.set_ylabel('Y (m)')
-        ax.set_title(f'[{self.mode}] {self.tag} ({elapsed:.1f}s)')
-        ax.legend(fontsize=7); ax.set_aspect('equal'); ax.grid(True, alpha=0.3)
+        def save_figure(filename, draw):
+            fig, ax = plt.subplots(figsize=(8, 6))
+            draw(ax)
+            fig.tight_layout()
+            path = os.path.join(experiment_dir, filename)
+            fig.savefig(path, dpi=150)
+            plt.close(fig)
+            paths.append(path)
 
-        # ---- 子图 2: 编队距离 ----
-        ax = axes[0][1]
-        n = min(len(self.t1_x), len(self.t2_x))
-        if n > 0:
-            dist_t = self.t2_t[:n]
-            dist = [math.hypot(self.t1_x[i] - self.t2_x[i], self.t1_y[i] - self.t2_y[i])
-                    for i in range(n)]
-            dist_mean = sum(dist) / n
-            dist_std = math.sqrt(max(0.0, sum((d - dist_mean) ** 2 for d in dist) / n))
-            ax.plot(dist_t, dist, linewidth=1.0, color='tab:red',
-                    label=f'Leader-follower (mean={dist_mean:.2f}m, std={dist_std:.2f}m)')
-        if self.ideal_radius > 0:
-            ax.axhline(y=self.ideal_radius, color='gray', linestyle='--', linewidth=1.2,
-                       label=f'Ideal radius = {self.ideal_radius:.1f}m')
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('Distance (m)')
-        ax.set_title('Leader-follower distance')
-        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        def finish(ax, xlabel, ylabel, title, legend_size=7):
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+            ax.set_title(title)
+            handles, _ = ax.get_legend_handles_labels()
+            if handles:
+                ax.legend(fontsize=legend_size)
+            ax.grid(True, alpha=0.3)
 
-        # ---- 子图 3: Vx + Vy ----
-        ax = axes[1][0]
-        for tl, vl, name, c in [
-            (self.t1_t, self.t1_vx, self.leader_label + ' Vx', 'tab:blue'),
-            (self.t2_t, self.t2_vx, self.follower_label + ' Vx', 'tab:orange'),
-            (self.t1_t, self.t1_vy, self.leader_label + ' Vy', 'deepskyblue'),
-            (self.t2_t, self.t2_vy, self.follower_label + ' Vy', 'gold'),
-        ]:
-            self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel(f'{velocity_frame} velocity (m/s)')
-        ax.set_title(f'{velocity_frame} Vx & Vy')
-        ax.legend(fontsize=6); ax.grid(True, alpha=0.3)
+        def draw_trajectory(ax):
+            for xl, yl, name, color in [
+                (self.t1_x, self.t1_y, self.leader_label, 'tab:blue'),
+                (self.t2_x, self.t2_y, self.follower_label, 'tab:orange'),
+            ]:
+                if not xl:
+                    continue
+                ax.plot(xl, yl, linewidth=0.8, label=name, color=color)
+                ax.scatter(xl[0], yl[0], c=color, marker='o', s=60, zorder=5)
+                ax.scatter(xl[-1], yl[-1], c=color, marker='s', s=60, zorder=5)
+            finish(ax, 'X (m)', 'Y (m)', f'[{self.mode}] {self.tag} ({elapsed:.1f}s)')
+            ax.set_aspect('equal')
 
-        # ---- 子图 4: |V| ----
-        ax = axes[1][1]
-        for tl, vl, name, c in [
-            (self.t1_t, self.t1_v, self.leader_label, 'tab:blue'),
-            (self.t2_t, self.t2_v, self.follower_label, 'tab:orange'),
-        ]:
-            self._plot_xy_vel(ax, tl, vl, name, c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel(f'|V| {velocity_frame} (m/s)')
-        ax.set_title(f'{velocity_frame} |V|')
-        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        def draw_distance(ax):
+            n = min(len(self.t1_x), len(self.t2_x))
+            if n:
+                distance = [math.hypot(self.t1_x[i] - self.t2_x[i],
+                                       self.t1_y[i] - self.t2_y[i]) for i in range(n)]
+                mean = sum(distance) / n
+                std = math.sqrt(sum((value - mean) ** 2 for value in distance) / n)
+                ax.plot(self.t2_t[:n], distance, linewidth=1.0, color='tab:red',
+                        label=f'Leader-follower (mean={mean:.2f}m, std={std:.2f}m)')
+            if self.ideal_radius > 0:
+                ax.axhline(self.ideal_radius, color='gray', linestyle='--', linewidth=1.2,
+                           label=f'Ideal radius = {self.ideal_radius:.1f}m')
+            finish(ax, 'Time (s)', 'Distance (m)', 'Leader-follower distance')
 
-        # ---- 子图 5: X over time ----
-        ax = axes[2][0]
-        for xl, yl, tl, name, c in [
-            (self.t1_x, self.t1_y, self.t1_t, self.leader_label, 'tab:blue'),
-            (self.t2_x, self.t2_y, self.t2_t, self.follower_label, 'tab:orange'),
-        ]:
-            if not tl:
-                continue
-            ax.plot(tl, xl, linewidth=0.8, label=name, color=c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('X (m)')
-        ax.set_title('X over time')
-        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        def draw_map_velocity(ax):
+            for tl, values, name, color in [
+                (self.t1_t, self.t1_vx, self.leader_label + ' Vx', 'tab:blue'),
+                (self.t2_t, self.t2_vx, self.follower_label + ' Vx', 'tab:orange'),
+                (self.t1_t, self.t1_vy, self.leader_label + ' Vy', 'deepskyblue'),
+                (self.t2_t, self.t2_vy, self.follower_label + ' Vy', 'gold'),
+                (self.t1_t, self.t1_omega, self.leader_label + ' omega', 'tab:purple'),
+                (self.t2_t, self.t2_omega, self.follower_label + ' omega', 'tab:green'),
+            ]:
+                self._plot_xy_vel(ax, tl, values, name, color)
+            finish(ax, 'Time (s)', 'Map velocity (m/s), omega (rad/s)',
+                   'Map-frame Vx, Vy & omega', 6)
 
-        # ---- 子图 6: Y over time ----
-        ax = axes[2][1]
-        for xl, yl, tl, name, c in [
-            (self.t1_x, self.t1_y, self.t1_t, self.leader_label, 'tab:blue'),
-            (self.t2_x, self.t2_y, self.t2_t, self.follower_label, 'tab:orange'),
-        ]:
-            if not tl:
-                continue
-            ax.plot(tl, yl, linewidth=0.8, label=name, color=c)
-        ax.set_xlabel('Time (s)'); ax.set_ylabel('Y (m)')
-        ax.set_title('Y over time')
-        ax.legend(fontsize=7); ax.grid(True, alpha=0.3)
+        def draw_speed(ax):
+            for tl, values, name, color in [
+                (self.t1_t, self.t1_v, self.leader_label, 'tab:blue'),
+                (self.t2_t, self.t2_v, self.follower_label, 'tab:orange'),
+            ]:
+                self._plot_xy_vel(ax, tl, values, name, color)
+            finish(ax, 'Time (s)', 'Map-frame |V| (m/s)', 'Map-frame |V|')
 
-        png_path = os.path.join(experiment_dir, 'check.png')
-        plt.tight_layout(); plt.savefig(png_path, dpi=150); plt.close()
+        def draw_position(axis, coordinate, title):
+            for tl, values, name, color in [
+                (self.t1_t, coordinate[0], self.leader_label, 'tab:blue'),
+                (self.t2_t, coordinate[1], self.follower_label, 'tab:orange'),
+            ]:
+                if tl:
+                    axis.plot(tl, values, linewidth=0.8, label=name, color=color)
+            finish(axis, 'Time (s)', title[0] + ' (m)', title[1])
 
-        n1, n2 = len(self.t1_x), len(self.t2_x)
+        def draw_yaw(ax):
+            for tl, yaws, name, color in [
+                (self.t1_t, self.t1_yaw, self.leader_label, 'tab:blue'),
+                (self.t2_t, self.t2_yaw, self.follower_label, 'tab:orange'),
+            ]:
+                if tl:
+                    ax.plot(tl, unwrap_yaw_series(yaws), linewidth=0.8,
+                            label=name, color=color)
+            finish(ax, 'Time (s)', 'Yaw (rad, unwrapped)', 'Yaw tracking')
+
+        save_figure('trajectory.png', draw_trajectory)
+        save_figure('distance.png', draw_distance)
+        save_figure('map_velocity.png', draw_map_velocity)
+        save_figure('speed.png', draw_speed)
+        save_figure('x.png', lambda ax: draw_position(ax, (self.t1_x, self.t2_x), ('X', 'X over time')))
+        save_figure('y.png', lambda ax: draw_position(ax, (self.t1_y, self.t2_y), ('Y', 'Y over time')))
+        save_figure('yaw.png', draw_yaw)
+
         self.get_logger().info(
-            f'PNG 已保存: {png_path}  ({self.leader_label}={n1}, {self.follower_label}={n2})')
+            f'PNG 已保存: {", ".join(paths)}  '
+            f'({self.leader_label}={len(self.t1_x)}, {self.follower_label}={len(self.t2_x)})')
 
     def _save_and_plot(self):
         experiment_dir = self._build_experiment_dir()

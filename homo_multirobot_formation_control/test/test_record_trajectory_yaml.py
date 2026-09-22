@@ -1,4 +1,6 @@
+import csv
 import importlib.util
+import math
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -159,8 +161,73 @@ def test_mocap_sample_uses_map_pose_and_linear_twist_directly():
     twist = TwistStamped()
     twist.twist.linear.x = 0.4
     twist.twist.linear.y = -0.2
+    twist.twist.angular.z = 0.3
 
-    assert module.mocap_sample(pose, twist) == (1.25, -0.75, 0.4, -0.2)
+    assert module.mocap_sample(pose, twist) == (1.25, -0.75, 0.0, 0.4, -0.2, 0.3)
+
+
+def test_yaw_and_map_velocity_helpers_preserve_planar_state():
+    pose = PoseStamped()
+    pose.pose.orientation.z = math.sqrt(0.5)
+    pose.pose.orientation.w = math.sqrt(0.5)
+
+    assert module.yaw_from_quaternion(pose.pose.orientation) == pytest.approx(math.pi / 2)
+    assert module.body_velocity_to_map(1.0, 0.0, math.pi / 2) == pytest.approx((0.0, 1.0))
+
+
+def test_map_yaw_includes_map_to_odom_rotation():
+    assert module.map_yaw_from_odom(math.pi / 4, math.pi / 2) == pytest.approx(3 * math.pi / 4)
+
+
+def test_save_csv_writes_map_velocity_and_attitude_columns(tmp_path):
+    recorder = SimpleNamespace(
+        t1_t=[0.0], t1_x=[1.0], t1_y=[2.0], t1_vx=[0.3], t1_vy=[0.4],
+        t1_yaw=[0.1], t1_omega=[0.2],
+        t2_t=[0.0], t2_x=[3.0], t2_y=[4.0], t2_vx=[0.5], t2_vy=[0.6],
+        t2_yaw=[0.7], t2_omega=[0.8],
+        get_logger=lambda: FakeLogger(),
+    )
+
+    module.TrajectoryRecorder._save_csv(recorder, tmp_path)
+
+    rows = list(csv.reader((tmp_path / 'raw.csv').open(encoding='utf-8')))
+    assert rows[0] == [
+        'time_s', 'leader_x_m', 'leader_y_m',
+        'leader_vx_map_ms', 'leader_vy_map_ms', 'leader_v_ms',
+        'leader_yaw_rad', 'leader_omega_rads',
+        'follower_x_m', 'follower_y_m',
+        'follower_vx_map_ms', 'follower_vy_map_ms', 'follower_v_ms',
+        'follower_yaw_rad', 'follower_omega_rads', 'distance_m',
+    ]
+    assert rows[1][6:8] == ['0.1000', '0.2000']
+    assert rows[1][13:15] == ['0.7000', '0.8000']
+
+
+def test_unwrap_yaw_series_removes_pi_boundary_jump():
+    values = module.unwrap_yaw_series([math.radians(179), math.radians(-179)])
+
+    assert values == pytest.approx([math.radians(179), math.radians(181)])
+
+
+def test_metadata_lists_individual_plot_files(tmp_path):
+    recorder = SimpleNamespace(
+        trial_id='trial_01', mode='sim', controller='',
+        ctrl_node_name='formation_control_node', duration=30.0,
+        leader_ns='/robot1', follower_ns='/robot2', state_source='ekf_tf',
+        ideal_radius=1.0, ctrl_params={}, delay_params={},
+    )
+    recorder._yaml_scalar = module.TrajectoryRecorder._yaml_scalar
+    recorder._write_yaml_mapping = module.TrajectoryRecorder._write_yaml_mapping.__get__(recorder)
+    recorder.get_logger = lambda: FakeLogger()
+
+    module.TrajectoryRecorder._save_metadata(recorder, tmp_path)
+
+    metadata = yaml.safe_load((tmp_path / 'metadata.yaml').read_text(encoding='utf-8'))
+    assert metadata['files']['plots'] == [
+        'trajectory.png', 'distance.png', 'map_velocity.png', 'speed.png',
+        'x.png', 'y.png', 'yaw.png',
+    ]
+    assert 'check_plot' not in metadata['files']
 
 
 def test_mocap_recording_topics_include_pose_and_twist():
@@ -200,8 +267,8 @@ def test_mocap_callbacks_wait_for_both_robots_before_recording():
         leader_mocap_twist=None,
         follower_mocap_pose=None,
         follower_mocap_twist=None,
-        t1_x=[], t1_y=[], t1_t=[], t1_vx=[], t1_vy=[], t1_v=[],
-        t2_x=[], t2_y=[], t2_t=[], t2_vx=[], t2_vy=[], t2_v=[],
+        t1_x=[], t1_y=[], t1_t=[], t1_vx=[], t1_vy=[], t1_v=[], t1_yaw=[], t1_omega=[],
+        t2_x=[], t2_y=[], t2_t=[], t2_vx=[], t2_vy=[], t2_v=[], t2_yaw=[], t2_omega=[],
     )
     recorder._mocap_ready = lambda: module.TrajectoryRecorder._mocap_ready(recorder)
     recorder._record_mocap = lambda *args: recorded.append(args)

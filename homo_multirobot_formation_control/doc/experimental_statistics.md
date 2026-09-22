@@ -1,0 +1,89 @@
+每组 3 次
+
+
+# 不同齐次度对比（无前馈）
+## 齐次度 -1.0（复用之前实验组）
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-1.0_20260921_205117
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112130
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112637
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126
+
+## 齐次度 -0.9
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.9_20260921_210212
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.9(no_fora)_20260922_161938
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.9(no_fora)_20260922_162215
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.9(no_fora)_20260922_162535
+
+## 齐次度 -0.8
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.8_20260921_210540
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.8(no_fora)_20260922_162911
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.8(no_fora)_20260922_163147
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.8(no_fora)_20260922_163348
+
+# 齐次度 -0.7
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.7_20260921_211157
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.7(no_fora)_20260922_163733
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.7(no_fora)_20260922_164127
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.7(no_fora)_20260922_164349
+
+## 齐次度 -0.6
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.6_20260921_211438
+
+## 齐次度 -0.5
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.5_20260921_211740
+
+# Leader 前馈开/关对比
+## 开
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_forw_vs_no_forw_20260922_113628
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_forw_vs_no_forw_20260922_114422
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126
+
+## 关
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112130
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112637
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126
+
+
+# 齐次/线性对比（无前馈）
+## 齐次（复用之前实验组）
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112130
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112637
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126
+
+## 线性
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_lpc_vs_hpc(no_fora)_20260922_151019
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_lpc_vs_hpc(no_fora)_20260922_150513
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_lpc_vs_hpc(no_fora)_20260922_151019
+
+# 不同控制频率对比（无前馈）
+## 10 Hz
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_10hz(no_fora)_20260922_160335
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_10hz(no_fora)_20260922_160621
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_10hz(no_fora)_20260922_161008
+
+## 20 Hz（复用之前实验组）
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112130
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112637
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126
+
+## 25 Hz
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_25hz(no_fora)_20260922_154002
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_25hz(no_fora)_20260922_154256
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_25hz(no_fora)_20260922_154540
+
+## 40 Hz
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_40hz(no_fora)_20260922_155158
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_40hz(no_fora)_20260922_155542
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_40hz(no_fora)_20260922_155808
+
+# 6D 和 4D 对比（无前馈）
+## 6D（复用之前实验组）
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112130
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112637
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126
+
+## 4D

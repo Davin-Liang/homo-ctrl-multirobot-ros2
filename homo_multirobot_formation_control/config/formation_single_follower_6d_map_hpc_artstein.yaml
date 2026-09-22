@@ -29,9 +29,9 @@
     # 是否强制使用指定齐次度；false 时自动使用理论 nu_min。
     use_hpc_nu_override: true
     # 高级实验参数：指定的齐次度。启用后必须位于自动理论区间 [nu_min, nu_max]。
-    hpc_nu_override: -0.4
+    hpc_nu_override: -0.5
     # 初始 LPC 极点下界。
-    initial_min_lambda: 1.5
+    initial_min_lambda: 2.0
     # 离散编队点切换后重建 HPC 使用的 LPC 极点下界。
     switch_min_lambda: 4.0
     # 平移等效电机时间常数（s）。
