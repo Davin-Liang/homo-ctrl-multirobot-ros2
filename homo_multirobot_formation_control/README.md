@@ -453,6 +453,8 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 输入延迟补偿、Follower 电机前向预测、Leader 状态外推或 Leader 命令前馈。它适合作为
 实物对照组：请和 Artstein 版本保持相同的定位链路、控制频率、速度和加速度限幅。
 该 launch 不接受 `tau`、`tau_yaw` 或 `Td` 参数。
+`motor_tau` 与 `transport_delay` 仅在 `use_motor_delay:=true` 时传给
+`sim_motor_delay.py` 注入仿真执行器延迟，不参与该控制器的状态预测或补偿。
 
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_map_hpc.launch.py \
