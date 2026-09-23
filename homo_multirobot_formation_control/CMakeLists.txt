@@ -87,6 +87,19 @@ install(TARGETS formation_control_node_4d_artstein
   target_link_libraries(formation_control_node_6d_map_hpc_artstein Eigen3::Eigen)
   install(TARGETS formation_control_node_6d_map_hpc_artstein DESTINATION lib/${PROJECT_NAME})
 
+add_executable(formation_control_node_6d_map_hpc
+  src/main_6d_map_hpc.cpp
+  src/formation_control_node_6d_map_hpc.cpp
+)
+target_include_directories(formation_control_node_6d_map_hpc PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+ament_target_dependencies(formation_control_node_6d_map_hpc
+  rclcpp geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs)
+target_link_libraries(formation_control_node_6d_map_hpc Eigen3::Eigen)
+install(TARGETS formation_control_node_6d_map_hpc DESTINATION lib/${PROJECT_NAME})
+
 # ---- 以下目标暂不编译，降低实物 ARM 的内存占用；需要时改为 if(TRUE)。--------
 if(FALSE)
 

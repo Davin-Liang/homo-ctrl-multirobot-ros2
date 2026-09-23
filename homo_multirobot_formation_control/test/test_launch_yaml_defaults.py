@@ -23,6 +23,9 @@ LAUNCH_TO_YAML = {
     "formation_single_follower_6d_map_hpc_artstein.launch.py": (
         "formation_single_follower_6d_map_hpc_artstein.yaml"
     ),
+    "formation_single_follower_6d_map_hpc.launch.py": (
+        "formation_single_follower_6d_map_hpc.yaml"
+    ),
 }
 
 
