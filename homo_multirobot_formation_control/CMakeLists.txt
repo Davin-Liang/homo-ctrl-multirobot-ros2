@@ -246,6 +246,10 @@ install(PROGRAMS
 )
 
 if(BUILD_TESTING)
+  add_test(NAME test_6d_map_hpc_baseline
+    COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_6d_map_hpc_baseline.py)
+
   add_test(NAME test_record_trajectory_yaml
     COMMAND ${Python3_EXECUTABLE} -m pytest -q
     ${CMAKE_CURRENT_SOURCE_DIR}/test/test_record_trajectory_yaml.py)
