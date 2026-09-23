@@ -458,7 +458,7 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_artst
 
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_map_hpc.launch.py \
-  leader_ns:=/robot1 follower_ns:=/robot2 use_sim_time:=false
+  leader_ns:=/robot1 follower_ns:=/robot2 use_sim_time:=false use_motor_delay:=false
 ```
 
 ### 启动（6D Map HPC Artstein，固定 map 编队偏移）

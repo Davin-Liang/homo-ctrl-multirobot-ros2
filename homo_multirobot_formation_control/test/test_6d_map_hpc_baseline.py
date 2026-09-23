@@ -26,6 +26,7 @@ class MapHpcBaselineTest(unittest.TestCase):
         for name in COMPENSATION_PARAMETERS:
             self.assertNotIn(name, params)
             self.assertNotIn(f'LaunchConfiguration("{name}")', launch_source)
+        self.assertFalse(params["use_motor_delay"])
 
     def test_baseline_control_path_uses_measured_states_directly(self):
         source = SOURCE.read_text(encoding="utf-8")

@@ -25,7 +25,7 @@
     max_linear_vel: 0.45
     max_angular_vel: 0.8
     min_cmd_vel: 0.07
-    use_motor_delay: true
+    use_motor_delay: false
     motor_tau: 0.43
     transport_delay: 0.22
     delay_max_accel: 0.6
