@@ -25,7 +25,14 @@ int main()
   const Eigen::VectorXd forward = predictor.predict(z, command, true);
   const Eigen::VectorXd expected_delay_only = (A * 0.5).exp() * z;
 
+  const Eigen::VectorXd no_compensation = predictor.predict(
+      z, command, false, false);
+  const Eigen::VectorXd forward_only = predictor.predict(
+      z, command, false, true);
+
   assert((delay_only - expected_delay_only).norm() < 1e-12);
   assert((forward - delay_only).norm() > 1e-6);
+  assert((no_compensation - z).norm() < 1e-12);
+  assert((forward_only - no_compensation).norm() > 1e-6);
   return 0;
 }
