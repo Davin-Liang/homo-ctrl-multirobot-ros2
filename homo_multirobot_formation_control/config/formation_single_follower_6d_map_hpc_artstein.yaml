@@ -40,6 +40,8 @@
     tau_yaw: 0.43
     # 执行器纯滞后时间（s）。
     Td: 0.22
+    # 是否启用 Artstein 输入延迟补偿；false 时跳过命令历史积分与 Td 外推。
+    enable_artstein_compensation: true
     # 是否启用 tau/tau_yaw 前向预测；false 时仍保留 Artstein Td 延迟补偿。
     enable_forward_prediction: true
     # 全向轮滚动半径（m）。

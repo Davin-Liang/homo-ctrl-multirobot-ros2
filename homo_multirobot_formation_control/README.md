@@ -478,8 +478,9 @@ ros2 launch homo_multirobot_formation_control formation_single_follower_6d_map_h
 线速度变化的一次性增量叠加到 map 系平移命令，增量由
 `leader_cmd_delta_lpf_tau` 低通且在 `leader_cmd_timeout` 后失效。Leader 的角速度
 命令不会绕过 6D Artstein/HPC yaw 通道。
-`enable_forward_prediction` 默认开启；设为 `false` 时，Follower 仍执行 Artstein
-历史积分与 `Td` 外推、Leader 仍仅外推 `Td`，但不再执行 `tau/tau_yaw` 前向预测。
+`enable_artstein_compensation` 默认开启；设为 `false` 时，Follower 不再执行 Artstein
+命令历史积分或 `Td` 外推，Leader 也不再外推 `Td`。`enable_forward_prediction` 与其
+独立：开启时仍从当前状态执行 `tau/tau_yaw` 前向预测，关闭时不执行该预测。
 
 ```bash
 ros2 launch homo_multirobot_formation_control formation_single_follower_6d_map_hpc_artstein.launch.py \

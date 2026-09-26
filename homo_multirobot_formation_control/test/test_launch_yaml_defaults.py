@@ -91,6 +91,18 @@ class TestLaunchYamlDefaults(unittest.TestCase):
         self.assertIn(
             '"enable_forward_prediction": enable_forward_prediction', source)
 
+    def test_6d_map_hpc_artstein_compensation_parameter(self):
+        names = yaml_parameter_names(
+            CONFIG_DIR / "formation_single_follower_6d_map_hpc_artstein.yaml")
+        source = (
+            LAUNCH_DIR / "formation_single_follower_6d_map_hpc_artstein.launch.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("enable_artstein_compensation", names)
+        self.assertIn('LaunchConfiguration("enable_artstein_compensation")', source)
+        self.assertIn(
+            '"enable_artstein_compensation": enable_artstein_compensation', source)
+
     def test_4d_controllers_do_not_expose_omega_d(self):
         for yaml_name, launch_name in (
             ("formation_single_follower.yaml", "formation_single_follower.launch.py"),
