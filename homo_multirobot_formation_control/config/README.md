@@ -14,7 +14,7 @@
 | `formation_single_follower_6d_disc.yaml` | `formation_single_follower_6d_disc.launch.py` / `formation_control_node_6d_disc` | 6D 运动学离散多边形编队控制器；使用平移/yaw 闭环带宽及运动学轮速约束。 |
 | `formation_single_follower_6d_artstein_disc_hocbf.yaml` | `formation_single_follower_6d_artstein_disc_hocbf.launch.py` / `formation_control_node_6d_artstein_disc_hocbf` | 6D Artstein 离散编队加 HOCBF 避障；除延迟补偿外，还配置激光聚类、圆柱拟合与障碍物安全间隙。 |
 | `formation_single_follower_6d_map_hpc.yaml` | `formation_single_follower_6d_map_hpc.launch.py` / `formation_control_node_6d_map_hpc` | 6D map-frame HPC 无补偿基线。直接使用当前 Leader/Follower 测量状态，适合实物上与 Artstein 版本对照；默认关闭仿真电机延迟。 |
-| `formation_single_follower_6d_map_hpc_artstein.yaml` | `formation_single_follower_6d_map_hpc_artstein.launch.py` / `formation_control_node_6d_map_hpc_artstein` | 6D map-frame HPC Artstein 版本。使用固定 map 系编队偏移，并配置平移/yaw 预测、输入延迟补偿和可选 Leader 命令前馈。 |
+| `formation_single_follower_6d_map_hpc_artstein.yaml` | `formation_single_follower_6d_map_hpc_artstein.launch.py` / `formation_control_node_6d_map_hpc_artstein` | 6D map-frame HPC Artstein 版本。使用固定 map 系编队偏移，并配置平移/yaw 预测、输入延迟补偿、可选关闭的 tau 前向预测和可选 Leader 命令前馈。 |
 
 除 `formation_single_follower_6d_disc.yaml` 外，带 `use_motor_delay` 的控制器配置都可在
 Gazebo 中经 `sim_motor_delay.py` 注入一阶电机滞后和传输延迟。实物测试应保持它为 `false`。

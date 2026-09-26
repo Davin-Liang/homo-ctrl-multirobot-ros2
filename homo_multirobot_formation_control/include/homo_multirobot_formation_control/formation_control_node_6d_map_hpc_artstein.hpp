@@ -64,6 +64,7 @@ private:
   double tau_v_ = 0.43;
   double tau_w_ = 0.43;
   double Td_ = 0.22;
+  bool enable_forward_prediction_ = true;
   double max_linear_vel_ = 1.0;
   double max_angular_vel_ = 0.5;
   double min_cmd_vel_ = 0.0;

@@ -40,6 +40,8 @@
     tau_yaw: 0.43
     # 执行器纯滞后时间（s）。
     Td: 0.22
+    # 是否启用 tau/tau_yaw 前向预测；false 时仍保留 Artstein Td 延迟补偿。
+    enable_forward_prediction: true
     # 全向轮滚动半径（m）。
     wheel_radius: 0.03
     # 机器人中心到车轮距离（m）。

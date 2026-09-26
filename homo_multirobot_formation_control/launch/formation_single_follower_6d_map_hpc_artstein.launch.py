@@ -56,6 +56,7 @@ def generate_launch_description():
     tau = LaunchConfiguration("tau")
     tau_yaw = LaunchConfiguration("tau_yaw")
     Td = LaunchConfiguration("Td")
+    enable_forward_prediction = LaunchConfiguration("enable_forward_prediction")
 
     wheel_radius = LaunchConfiguration("wheel_radius")
     base_radius = LaunchConfiguration("base_radius")
@@ -108,6 +109,7 @@ def generate_launch_description():
                 "tau": tau,
                 "tau_yaw": tau_yaw,
                 "Td": Td,
+                "enable_forward_prediction": enable_forward_prediction,
                 "wheel_radius": wheel_radius,
                 "base_radius": base_radius,
                 "wheel_max_omega": wheel_max_omega,
@@ -164,6 +166,7 @@ def generate_launch_description():
             DeclareLaunchArgument("tau", default_value="0.43"),
             DeclareLaunchArgument("tau_yaw", default_value="0.43"),
             DeclareLaunchArgument("Td", default_value="0.22"),
+            DeclareLaunchArgument("enable_forward_prediction", default_value="true"),
             DeclareLaunchArgument("wheel_radius", default_value="0.03"),
             DeclareLaunchArgument("base_radius", default_value="0.11"),
             DeclareLaunchArgument("wheel_max_omega", default_value="20.0"),

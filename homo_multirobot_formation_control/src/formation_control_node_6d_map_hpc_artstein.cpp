@@ -58,6 +58,8 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
   tau_v_ = declare_parameter("tau", 0.43);
   tau_w_ = declare_parameter("tau_yaw", tau_v_);
   Td_ = declare_parameter("Td", 0.22);
+  enable_forward_prediction_ =
+      declare_parameter("enable_forward_prediction", true);
 
   double wheel_radius = declare_parameter("wheel_radius", 0.03);
   double base_radius = declare_parameter("base_radius", 0.11);
@@ -248,14 +250,16 @@ Eigen::VectorXd FormationController6DMapHpcArtstein::predict_follower_state(
   Eigen::VectorXd x4(4);
   x4 << measured.x(0), measured.x(1), measured.v_map(0), measured.v_map(1);
   Eigen::VectorXd z4 = x4 + trans_predictor_.integral(follower_vcmd_map_hist_);
-  Eigen::VectorXd pred4 = trans_predictor_.predict(z4, last_vcmd_map_);
+  Eigen::VectorXd pred4 = trans_predictor_.predict(
+      z4, last_vcmd_map_, enable_forward_prediction_);
 
   Eigen::VectorXd x2(2);
   x2 << measured.x(2), measured.x(5);
   Eigen::VectorXd z2 = x2 + yaw_predictor_.integral(follower_wcmd_hist_);
   Eigen::VectorXd wcmd(1);
   wcmd << last_wcmd_;
-  Eigen::VectorXd pred2 = yaw_predictor_.predict(z2, wcmd);
+  Eigen::VectorXd pred2 = yaw_predictor_.predict(
+      z2, wcmd, enable_forward_prediction_);
 
   double theta_pred = wrap_angle(pred2(0));
   Eigen::Vector2d v_body_pred = map_to_body(theta_pred, pred4.tail<2>());
@@ -298,6 +302,8 @@ void FormationController6DMapHpcArtstein::timer_cb()
     fill(follower_mocap_pose_, follower_mocap_twist_, follower);
   }
   const bool target_switched = ctrl_->select_target(leader.x, follower.x);
+  const double prediction_horizon = Td_ +
+      (enable_forward_prediction_ ? std::max(tau_v_, tau_w_) : 0.0);
 
   if (enable_leader_cmd_feedforward_ && leader_cmd_ &&
       leader_cmd_sequence_ != processed_leader_cmd_sequence_) {
@@ -327,8 +333,7 @@ void FormationController6DMapHpcArtstein::timer_cb()
       follower_wcmd_hist_.push_back(w);
     }
 
-    Eigen::VectorXd x1_h = predict_leader_state(
-        leader.x, Td_ + std::max(tau_v_, tau_w_));
+    Eigen::VectorXd x1_h = predict_leader_state(leader.x, prediction_horizon);
     Eigen::VectorXd x2_h = predict_follower_state(follower);
 
     try {
@@ -343,8 +348,7 @@ void FormationController6DMapHpcArtstein::timer_cb()
       return;
     }
   } else if (target_switched) {
-    Eigen::VectorXd x1_h = predict_leader_state(
-        leader.x, Td_ + std::max(tau_v_, tau_w_));
+    Eigen::VectorXd x1_h = predict_leader_state(leader.x, prediction_horizon);
     Eigen::VectorXd x2_h = predict_follower_state(follower);
     ctrl_->initialize(x1_h, x2_h, true);
     RCLCPP_INFO(get_logger(), "6D Map HPC switched polygon target to %d.", ctrl_->target_index());
@@ -354,8 +358,7 @@ void FormationController6DMapHpcArtstein::timer_cb()
         ctrl_->nu(), ctrl_->nu_min(), ctrl_->nu_max());
   }
 
-  Eigen::VectorXd x1_h = predict_leader_state(
-      leader.x, Td_ + std::max(tau_v_, tau_w_));
+  Eigen::VectorXd x1_h = predict_leader_state(leader.x, prediction_horizon);
   Eigen::VectorXd x2_h = predict_follower_state(follower);
 
   Eigen::Vector3d map_out = ctrl_->command(x1_h, x2_h);
