@@ -291,6 +291,17 @@ if(BUILD_TESTING)
   add_test(NAME test_6d_map_hpc_artstein_controller
     COMMAND test_6d_map_hpc_artstein_controller)
 
+  add_executable(test_artstein_predictor_nd
+    test/test_artstein_predictor_nd.cpp
+  )
+  target_include_directories(test_artstein_predictor_nd PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+  )
+  target_link_libraries(test_artstein_predictor_nd Eigen3::Eigen)
+  add_test(NAME test_artstein_predictor_nd
+    COMMAND test_artstein_predictor_nd)
+
   add_executable(test_lqr_controller_4d_artstein
     test/test_lqr_controller_4d_artstein.cpp
   )
