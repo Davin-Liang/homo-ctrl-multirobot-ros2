@@ -39,6 +39,37 @@ homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.5(no_fora)_20
 homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.5(no_fora)_20260922_170509
 homo_multirobot_formation_control/robot_traj/real/6d_artstein_nu-0.5(no_fora)_20260922_170816
 
+## 齐次度 -0.4
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.4_20260928_171712
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.4_20260928_171938
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.4_20260928_172243
+
+## 齐次度 -0.3
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.3_20260928_172716
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.3_20260928_172953
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.3_20260928_173238
+
+## 齐次度 -0.2
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.2_20260928_201610
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.2_20260928_201956
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.2_20260928_202222
+
+## 齐次度 -0.1
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.1_20260928_202437
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.1_20260928_202638
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0.1_20260928_202854
+
+## 齐次度 -0.0
+
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0_20260928_203052
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0_20260928_203325
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forward_nu-0_20260928_203536
+
+
 # Leader 前馈开/关对比
 
 ## 开
@@ -93,15 +124,6 @@ homo_multirobot_formation_control/robot_traj/real/6d_artstein_40hz(no_fora)_2026
 homo_multirobot_formation_control/robot_traj/real/6d_artstein_40hz(no_fora)_20260922_155542
 homo_multirobot_formation_control/robot_traj/real/6d_artstein_40hz(no_fora)_20260922_155808
 
-# 6D 和 4D 对比（无前馈）
-
-## 6D（复用之前实验组）
-
-homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112130
-homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112637
-homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126
-
-## 4D
 
 ## 无前馈敏感性统计结果
 
@@ -131,6 +153,21 @@ homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20
 | -0.5 | 1 (`6d_artstein_nu-0.5(no_fora)_20260922_170125`) | 0.1445 | 0.2102 | 0.1015 | 0.1070 | 0.1076 | 0.0905 |
 | -0.5 | 2 (`6d_artstein_nu-0.5(no_fora)_20260922_170509`) | 0.1420 | 0.2014 | 0.1051 | 0.1077 | 0.1079 | 0.0787 |
 | -0.5 | 3 (`6d_artstein_nu-0.5(no_fora)_20260922_170816`) | 0.1394 | 0.2016 | 0.0981 | 0.0995 | 0.1028 | 0.0764 |
+| -0.4 | 1 (`6d_artstein_no_forward_nu-0.4_20260928_171712`) | 0.1766 | 0.2405 | 0.1388 | 0.1495 | 0.1238 | 0.0944 |
+| -0.4 | 2 (`6d_artstein_no_forward_nu-0.4_20260928_171938`) | 0.1715 | 0.2302 | 0.1241 | 0.1255 | 0.1147 | 0.0911 |
+| -0.4 | 3 (`6d_artstein_no_forward_nu-0.4_20260928_172243`) | 0.1741 | 0.2368 | 0.1290 | 0.1369 | 0.1172 | 0.0904 |
+| -0.3 | 1 (`6d_artstein_no_forward_nu-0.3_20260928_172716`) | 0.2088 | 0.2706 | 0.1744 | 0.1917 | 0.1388 | 0.1166 |
+| -0.3 | 2 (`6d_artstein_no_forward_nu-0.3_20260928_172953`) | 0.1978 | 0.2475 | 0.1651 | 0.1797 | 0.1324 | 0.1107 |
+| -0.3 | 3 (`6d_artstein_no_forward_nu-0.3_20260928_173238`) | 0.2079 | 0.2649 | 0.1747 | 0.1893 | 0.1344 | 0.1110 |
+| -0.2 | 1 (`6d_artstein_no_forward_nu-0.2_20260928_201610`) | 0.2311 | 0.2741 | 0.2050 | 0.2230 | 0.1454 | 0.1292 |
+| -0.2 | 2 (`6d_artstein_no_forward_nu-0.2_20260928_201956`) | 0.2353 | 0.3006 | 0.1930 | 0.2121 | 0.1418 | 0.1207 |
+| -0.2 | 3 (`6d_artstein_no_forward_nu-0.2_20260928_202222`) | 0.3368 | 0.4062 | 0.3312 | 0.3691 | 0.2192 | 0.2123 |
+| -0.1 | 1 (`6d_artstein_no_forward_nu-0.1_20260928_202437`) | 0.2641 | 0.3199 | 0.2314 | 0.2548 | 0.1592 | 0.1428 |
+| -0.1 | 2 (`6d_artstein_no_forward_nu-0.1_20260928_202638`) | 0.2564 | 0.3027 | 0.2319 | 0.2563 | 0.1551 | 0.1404 |
+| -0.1 | 3 (`6d_artstein_no_forward_nu-0.1_20260928_202854`) | 0.2513 | 0.2942 | 0.2310 | 0.2539 | 0.1541 | 0.1396 |
+| 0.0 | 1 (`6d_artstein_no_forward_nu-0_20260928_203052`) | 0.2844 | 0.3365 | 0.2677 | 0.2967 | 0.1663 | 0.1549 |
+| 0.0 | 2 (`6d_artstein_no_forward_nu-0_20260928_203325`) | 0.2829 | 0.3283 | 0.2620 | 0.2900 | 0.1673 | 0.1567 |
+| 0.0 | 3 (`6d_artstein_no_forward_nu-0_20260928_203536`) | 0.2821 | 0.3339 | 0.2626 | 0.2920 | 0.1673 | 0.1538 |
 
 #### 组级汇总（均值 ± 标准差）
 
@@ -142,6 +179,11 @@ homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20
 | -0.7 | n=3 | 0.0957 ± 0.0041 | 0.1705 ± 0.0054 | 0.0555 ± 0.0021 | 0.0555 ± 0.0010 | 0.0845 ± 0.0015 | 0.0575 ± 0.0030 |
 | -0.6 | n=3 | 0.1113 ± 0.0132 | 0.1821 ± 0.0504 | 0.0694 ± 0.0025 | 0.0688 ± 0.0048 | 0.0931 ± 0.0061 | 0.0684 ± 0.0076 |
 | -0.5 | n=3 | 0.1420 ± 0.0025 | 0.2044 ± 0.0050 | 0.1016 ± 0.0035 | 0.1047 ± 0.0046 | 0.1061 ± 0.0029 | 0.0819 ± 0.0076 |
+| -0.4 | n=3 | 0.1740 ± 0.0026 | 0.2358 ± 0.0052 | 0.1306 ± 0.0075 | 0.1373 ± 0.0120 | 0.1186 ± 0.0047 | 0.0920 ± 0.0021 |
+| -0.3 | n=3 | 0.2048 ± 0.0061 | 0.2610 ± 0.0120 | 0.1714 ± 0.0054 | 0.1869 ± 0.0064 | 0.1352 ± 0.0033 | 0.1128 ± 0.0033 |
+| -0.2 | n=3 | 0.2678 ± 0.0599 | 0.3270 ± 0.0699 | 0.2431 ± 0.0766 | 0.2681 ± 0.0877 | 0.1688 ± 0.0437 | 0.1541 ± 0.0506 |
+| -0.1 | n=3 | 0.2573 ± 0.0064 | 0.3056 ± 0.0131 | 0.2314 ± 0.0005 | 0.2550 ± 0.0012 | 0.1561 ± 0.0027 | 0.1409 ± 0.0016 |
+| 0.0 | n=3 | 0.2831 ± 0.0012 | 0.3329 ± 0.0042 | 0.2641 ± 0.0031 | 0.2929 ± 0.0034 | 0.1670 ± 0.0006 | 0.1552 ± 0.0015 |
 
 ### 不同控制频率 (Hz)对比
 
@@ -170,3 +212,24 @@ homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20
 | 20 | n=3 | 0.0642 ± 0.0002 | 0.1473 ± 0.0035 | 0.0332 ± 0.0027 | 0.0329 ± 0.0043 | 0.0702 ± 0.0029 | 0.0459 ± 0.0103 |
 | 25 | n=3 | 0.0611 ± 0.0171 | 0.1224 ± 0.0657 | 0.0384 ± 0.0005 | 0.0395 ± 0.0017 | 0.0678 ± 0.0132 | 0.0519 ± 0.0029 |
 | 40 | n=3 | 0.0724 ± 0.0020 | 0.1619 ± 0.0126 | 0.0385 ± 0.0031 | 0.0385 ± 0.0053 | 0.0743 ± 0.0013 | 0.0445 ± 0.0123 |
+
+# 原始 6D map hpc / 只有 artstein 补偿 / 只有前向预测 / artstein 补偿和前向预测都有的6D map hpc 对比
+## 原始 6D map hpc
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(no_artstein_no_forward)_20260928_152026
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(no_artstein_no_forward)_20260928_152839
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(no_artstein_no_forward)_20260928_153438
+
+## 只有 artstein 补偿
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(only_artstein)_20260928_153858
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(only_artstein)_20260928_154239
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(only_artstein)_20260928_154525
+
+## 只有前向预测
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(only_forward)_20260928_165352
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(only_forward)_20260928_165802
+homo_multirobot_formation_control/robot_traj/real/6d_map_artstein(only_forward)_20260928_170102
+
+## artstein 补偿和前向预测都有的6D map hpc（复用之前实验组）
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112130
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_112637
+homo_multirobot_formation_control/robot_traj/real/6d_artstein_no_forw_vs_forw_20260922_113126

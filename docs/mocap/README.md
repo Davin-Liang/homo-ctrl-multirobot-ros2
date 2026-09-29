@@ -265,7 +265,7 @@ ros2 launch homo_multirobot_formation_control \
   namespace:=robot1 \
   use_sim_time:=false \
   state_source:=mocap \
-  radius:=1.0 speed:=0.20 heading:=0.0 direction:=ccw
+  radius:=0.6 speed:=0.25 heading:=0.0 direction:=ccw
 ```
 
 该节点订阅：
