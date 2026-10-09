@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 
 import numpy as np
@@ -22,3 +23,19 @@ def test_first_order_wins_for_first_order_samples():
     first = module.fit_first_order(time_s, speed, 0.2)
     accel = module.fit_constant_accel(time_s, speed, 0.2)
     assert module.choose_model(first, accel) == "first_order"
+
+
+def test_write_outputs_creates_replayable_files(tmp_path):
+    samples = [{"trial": 1, "phase": "hold", "elapsed_s": 0.0,
+                "cmd_vx": 0.15, "cmd_vy": 0.0, "cmd_wz": 0.0,
+                "vx_map": 0.0, "vy_map": 0.0, "wz": 0.0,
+                "response": 0.0}]
+    module.write_outputs(tmp_path, samples, [], {"mode": "move"})
+    assert (tmp_path / "samples.csv").is_file()
+    assert (tmp_path / "fit_summary.csv").is_file()
+    assert json.loads((tmp_path / "metadata.json").read_text())["mode"] == "move"
+
+
+def test_command_values_activate_one_axis():
+    assert module.command_values("move", 0.15) == (0.15, 0.0, 0.0)
+    assert module.command_values("turn", 0.3) == (0.0, 0.0, 0.3)
