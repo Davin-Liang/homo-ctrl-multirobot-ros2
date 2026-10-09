@@ -251,6 +251,7 @@ install(PROGRAMS
   scripts/record_velocity_diagnostics.py
   scripts/virtual_leader_circle.py
   scripts/measure_motor_latency.py
+  scripts/measure_mocap_velocity_model.py
   scripts/measure_cross_machine_delay.py
   scripts/sim_motor_delay.py
   scripts/sim_4d_hpc_artstein_compare.py

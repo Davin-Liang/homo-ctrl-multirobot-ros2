@@ -116,6 +116,24 @@ def summarize_samples(samples, target):
     return rows
 
 
+def plot_samples(output_dir, samples):
+    if not samples:
+        return
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    figure, axis = plt.subplots()
+    for trial in sorted({sample["trial"] for sample in samples}):
+        part = [sample for sample in samples if sample["trial"] == trial]
+        axis.plot([sample["response"] for sample in part], label=f"trial {trial}")
+    axis.set_xlabel("sample")
+    axis.set_ylabel("measured response")
+    axis.grid()
+    axis.legend()
+    figure.savefig(Path(output_dir) / "comparison.png", dpi=150)
+    plt.close(figure)
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("move", "turn"), required=True)
@@ -186,6 +204,7 @@ def main():
             meter.collect(trial, "stop", args.settle_seconds, False)
         write_outputs(output, meter.samples, summarize_samples(meter.samples, args.target),
                       vars(args) | {"completed": True})
+        plot_samples(output, meter.samples)
         print(output)
     finally:
         meter.publish_stop()

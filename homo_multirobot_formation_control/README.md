@@ -775,6 +775,22 @@ python3 measure_motor_latency.py --ns /robot1 --trials 5
 同时测量 `/odom`（串口直出）和 `/odometry/filtered`（EKF 滤波）两路延迟，
 差值即为 EKF 滤波开销。
 
+### measure_mocap_velocity_model — 动捕速度模型测试
+
+使用动捕全局速度做重复阶跃实验，并比较一阶滞后和固定加速度模型。测试前请清空场地，确认仅待测机器人可运动。
+
+```bash
+# 平移：使用 sqrt(vx_map^2 + vy_map^2) 作为响应速度
+ros2 run homo_multirobot_formation_control measure_mocap_velocity_model.py \
+  --mode move --target 0.15 --trials 5
+
+# 偏航：使用动捕 angular.z 作为响应速度
+ros2 run homo_multirobot_formation_control measure_mocap_velocity_model.py \
+  --mode turn --target 0.30 --trials 5
+```
+
+默认读 `/robot2/mocap/twist`、向 `/robot2/cmd_vel` 发布；可用 `--namespace /robot1` 切换。每次运行写入 `robot_traj/real/model_identification/<timestamp>/` 下的 `samples.csv`、`fit_summary.csv`、`metadata.json` 和 `comparison.png`。`--target` 必填；动捕超时、异常和脚本结束都会发布零速度。
+
 ### measure_cross_machine_delay — 跨机器话题延迟
 
 测量 WiFi 环境下 ROS 2 话题的端到端延迟（在 Follower 车上运行）：
