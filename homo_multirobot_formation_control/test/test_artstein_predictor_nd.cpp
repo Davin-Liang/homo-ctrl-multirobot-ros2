@@ -34,5 +34,15 @@ int main()
   assert((forward - delay_only).norm() > 1e-6);
   assert((no_compensation - z).norm() < 1e-12);
   assert((forward_only - no_compensation).norm() > 1e-6);
+
+  const double H = 0.25;
+  const Eigen::VectorXd custom_horizon = predictor.predict(
+      z, command, false, true, H);
+  const double decay = std::exp(-H);
+  Eigen::VectorXd expected_custom(2);
+  expected_custom(0) = z(0) + command(0) * H
+      + (1.0 - decay) * (z(1) - command(0));
+  expected_custom(1) = command(0) + decay * (z(1) - command(0));
+  assert((custom_horizon - expected_custom).norm() < 1e-12);
   return 0;
 }

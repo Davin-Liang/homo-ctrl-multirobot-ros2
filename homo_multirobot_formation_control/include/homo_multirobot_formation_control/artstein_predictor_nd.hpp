@@ -62,13 +62,24 @@ struct ArtsteinPredictorNd {
                           const Eigen::VectorXd& current_cmd,
                           bool enable_forward_prediction = true) const
   {
-    return predict(artstein_state, current_cmd, true, enable_forward_prediction);
+    return predict(artstein_state, current_cmd, true, enable_forward_prediction,
+                   tau_);
   }
 
   Eigen::VectorXd predict(const Eigen::VectorXd& state,
                           const Eigen::VectorXd& current_cmd,
                           bool enable_artstein_compensation,
                           bool enable_forward_prediction) const
+  {
+    return predict(state, current_cmd, enable_artstein_compensation,
+                   enable_forward_prediction, tau_);
+  }
+
+  Eigen::VectorXd predict(const Eigen::VectorXd& state,
+                          const Eigen::VectorXd& current_cmd,
+                          bool enable_artstein_compensation,
+                          bool enable_forward_prediction,
+                          double forward_horizon) const
   {
     Eigen::VectorXd compensated = state;
     if (enable_artstein_compensation) {
@@ -79,9 +90,9 @@ struct ArtsteinPredictorNd {
     }
 
     int q = static_cast<int>(current_cmd.size());
-    double decay = std::exp(-1.0);
+    double decay = std::exp(-forward_horizon / tau_);
     Eigen::VectorXd predicted(2 * q);
-    predicted.head(q) = compensated.head(q) + current_cmd * tau_
+    predicted.head(q) = compensated.head(q) + current_cmd * forward_horizon
                       + tau_ * (1.0 - decay) * (compensated.tail(q) - current_cmd);
     predicted.tail(q) = current_cmd + decay * (compensated.tail(q) - current_cmd);
     return predicted;
