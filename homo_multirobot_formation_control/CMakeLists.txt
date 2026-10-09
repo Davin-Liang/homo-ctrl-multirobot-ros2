@@ -271,6 +271,10 @@ if(BUILD_TESTING)
     COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test/test_launch_yaml_defaults.py)
 
+  add_test(NAME test_6d_map_hpc_artstein_forward_prediction
+    COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_6d_map_hpc_artstein_forward_prediction.py)
+
   add_test(NAME test_two_robot_launch_config_defaults
     COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/test/test_two_robot_launch_config_defaults.py)

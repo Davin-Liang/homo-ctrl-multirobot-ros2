@@ -62,6 +62,11 @@ FormationController6DMapHpcArtstein::FormationController6DMapHpcArtstein()
       declare_parameter("enable_artstein_compensation", true);
   enable_forward_prediction_ =
       declare_parameter("enable_forward_prediction", true);
+  const double configured_forward_prediction_horizon =
+      declare_parameter("forward_prediction_horizon", 0.0);
+  forward_prediction_horizon_ = configured_forward_prediction_horizon > 0.0
+      ? configured_forward_prediction_horizon
+      : std::max(tau_v_, tau_w_);
 
   double wheel_radius = declare_parameter("wheel_radius", 0.03);
   double base_radius = declare_parameter("base_radius", 0.11);
@@ -257,7 +262,7 @@ Eigen::VectorXd FormationController6DMapHpcArtstein::predict_follower_state(
   }
   Eigen::VectorXd pred4 = trans_predictor_.predict(
       z4, last_vcmd_map_, enable_artstein_compensation_,
-      enable_forward_prediction_);
+      enable_forward_prediction_, forward_prediction_horizon_);
 
   Eigen::VectorXd x2(2);
   x2 << measured.x(2), measured.x(5);
@@ -268,7 +273,8 @@ Eigen::VectorXd FormationController6DMapHpcArtstein::predict_follower_state(
   Eigen::VectorXd wcmd(1);
   wcmd << last_wcmd_;
   Eigen::VectorXd pred2 = yaw_predictor_.predict(
-      z2, wcmd, enable_artstein_compensation_, enable_forward_prediction_);
+      z2, wcmd, enable_artstein_compensation_,
+      enable_forward_prediction_, forward_prediction_horizon_);
 
   double theta_pred = wrap_angle(pred2(0));
   Eigen::Vector2d v_body_pred = map_to_body(theta_pred, pred4.tail<2>());
@@ -313,7 +319,7 @@ void FormationController6DMapHpcArtstein::timer_cb()
   const bool target_switched = ctrl_->select_target(leader.x, follower.x);
   const double prediction_horizon =
       (enable_artstein_compensation_ ? Td_ : 0.0) +
-      (enable_forward_prediction_ ? std::max(tau_v_, tau_w_) : 0.0);
+      (enable_forward_prediction_ ? forward_prediction_horizon_ : 0.0);
 
   if (enable_leader_cmd_feedforward_ && leader_cmd_ &&
       leader_cmd_sequence_ != processed_leader_cmd_sequence_) {
