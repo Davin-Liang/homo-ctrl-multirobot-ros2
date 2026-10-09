@@ -12,6 +12,20 @@
 - `artstein`：含相同 plant，使用 map-frame 状态预测后再进入同一 HPC。
 - `artstein_linear`：与 `artstein` 使用完全相同的预测和 plant，但直接使用初始化的 `k_lin e`，关闭齐次范数和误差翘曲。
 
+## 独立前向预测时域
+
+`forward_prediction_horizon` 控制额外的一阶响应前向预测时域 `H`，而 `tau` 和 `tau_yaw` 仍只描述平移和偏航的速度响应时间常数。默认 `0.0` 会回退为旧行为 `max(tau, tau_yaw)`；当启用 Artstein 补偿和前向预测时，Leader 总预测时域为 `Td + H`。
+
+例如，独立使用 `0.30 s` 前向预测：
+
+```bash
+ros2 launch homo_multirobot_formation_control \
+  formation_single_follower_6d_map_hpc_artstein.launch.py \
+  forward_prediction_horizon:=0.30
+```
+
+设 `enable_forward_prediction:=false` 时，额外前向预测关闭，`forward_prediction_horizon` 不影响控制输出。
+
 三个组共享 Leader 圆轨迹、Follower 初值、HPC 参数、命令限幅和随机种子。
 
 默认还包含一个未知的 Leader yaw 阶跃：`t=30 s` 时，Leader yaw 在当前切线航向基础上增加 `+90°`，位置与 map-frame 平移速度连续。Artstein 组在阶跃发生前不会预知它；发生后才将观测到的 yaw 偏置带入未来状态预测。

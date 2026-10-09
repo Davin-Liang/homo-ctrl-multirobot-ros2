@@ -90,6 +90,15 @@ class TestLaunchYamlDefaults(unittest.TestCase):
         self.assertIn('LaunchConfiguration("enable_forward_prediction")', source)
         self.assertIn(
             '"enable_forward_prediction": enable_forward_prediction', source)
+        self.assertIn("forward_prediction_horizon", names)
+        self.assertIn('LaunchConfiguration("forward_prediction_horizon")', source)
+        self.assertIn(
+            '"forward_prediction_horizon": forward_prediction_horizon', source)
+        mocap_source = (
+            LAUNCH_DIR / "formation_single_follower_6d_map_hpc_artstein_mocap.launch.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            '"forward_prediction_horizon": LaunchConfiguration(', mocap_source)
 
     def test_6d_map_hpc_artstein_compensation_parameter(self):
         names = yaml_parameter_names(

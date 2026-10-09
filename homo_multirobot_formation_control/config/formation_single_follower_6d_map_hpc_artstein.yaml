@@ -42,6 +42,8 @@
     Td: 0.22
     # 是否启用 Artstein 输入延迟补偿；false 时跳过命令历史积分与 Td 外推。
     enable_artstein_compensation: true
+    # 额外前向预测时域（s）；小于等于 0 时沿用 max(tau, tau_yaw)。
+    forward_prediction_horizon: 0.0
     # 是否启用 tau/tau_yaw 前向预测；false 时仍保留 Artstein Td 延迟补偿。
     enable_forward_prediction: true
     # 全向轮滚动半径（m）。
