@@ -97,6 +97,11 @@ class TestLaunchYamlDefaults(unittest.TestCase):
         mocap_source = (
             LAUNCH_DIR / "formation_single_follower_6d_map_hpc_artstein_mocap.launch.py"
         ).read_text(encoding="utf-8")
+        self.assertRegex(
+            mocap_source,
+            r'DeclareLaunchArgument\(\s*"forward_prediction_horizon",\s*'
+            r'default_value=_launch_default\(defaults\["forward_prediction_horizon"\]\)\)',
+        )
         self.assertIn(
             '"forward_prediction_horizon": LaunchConfiguration(', mocap_source)
 
