@@ -154,6 +154,7 @@ def main():
     from geometry_msgs.msg import Twist
     from geometry_msgs.msg import TwistStamped
     from rclpy.node import Node
+    from rclpy.qos import qos_profile_sensor_data
 
     class Meter(Node):
         def __init__(self):
@@ -162,7 +163,8 @@ def main():
             self.publisher = self.create_publisher(Twist, f"{ns}/cmd_vel", 10)
             self.latest = None
             self.samples = []
-            self.create_subscription(TwistStamped, f"{ns}/mocap/twist", self.callback, 10)
+            self.create_subscription(TwistStamped, f"{ns}/mocap/twist",
+                                     self.callback, qos_profile_sensor_data)
 
         def callback(self, message):
             self.latest = (time.monotonic(), message)

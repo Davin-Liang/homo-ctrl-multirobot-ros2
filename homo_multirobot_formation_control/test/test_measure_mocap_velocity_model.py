@@ -39,3 +39,9 @@ def test_write_outputs_creates_replayable_files(tmp_path):
 def test_command_values_activate_one_axis():
     assert module.command_values("move", 0.15) == (0.15, 0.0, 0.0)
     assert module.command_values("turn", 0.3) == (0.0, 0.0, 0.3)
+
+
+def test_mocap_subscription_uses_sensor_data_qos():
+    source = SCRIPT.read_text(encoding="utf-8")
+    assert "qos_profile_sensor_data" in source
+    assert "self.callback, qos_profile_sensor_data" in source
