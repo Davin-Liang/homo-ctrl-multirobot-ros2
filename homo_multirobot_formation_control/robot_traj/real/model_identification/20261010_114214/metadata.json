@@ -1,0 +1,11 @@
+{
+  "mode": "move",
+  "target": 0.7,
+  "namespace": "/robot1",
+  "trials": 3,
+  "hold_seconds": 3.0,
+  "settle_seconds": 2.0,
+  "mocap_timeout": 0.2,
+  "out_dir": "",
+  "completed": true
+}
