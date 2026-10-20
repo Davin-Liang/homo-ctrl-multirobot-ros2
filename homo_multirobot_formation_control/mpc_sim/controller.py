@@ -104,7 +104,13 @@ class DelayAwareMpc:
 
         problem = cp.Problem(cp.Minimize(cost), constraints)
         started = perf_counter()
-        problem.solve(solver=cp.OSQP, warm_start=True, polishing=True)
+        problem.solve(
+            solver=cp.OSQP,
+            warm_start=True,
+            polishing=True,
+            eps_abs=1e-8,
+            eps_rel=1e-8,
+        )
         elapsed = perf_counter() - started
         if relative.value is None or state.value is None:
             fallback = previous_follower_command.copy()
