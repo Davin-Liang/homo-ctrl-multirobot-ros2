@@ -25,3 +25,6 @@ homo_multirobot_formation_control/analysis/
 
 # Local experiment reports and office documents
 docs/reports/
+
+# Generated delay-aware MPC numerical experiment results
+homo_multirobot_formation_control/mpc_sim/results/
