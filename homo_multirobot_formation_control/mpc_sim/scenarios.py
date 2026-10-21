@@ -95,3 +95,15 @@ def make_circle_far3_scenario(duration: float = 32.0) -> Scenario:
         np.array([-3.0, 0.0, 0.0]),
         base.leader_command_at,
     )
+
+
+def make_circle_large_initial_separation_scenario(duration: float = 32.0) -> Scenario:
+    """Original 1 m target offset with Follower initially 3 m behind Leader."""
+    base = make_circle_scenario(duration)
+    return Scenario(
+        "circle_large_init",
+        duration,
+        np.array([-2.0, 0.0, 0.45, 0.0, 0.0, 0.0]),
+        base.offset_map.copy(),
+        base.leader_command_at,
+    )
