@@ -50,6 +50,12 @@ def test_large_initial_separation_keeps_target_offset_and_sets_three_meter_start
     assert_allclose(scenario.offset_map + scenario.initial_error[:3], [-3.0, 0.0, 0.45])
 
 
+def test_large_initial_separation_accepts_ten_meter_start_distance():
+    scenario = make_circle_large_initial_separation_scenario(initial_distance=10.0)
+    assert_allclose(scenario.offset_map + scenario.initial_error[:3], [-10.0, 0.0, 0.45])
+    assert_allclose(scenario.initial_error[:2], [-9.0, 0.0])
+
+
 def test_zero_state_is_invariant_for_delay_aware_closed_loop():
     scenario = make_static_scenario(initial_error=np.zeros(6), duration=0.5)
     log = run_case(scenario, controller_delay_steps=6, plant_delay_steps=6, config=default_config())

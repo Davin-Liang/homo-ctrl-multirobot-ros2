@@ -97,13 +97,18 @@ def make_circle_far3_scenario(duration: float = 32.0) -> Scenario:
     )
 
 
-def make_circle_large_initial_separation_scenario(duration: float = 32.0) -> Scenario:
-    """Original 1 m target offset with Follower initially 3 m behind Leader."""
+def make_circle_large_initial_separation_scenario(
+    duration: float = 32.0, initial_distance: float = 3.0
+) -> Scenario:
+    """Original 1 m target offset with Follower initially behind Leader."""
+    if initial_distance <= 0.0:
+        raise ValueError("initial_distance must be positive")
     base = make_circle_scenario(duration)
+    initial_error_x = -initial_distance - base.offset_map[0]
     return Scenario(
         "circle_large_init",
         duration,
-        np.array([-2.0, 0.0, 0.45, 0.0, 0.0, 0.0]),
+        np.array([initial_error_x, 0.0, 0.45, 0.0, 0.0, 0.0]),
         base.offset_map.copy(),
         base.leader_command_at,
     )
