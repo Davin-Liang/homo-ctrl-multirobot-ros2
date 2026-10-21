@@ -83,3 +83,15 @@ def make_circle_scenario(duration: float = 32.0) -> Scenario:
         np.array([-1.0, 0.0, 0.0]),
         command,
     )
+
+
+def make_circle_far3_scenario(duration: float = 32.0) -> Scenario:
+    """The circular Leader case with a fixed 3 m map-frame Follower offset."""
+    base = make_circle_scenario(duration)
+    return Scenario(
+        "circle_far3",
+        duration,
+        base.initial_error.copy(),
+        np.array([-3.0, 0.0, 0.0]),
+        base.leader_command_at,
+    )

@@ -11,6 +11,7 @@ if str(PACKAGE_PARENT) not in sys.path:
 
 from mpc_sim.scenarios import (
     make_circle_scenario,
+    make_circle_far3_scenario,
     make_curve_scenario,
     make_static_scenario,
     make_straight_scenario,
@@ -31,6 +32,14 @@ def test_circle_scenario_uses_configured_map_frame_tangential_command():
     assert_allclose(
         scenario.leader_command_at(2.0 * np.pi), [-0.5, 0.0, 0.25], atol=1e-12
     )
+
+
+def test_far3_circle_uses_three_meter_map_offset_and_same_leader_circle():
+    far = make_circle_far3_scenario()
+    base = make_circle_scenario()
+    assert far.name == "circle_far3"
+    assert_allclose(far.offset_map, [-3.0, 0.0, 0.0])
+    assert_allclose(far.leader_command_at(4.0), base.leader_command_at(4.0))
 
 
 def test_zero_state_is_invariant_for_delay_aware_closed_loop():
