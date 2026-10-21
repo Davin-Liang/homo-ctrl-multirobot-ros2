@@ -8,6 +8,7 @@ import numpy as np
 
 SCRIPT_PATH = (
     Path(__file__).parents[1] / 'scripts' / 'leader_circle_closed_loop.py')
+CMAKE_PATH = Path(__file__).parents[1] / 'CMakeLists.txt'
 SPEC = importlib.util.spec_from_file_location('leader_circle_closed_loop', SCRIPT_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
@@ -32,3 +33,9 @@ def test_node_declares_and_uses_heading_mode():
     assert "self.declare_parameter('heading_mode', 'fixed')" in source
     assert 'self.heading_mode = str(self.get_parameter(' in source
     assert 'reference_heading(self.heading_mode, self.heading,' in source
+
+
+def test_ctest_registers_leader_circle_closed_loop_pytest():
+    cmake_source = CMAKE_PATH.read_text(encoding='utf-8')
+
+    assert 'add_test(NAME test_leader_circle_closed_loop' in cmake_source

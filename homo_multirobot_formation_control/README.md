@@ -589,7 +589,7 @@ ros2 run homo_multirobot_formation_control leader_circle_closed_loop.py \
 | `Td` | 0.22 | 等效纯输入死区 (s) |
 | `tau_v` | 0.43 | 等效平移速度响应时间常数 (s) |
 | `kp` / `kv` | 0.8 / 0.2 | map 系位置/速度反馈增益 |
-| `k_yaw` | 1.5 | 固定 yaw 反馈增益 |
+| `k_yaw` | 1.5 | 目标 yaw 反馈增益 |
 | `max_linear_vel` | 0.4 | map 系线速度模长上限 (m/s) |
 | `max_linear_accel` | 0.25 | map 系速度变化率上限 (m/s²) |
 

@@ -285,6 +285,11 @@ if(BUILD_TESTING)
     -m pytest -q
     ${CMAKE_CURRENT_SOURCE_DIR}/test/test_sim_4d_hpc_artstein_compare.py)
 
+  add_test(NAME test_leader_circle_closed_loop
+    COMMAND ${Python3_EXECUTABLE}
+    -m pytest -q
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/test_leader_circle_closed_loop.py)
+
   add_executable(test_6d_map_hpc_artstein_controller
     test/test_6d_map_hpc_artstein_controller.cpp
   )
