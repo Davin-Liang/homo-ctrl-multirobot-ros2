@@ -67,6 +67,17 @@ def circle_reference(
     return position, velocity
 
 
+def reference_heading(
+    heading_mode: str,
+    fixed_heading: float,
+    reference_velocity: np.ndarray,
+) -> float:
+    """Return fixed yaw or the forward tangent yaw of a circle reference."""
+    if heading_mode == 'tangent':
+        return math.atan2(reference_velocity[1], reference_velocity[0])
+    return fixed_heading
+
+
 def artstein_integral(
     command_history: Iterable[np.ndarray],
     dt: float,
