@@ -553,8 +553,9 @@ ros2 run homo_multirobot_formation_control leader_eight.py --ros-args -r __ns:=/
 
 该节点以 `odometry/filtered` 为反馈，并通过纯定位发布的 `map → <robot>_odom` TF
 将状态转换到 map 后闭环；第一帧有效 map 位姿用于锁定圆心。它使用 `Td + tau_v` 前瞻参考、
-已发布速度命令历史与一阶速度响应预测抑制底盘延迟引起的相位滞后；`heading` 为固定目标航向，
-节点使用 map 系实际 yaw 进行 map/body 速度转换和 yaw 闭环。
+已发布速度命令历史与一阶速度响应预测抑制底盘延迟引起的相位滞后；`heading_mode:=fixed`
+时 `heading` 为固定目标航向，`heading_mode:=tangent` 时车头沿圆周前进切线转动。节点使用
+map 系实际 yaw 进行 map/body 速度转换和 yaw 闭环。
 `start_side` 指定第一帧 odometry 位姿在参考圆上的竖直起点：最上端或最下端。节点会补偿
 `Td + tau_v` 前瞻带来的初始相位偏移，因此第一个闭环目标也位于所选端点。
 
@@ -566,11 +567,21 @@ ros2 run homo_multirobot_formation_control leader_circle_closed_loop.py \
   -p Td:=0.22 -p tau_v:=0.43
 ```
 
+切线航向模式：
+
+```bash
+ros2 run homo_multirobot_formation_control leader_circle_closed_loop.py \
+  --ros-args -r __ns:=/robot1 \
+  -p radius:=1.0 -p speed:=0.25 -p direction:=ccw \
+  -p heading_mode:=tangent -p Td:=0.22 -p tau_v:=0.43
+```
+
 | 参数 | 默认值 | 说明 |
 | --- | ---: | --- |
 | `radius` | 2.0 | 圆半径 (m) |
 | `speed` | 0.2 | 切向参考速度 (m/s) |
 | `heading` | 0.0 | 固定目标航向 (deg) |
+| `heading_mode` | `fixed` | `fixed`=保持 `heading`；`tangent`=车头沿 CW/CCW 运动前进切线 |
 | `direction` | `ccw` | `ccw`=逆时针，`cw`=顺时针 |
 | `start_side` | `top` | `top`=从圆最上端起步，`bottom`=从圆最下端起步 |
 | `odom_topic` | `odometry/filtered` | 相对反馈里程计话题 |
