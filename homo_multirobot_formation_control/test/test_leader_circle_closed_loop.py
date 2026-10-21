@@ -24,3 +24,11 @@ def test_reference_heading_faces_ccw_and_cw_tangent_directions():
 
     assert math.isclose(ccw, math.pi)
     assert math.isclose(cw, 0.0)
+
+
+def test_node_declares_and_uses_heading_mode():
+    source = SCRIPT_PATH.read_text(encoding='utf-8')
+
+    assert "self.declare_parameter('heading_mode', 'fixed')" in source
+    assert 'self.heading_mode = str(self.get_parameter(' in source
+    assert 'reference_heading(self.heading_mode, self.heading,' in source

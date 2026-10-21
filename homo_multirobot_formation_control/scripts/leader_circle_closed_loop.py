@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Delay-aware closed-loop circular trajectory generator for a Leader robot.
 
-The node holds a fixed map-frame heading while tracking a circular position
-reference from EKF/odometry feedback.  It predicts the translational state over
-the configured command dead time and first-order velocity-response horizon.
+The node tracks a circular position reference from EKF/odometry feedback while
+holding a fixed map-frame heading or following the forward circle tangent. It
+predicts the translational state over the configured command dead time and
+first-order velocity-response horizon.
 """
 
 from __future__ import annotations
@@ -157,6 +158,7 @@ class LeaderCircleClosedLoop(Node):
         self.declare_parameter('radius', 2.0)
         self.declare_parameter('speed', 0.2)
         self.declare_parameter('heading', 0.0)
+        self.declare_parameter('heading_mode', 'fixed')
         self.declare_parameter('direction', 'ccw')
         self.declare_parameter('start_side', 'top')
         self.declare_parameter('rate', 20.0)
@@ -174,6 +176,7 @@ class LeaderCircleClosedLoop(Node):
         self.radius = float(self.get_parameter('radius').value)
         self.speed = float(self.get_parameter('speed').value)
         self.heading = math.radians(float(self.get_parameter('heading').value))
+        self.heading_mode = str(self.get_parameter('heading_mode').value)
         self.direction = str(self.get_parameter('direction').value)
         self.start_side = str(self.get_parameter('start_side').value)
         self.rate = float(self.get_parameter('rate').value)
@@ -196,6 +199,10 @@ class LeaderCircleClosedLoop(Node):
             raise ValueError('Td must be non-negative and tau_v must be positive')
         if self.start_side not in ('top', 'bottom'):
             raise ValueError("start_side must be 'top' or 'bottom'")
+        if self.heading_mode not in ('fixed', 'tangent'):
+            self.get_logger().warn(
+                f'unknown heading_mode {self.heading_mode!r}; using fixed')
+            self.heading_mode = 'fixed'
 
         direction_sign = 1.0 if self.direction == 'ccw' else -1.0
         if self.direction not in ('ccw', 'cw'):
@@ -226,6 +233,7 @@ class LeaderCircleClosedLoop(Node):
             f'R={self.radius:.2f} m v={self.speed:.2f} m/s '
             f'omega={self.omega_ref:.3f} rad/s heading='
             f'{math.degrees(self.heading):.1f} deg '
+            f'heading_mode={self.heading_mode} '
             f'start_side={self.start_side} '
             f'Td={self.td:.2f} s tau_v={self.tau_v:.2f} s')
 
@@ -287,7 +295,8 @@ class LeaderCircleClosedLoop(Node):
             self.dt)
         map_command = limit_norm(map_command, self.max_linear_vel)
 
-        yaw_error = wrap_angle(self.heading - self.yaw)
+        target_heading = reference_heading(self.heading_mode, self.heading, reference_velocity)
+        yaw_error = wrap_angle(target_heading - self.yaw)
         omega_command = max(
             -self.max_angular_vel,
             min(self.max_angular_vel, self.k_yaw * yaw_error))
