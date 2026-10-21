@@ -7,3 +7,4 @@ def test_readme_documents_reproducible_full_experiment_command():
     assert "0.30" in text
     assert "6" in text
     assert "CVXPY" in text
+    assert "圆周 Leader" in text

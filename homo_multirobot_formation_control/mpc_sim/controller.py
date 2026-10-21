@@ -10,6 +10,11 @@ from .config import MpcConfig, PlantConfig
 from .model import exact_zoh
 
 
+def is_acceptable_status(status: str) -> bool:
+    """Only solver statuses with a valid optimum may drive the plant."""
+    return status in {"optimal", "optimal_inaccurate"}
+
+
 def augment_delay_model(
     ad: np.ndarray, bd: np.ndarray, delay_steps: int
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -112,7 +117,7 @@ class DelayAwareMpc:
             eps_rel=1e-8,
         )
         elapsed = perf_counter() - started
-        if relative.value is None or state.value is None:
+        if not is_acceptable_status(str(problem.status)) or relative.value is None or state.value is None:
             fallback = previous_follower_command.copy()
             return MpcResult(
                 fallback - leader_commands[0], fallback, str(problem.status), elapsed,

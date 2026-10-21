@@ -60,3 +60,26 @@ def make_curve_scenario(duration: float = 20.0) -> Scenario:
         np.array([-1.0, 0.0, 0.0]),
         command,
     )
+
+
+def make_circle_scenario(duration: float = 32.0) -> Scenario:
+    """Leader command tracing a 2 m map-frame circle after actuator transients."""
+    radius, omega = 2.0, 0.25
+
+    def command(time: float) -> np.ndarray:
+        phase = omega * time
+        return np.array(
+            [
+                -radius * omega * np.sin(phase),
+                radius * omega * np.cos(phase),
+                omega,
+            ]
+        )
+
+    return Scenario(
+        "circle",
+        duration,
+        np.array([1.0, -0.6, 0.45, 0.0, 0.0, 0.0]),
+        np.array([-1.0, 0.0, 0.0]),
+        command,
+    )

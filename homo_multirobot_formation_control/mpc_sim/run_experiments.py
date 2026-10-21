@@ -11,7 +11,12 @@ if str(PACKAGE_PARENT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_PARENT))
 
 from mpc_sim.reporting import compute_metrics, write_case_results
-from mpc_sim.scenarios import make_curve_scenario, make_static_scenario, make_straight_scenario
+from mpc_sim.scenarios import (
+    make_circle_scenario,
+    make_curve_scenario,
+    make_static_scenario,
+    make_straight_scenario,
+)
 from mpc_sim.simulation import default_config, run_case, strict_default_config
 
 
@@ -25,6 +30,8 @@ def run_all(output_dir: Path, duration_scale: float = 1.0) -> Path:
         ("straight_delay_aware", make_straight_scenario(duration=16.0 * duration_scale), 6, 6, base),
         ("curve_ordinary_mpc", make_curve_scenario(duration=20.0 * duration_scale), 0, 6, base),
         ("curve_delay_aware", make_curve_scenario(duration=20.0 * duration_scale), 6, 6, base),
+        ("circle_ordinary_mpc", make_circle_scenario(duration=32.0 * duration_scale), 0, 6, base),
+        ("circle_delay_aware", make_circle_scenario(duration=32.0 * duration_scale), 6, 6, base),
         ("strict_constraints", make_straight_scenario(duration=16.0 * duration_scale), 6, 6, strict_default_config()),
         ("mismatch_actual_4", make_curve_scenario(duration=12.0 * duration_scale), 6, 4, base),
         ("mismatch_actual_8", make_curve_scenario(duration=12.0 * duration_scale), 6, 8, base),

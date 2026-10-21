@@ -30,7 +30,7 @@ python3 homo_multirobot_formation_control/mpc_sim/run_experiments.py \
   --output-dir /tmp/delay_aware_mpc --duration-scale 0.1
 ```
 
-默认实验包括静止 Leader、直线、平移/角速度变化的曲线、严格输入约束、普通 MPC（内部假定零时延）与 6 步延迟感知 MPC 的公平比较，以及真实对象为 4 步或 8 步时延的失配测试。
+默认实验包括静止 Leader、直线、平移/角速度变化的曲线、圆周 Leader（半径 2.0 m、角速度 0.25 rad/s）、严格输入约束、普通 MPC（内部假定零时延）与 6 步延迟感知 MPC 的公平比较，以及真实对象为 4 步或 8 步时延的失配测试。
 
 ## 输出
 

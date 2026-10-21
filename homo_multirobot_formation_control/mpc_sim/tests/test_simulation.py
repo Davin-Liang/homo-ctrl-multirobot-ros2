@@ -9,7 +9,12 @@ PACKAGE_PARENT = Path(__file__).resolve().parents[2]
 if str(PACKAGE_PARENT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_PARENT))
 
-from mpc_sim.scenarios import make_curve_scenario, make_static_scenario, make_straight_scenario
+from mpc_sim.scenarios import (
+    make_circle_scenario,
+    make_curve_scenario,
+    make_static_scenario,
+    make_straight_scenario,
+)
 from mpc_sim.simulation import default_config, run_case, strict_default_config
 
 
@@ -17,6 +22,15 @@ def test_scenarios_expose_static_straight_and_curved_leader_inputs():
     assert make_static_scenario().leader_command_at(0.0).shape == (3,)
     assert make_straight_scenario().leader_command_at(1.0)[0] > 0.0
     assert abs(make_curve_scenario().leader_command_at(1.0)[2]) > 0.0
+
+
+def test_circle_scenario_uses_configured_map_frame_tangential_command():
+    scenario = make_circle_scenario()
+    assert scenario.name == "circle"
+    assert_allclose(scenario.leader_command_at(0.0), [0.0, 0.5, 0.25])
+    assert_allclose(
+        scenario.leader_command_at(2.0 * np.pi), [-0.5, 0.0, 0.25], atol=1e-12
+    )
 
 
 def test_zero_state_is_invariant_for_delay_aware_closed_loop():

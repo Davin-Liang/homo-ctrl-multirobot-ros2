@@ -11,7 +11,7 @@ if str(PACKAGE_PARENT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_PARENT))
 
 from mpc_sim.config import MpcConfig, PlantConfig
-from mpc_sim.controller import DelayAwareMpc, augment_delay_model
+from mpc_sim.controller import DelayAwareMpc, augment_delay_model, is_acceptable_status
 from mpc_sim.model import exact_zoh
 
 
@@ -62,3 +62,10 @@ def test_constraints_apply_to_follower_not_relative_command():
     assert result.status in {"optimal", "optimal_inaccurate"}
     assert result.follower_command[0] == pytest.approx(0.12, abs=1e-5)
     assert np.all(result.follower_command <= 0.2 + 1e-8)
+
+
+def test_only_optimal_statuses_are_accepted_for_command_output():
+    assert is_acceptable_status("optimal")
+    assert is_acceptable_status("optimal_inaccurate")
+    assert not is_acceptable_status("user_limit")
+    assert not is_acceptable_status("infeasible")
