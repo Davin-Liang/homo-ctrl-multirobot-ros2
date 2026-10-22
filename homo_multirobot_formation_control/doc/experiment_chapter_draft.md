@@ -6,7 +6,7 @@
 
 实验对象为两台全向移动机器人组成的 Leader--Follower 系统。Leader 在全局坐标系中执行圆周参考运动，Follower 在相同 map 坐标系下根据 Leader 状态保持给定的相对编队关系。实际位姿、航向和速度由定位链路记录；控制器输出经通信、底盘速度接口和电机执行器作用于 Follower。因此，实验闭环同时包含采样、通信与执行器动态等非理想因素。
 
-为保证比较可复现，同一组内保持编队任务、轨迹记录方式和评价窗口一致。不同齐次度实验、齐次/线性对比及补偿消融实验均使用三次试验结果进行组级统计。不同齐次度结果见表 X（文件：`robot_traj/real/homogeneity_metrics_table.xlsx`，备份文件：`homogeneity_metrics_table.csv`）；图形结果分别见图 X--图 X（文件名在各小节中给出）。
+为保证比较可复现，本文在各比较中明确采用的试验目录、轨迹记录方式和评价窗口。不同齐次度实验、齐次/线性对比及补偿方案比较均以三条所选试验记录进行组级统计。不同齐次度结果见表 X（文件：`robot_traj/real/homogeneity_metrics_table.xlsx`，备份文件：`homogeneity_metrics_table.csv`）；图形结果分别见图 X--图 X（文件名在各小节中给出）。图表文件作为论文插图与表格素材保存在当前实验工作区，定稿时应随论文源文件一并归档。
 
 ## X.2 评价指标与数据处理
 
@@ -44,7 +44,7 @@ $$
 
 ## X.4 齐次控制与线性控制对比
 
-为比较广义齐次反馈与线性反馈的实际跟踪能力，在相同 Leader--Follower 任务下分别记录两类控制器的轨迹和误差。图 X、图 X、图 X 和图 X 分别对应 XY 轨迹、距离误差、速度差和相对航向误差，文件依次为 `homogeneous_vs_linear_xy.png`、`homogeneous_vs_linear_position_error.png`、`homogeneous_vs_linear_velocity_error.png` 和 `homogeneous_vs_linear_yaw_error.png`。
+为比较广义齐次反馈与线性反馈的实际跟踪能力，分别选取两类控制器的三条实物记录计算组级指标。线性控制记录为 `6d_artstein_lpc_vs_hpc(no_fora)_20260922_150051`、`6d_artstein_lpc_vs_hpc(no_fora)_20260922_150513` 和 `6d_artstein_lpc_vs_hpc(no_fora)_20260922_151019`；齐次控制使用表 X 对应的三条基线记录。图 X、图 X、图 X 和图 X 分别对应 XY 轨迹、距离误差、速度差和相对航向误差，文件依次为 `homogeneous_vs_linear_xy.png`、`homogeneous_vs_linear_position_error.png`、`homogeneous_vs_linear_velocity_error.png` 和 `homogeneous_vs_linear_yaw_error.png`。
 
 量化结果表明，齐次控制在本组试验中显著减小了编队误差。齐次控制的全程距离 MAE 为 $0.0642\pm0.0002\ \mathrm{m}$，线性控制为 $0.4638\pm0.0069\ \mathrm{m}$；末 $10\ \mathrm{s}$ 距离 MAE 分别为 $0.0332\pm0.0027\ \mathrm{m}$ 与 $0.5346\pm0.0053\ \mathrm{m}$。相应地，全程速度差 MAE 从线性控制的 $0.2791\pm0.0021\ \mathrm{m/s}$ 降至 $0.0702\pm0.0029\ \mathrm{m/s}$，全程相对航向 RMS 从 $0.1271\pm0.0135\ \mathrm{rad}$ 降至 $0.0476\pm0.0035\ \mathrm{rad}$。
 
@@ -60,13 +60,13 @@ $$
 
 ## X.5 延迟补偿方案消融实验
 
-为分离输入纯延迟补偿与执行器速度响应预测的作用，在同一编队任务下比较四种方案：无补偿、仅 Artstein 补偿、仅前向预测，以及 Artstein 补偿与前向预测同时启用。对应的轨迹和三类误差曲线分别见 `four_compensation_xy.png`、`four_compensation_position_error.png`、`four_compensation_velocity_error.png` 和 `four_compensation_yaw_error.png`。
+为考察输入纯延迟补偿与执行器速度响应预测在所选数据集上的关联，比较无补偿、仅 Artstein 补偿、仅前向预测，以及 Artstein 补偿与前向预测同时启用四种实现。对应的轨迹和三类误差曲线分别见 `four_compensation_xy.png`、`four_compensation_position_error.png`、`four_compensation_velocity_error.png` 和 `four_compensation_yaw_error.png`。由于四组记录采集于不同日期，且原始 CSV 不保存完整的实验配置哈希，以下结果反映当前所选试验条件下的比较，不将其表述为严格受控的单因素因果实验。
 
 无补偿方案的全程距离 MAE 为 $0.1848\pm0.0300\ \mathrm{m}$，末 $10\ \mathrm{s}$ 距离 MAE 为 $0.1193\pm0.0305\ \mathrm{m}$。仅使用 Artstein 补偿后，这两项指标降至 $0.1276\pm0.0152\ \mathrm{m}$ 与 $0.1015\pm0.0419\ \mathrm{m}$，表明对输入历史进行补偿能够降低部分位置误差；但其全程相对航向 RMS 为 $0.2494\pm0.0186\ \mathrm{rad}$，高于无补偿方案的 $0.1611\pm0.0239\ \mathrm{rad}$，说明仅补偿纯延迟并不能保证所有状态通道同时改善。
 
 仅使用前向预测时，全程距离 MAE 和末 $10\ \mathrm{s}$ 距离 MAE 分别为 $0.0681\pm0.0083\ \mathrm{m}$ 与 $0.0299\pm0.0028\ \mathrm{m}$，表明该工况下执行器动态预测对减小相位滞后具有直接作用。两种补偿同时启用时，全程距离 MAE 为 $0.0642\pm0.0002\ \mathrm{m}$，全程速度差 MAE 为 $0.0702\pm0.0029\ \mathrm{m/s}$，全程相对航向 RMS 为 $0.0476\pm0.0035\ \mathrm{rad}$；相对无补偿方案，上述三项全程指标分别降低约 $65.3\%$、$56.7\%$ 和 $70.5\%$。
 
-因此，在当前时延和速度响应参数下，前向预测贡献了主要的稳态距离误差改善，Artstein 补偿与预测联合使用则在全程距离、速度同步与航向一致性之间取得了更均衡的综合表现。由于仅前向预测方案的末 $10\ \mathrm{s}$ 距离 MAE 略低于联合方案，不能简单宣称联合方案在所有单一指标上均最优；消融结果支持的结论是，联合补偿在本实验条件下具有最佳的总体折中性能。
+因此，在所选数据集和当前标定参数下，前向预测与较小的稳态距离误差相关，Artstein 补偿与预测联合使用则在全程距离、速度同步与航向一致性之间呈现更均衡的综合表现。由于仅前向预测方案的末 $10\ \mathrm{s}$ 距离 MAE 略低于联合方案，不能简单宣称联合方案在所有单一指标上均最优；这些比较结果支持其在本实验条件下具有较优总体折中的判断。
 
 > **图 X 四种延迟补偿方案的 XY 轨迹。** 文件：`four_compensation_xy.png`。
 
