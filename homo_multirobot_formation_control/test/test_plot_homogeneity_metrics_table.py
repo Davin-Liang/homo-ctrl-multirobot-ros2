@@ -19,20 +19,12 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
             'full_distance_mae', 'steady_distance_mae',
             'full_yaw_rms', 'steady_yaw_rms',
             'full_velocity_mae', 'steady_velocity_mae',
-            'read_trial_metrics', 'wrap_to_pi', 'draw_metrics_table',
-            'axes', 'text(', 'rectangle(',
-            'exportgraphics', 'homogeneity_metrics_table.png',
-            'homogeneity_metrics_table.pdf',
+            'read_trial_metrics', 'wrap_to_pi',
             'time_s', 'distance_m', 'leader_vx_map_ms', 'leader_vy_map_ms',
             'follower_vx_map_ms', 'follower_vy_map_ms', 'leader_yaw_rad',
             'follower_yaw_rad', 'steady_window_s', 'std(', 'summary_table',
-            'Full Distance MAE (m)', 'Steady Distance MAE (m)',
-            'Full Yaw RMS (rad)', 'Steady Yaw RMS (rad)',
-            'Full Velocity MAE (m/s)', 'Steady Velocity MAE (m/s)',
-            "'Resolution', 300", 'repmat(struct', 'numel(group.trials) ~= 3',
+            'repmat(struct', 'numel(group.trials) ~= 3',
             'EmptyCsv', 'InvalidData', 'InvalidTime', 'isfinite(values)',
-            'header_labels', "sprintf('Full Distance\\nMAE (m)')",
-            "'Position', [100, 100, 1000, 540]",
             'homogeneity_metrics_table.xlsx',
             'homogeneity_metrics_table.csv',
             'writetable(export_table, xlsx_path)',
@@ -41,6 +33,9 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
         )
         for token in required:
             self.assertIn(token, source)
+        self.assertNotIn('exportgraphics', source)
+        self.assertNotIn('homogeneity_metrics_table.png', source)
+        self.assertNotIn('homogeneity_metrics_table.pdf', source)
 
 
 if __name__ == '__main__':

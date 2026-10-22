@@ -1,4 +1,4 @@
-% 汇总不同齐次度无前馈实物试验的六项编队指标，并导出论文表格图片。
+% 汇总不同齐次度无前馈实物试验的六项编队指标，并导出可编辑表格。
 ideal_radius_m = 1.0;
 steady_window_s = 10.0;
 script_dir = fileparts(mfilename('fullpath'));
@@ -27,11 +27,7 @@ end
 metric_names = {'full_distance_mae', 'steady_distance_mae', ...
     'full_yaw_rms', 'steady_yaw_rms', ...
     'full_velocity_mae', 'steady_velocity_mae'};
-column_names = {'Full Distance MAE (m)', 'Steady Distance MAE (m)', ...
-    'Full Yaw RMS (rad)', 'Steady Yaw RMS (rad)', ...
-    'Full Velocity MAE (m/s)', 'Steady Velocity MAE (m/s)'};
 
-group_data = cell(numel(homogeneity_groups), numel(metric_names));
 row_names = cell(numel(homogeneity_groups), 1);
 summary_values = strings(numel(homogeneity_groups), numel(metric_names));
 for group_index = 1:numel(homogeneity_groups)
@@ -49,9 +45,8 @@ for group_index = 1:numel(homogeneity_groups)
     means = mean(values, 1);
     deviations = std(values, 0, 1);
     for metric_index = 1:numel(metric_names)
-        group_data{group_index, metric_index} = ...
+        summary_values(group_index, metric_index) = ...
             sprintf('%.4f ± %.4f', means(metric_index), deviations(metric_index));
-        summary_values(group_index, metric_index) = group_data{group_index, metric_index};
     end
     row_names{group_index} = sprintf('nu = %.1f', group.nu);
 end
@@ -65,62 +60,6 @@ xlsx_path = fullfile(script_dir, 'homogeneity_metrics_table.xlsx');
 csv_path = fullfile(script_dir, 'homogeneity_metrics_table.csv');
 writetable(export_table, xlsx_path);
 writetable(export_table, csv_path, 'Encoding', 'UTF-8');
-
-fig = figure('Color', 'w', 'Position', [100, 100, 1000, 540]);
-draw_metrics_table(fig, column_names, row_names, group_data);
-
-exportgraphics(fig, fullfile(script_dir, 'homogeneity_metrics_table.png'), ...
-    'Resolution', 300);
-exportgraphics(fig, fullfile(script_dir, 'homogeneity_metrics_table.pdf'), ...
-    'ContentType', 'vector');
-
-
-function draw_metrics_table(fig, column_names, row_names, group_data)
-row_count = size(group_data, 1);
-column_count = size(group_data, 2) + 1;
-header_labels = { ...
-    sprintf('Full Distance\nMAE (m)'), ...
-    sprintf('Steady Distance\nMAE (m)'), ...
-    sprintf('Full Yaw\nRMS (rad)'), ...
-    sprintf('Steady Yaw\nRMS (rad)'), ...
-    sprintf('Full Velocity\nMAE (m/s)'), ...
-    sprintf('Steady Velocity\nMAE (m/s)')};
-ax = axes(fig, 'Position', [0.015, 0.04, 0.97, 0.92]);
-hold(ax, 'on');
-axis(ax, [0, column_count, 0, row_count + 1]);
-set(ax, 'YDir', 'reverse', 'Visible', 'off');
-
-for row = 0:row_count
-    for column = 0:column_count - 1
-        if row == 0
-            face_color = [0.88, 0.92, 0.97];
-        else
-            face_color = [1.0, 1.0, 1.0];
-        end
-        rectangle(ax, 'Position', [column, row, 1, 1], ...
-            'FaceColor', face_color, 'EdgeColor', [0.45, 0.45, 0.45]);
-    end
-end
-
-text(ax, 0.5, 0.5, 'Homogeneity degree', ...
-    'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-    'FontName', 'Times New Roman', 'FontWeight', 'bold', 'FontSize', 9);
-for column = 1:numel(column_names)
-    text(ax, column + 0.5, 0.5, header_labels{column}, ...
-        'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-        'FontName', 'Times New Roman', 'FontWeight', 'bold', 'FontSize', 8);
-end
-for row = 1:row_count
-    text(ax, 0.5, row + 0.5, row_names{row}, ...
-        'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-        'FontName', 'Times New Roman', 'FontSize', 10);
-    for column = 1:size(group_data, 2)
-        text(ax, column + 0.5, row + 0.5, group_data{row, column}, ...
-            'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-            'FontName', 'Times New Roman', 'FontSize', 8);
-    end
-end
-end
 
 
 function metrics = read_trial_metrics(script_dir, trial_dir, group_nu, ...

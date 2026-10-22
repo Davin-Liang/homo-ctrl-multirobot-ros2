@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox syntax for tracking.
 
-**Goal:** Create a PNG/PDF table comparing six group-level position, yaw, and velocity metrics across the existing homogeneity-degree experiments.
+**Goal:** Create editable Excel/CSV tables comparing six group-level position, yaw, and velocity metrics across the existing homogeneity-degree experiments.
 
-**Architecture:** One MATLAB script owns the explicit nu/trial mapping, reads raw.csv, aggregates three trials as mean ± sample standard deviation, prints a MATLAB table, and renders it through graphics-native axes, rectangles, and text. A Python unittest verifies the required mapping, metrics, and exports.
+**Architecture:** One MATLAB script owns the explicit nu/trial mapping, reads raw.csv, aggregates three trials as mean ± sample standard deviation, prints a MATLAB table, and exports editable Excel/CSV files. A Python unittest verifies the required mapping, metrics, and exports.
 
-**Tech Stack:** MATLAB readtable/table/axes/text/rectangle/exportgraphics; Python unittest.
+**Tech Stack:** MATLAB readtable/table/writetable; Python unittest.
 
 ## Global Constraints
 
@@ -14,7 +14,7 @@
 - Read raw.csv from robot_traj/real and do not change existing data or plotting scripts.
 - Set ideal_radius_m=1.0 and use a trailing 10-second window, falling back to every sample for shorter trials.
 - Require three trial directories per nu and all required position, velocity, yaw, and time columns.
-- Output homogeneity_metrics_table.png at 300 dpi, homogeneity_metrics_table.pdf, homogeneity_metrics_table.xlsx, and UTF-8 homogeneity_metrics_table.csv beside the script.
+- Output homogeneity_metrics_table.xlsx and UTF-8 homogeneity_metrics_table.csv beside the script.
 
 ---
 
