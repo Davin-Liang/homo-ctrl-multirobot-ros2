@@ -60,7 +60,7 @@ summary_table = array2table(summary_values, 'VariableNames', metric_names, ...
     'RowNames', row_names);
 disp(summary_table);
 
-fig = figure('Color', 'w', 'Position', [100, 100, 1600, 540]);
+fig = figure('Color', 'w', 'Position', [100, 100, 1000, 540]);
 draw_metrics_table(fig, column_names, row_names, group_data);
 
 exportgraphics(fig, fullfile(script_dir, 'homogeneity_metrics_table.png'), ...

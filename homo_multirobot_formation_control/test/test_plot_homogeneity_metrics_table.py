@@ -32,6 +32,7 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
             "'Resolution', 300", 'repmat(struct', 'numel(group.trials) ~= 3',
             'EmptyCsv', 'InvalidData', 'InvalidTime', 'isfinite(values)',
             'header_labels', "sprintf('Full Distance\\nMAE (m)')",
+            "'Position', [100, 100, 1000, 540]",
         )
         for token in required:
             self.assertIn(token, source)
