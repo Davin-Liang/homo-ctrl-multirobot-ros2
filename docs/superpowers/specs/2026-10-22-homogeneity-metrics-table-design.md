@@ -34,6 +34,8 @@
 - 使用 MATLAB 原生 figure、线框与 text 图元渲染，统一 Times New Roman 字体、适合单页横向论文版面；避免 UI 组件不能被 `exportgraphics` 捕获的问题。
 - 导出到脚本目录：`homogeneity_metrics_table.png`（300 dpi）和 `homogeneity_metrics_table.pdf`（矢量）。
 - 在命令窗口显示同一张组级汇总 `table`，便于核查数值与复制到论文源文件。
+- 同时导出 `homogeneity_metrics_table.xlsx`，作为复制到 Word 的主文件；首列为 `nu`，其余六列保留 `mean +/- std` 格式字符串。
+- 同时导出 UTF-8 `homogeneity_metrics_table.csv`，与 Excel 使用相同列与数值，供 LaTeX、脚本处理和复核。
 
 ## 范围
 

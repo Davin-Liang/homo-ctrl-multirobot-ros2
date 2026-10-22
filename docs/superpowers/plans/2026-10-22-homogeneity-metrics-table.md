@@ -14,7 +14,7 @@
 - Read raw.csv from robot_traj/real and do not change existing data or plotting scripts.
 - Set ideal_radius_m=1.0 and use a trailing 10-second window, falling back to every sample for shorter trials.
 - Require three trial directories per nu and all required position, velocity, yaw, and time columns.
-- Output homogeneity_metrics_table.png at 300 dpi and homogeneity_metrics_table.pdf beside the script.
+- Output homogeneity_metrics_table.png at 300 dpi, homogeneity_metrics_table.pdf, homogeneity_metrics_table.xlsx, and UTF-8 homogeneity_metrics_table.csv beside the script.
 
 ---
 
@@ -26,7 +26,7 @@
 
 **Interfaces:**
 - Produces functions read_trial_metrics(script_dir, trial_dir, ideal_radius_m, steady_window_s) and wrap_to_pi(angle).
-- Produces homogeneity_metrics_table.png and homogeneity_metrics_table.pdf.
+- Produces homogeneity_metrics_table.png, homogeneity_metrics_table.pdf, homogeneity_metrics_table.xlsx, and homogeneity_metrics_table.csv.
 
 - [ ] **Step 1: Write the failing static test**
 
