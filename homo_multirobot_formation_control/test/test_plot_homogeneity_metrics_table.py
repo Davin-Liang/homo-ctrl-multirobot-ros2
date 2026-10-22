@@ -37,6 +37,7 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
             'homogeneity_metrics_table.csv',
             'writetable(export_table, xlsx_path)',
             "writetable(export_table, csv_path, 'Encoding', 'UTF-8')",
+            "'%.4f ± %.4f'",
         )
         for token in required:
             self.assertIn(token, source)

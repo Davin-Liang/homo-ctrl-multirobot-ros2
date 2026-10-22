@@ -50,7 +50,7 @@ for group_index = 1:numel(homogeneity_groups)
     deviations = std(values, 0, 1);
     for metric_index = 1:numel(metric_names)
         group_data{group_index, metric_index} = ...
-            sprintf('%.4f +/- %.4f', means(metric_index), deviations(metric_index));
+            sprintf('%.4f ± %.4f', means(metric_index), deviations(metric_index));
         summary_values(group_index, metric_index) = group_data{group_index, metric_index};
     end
     row_names{group_index} = sprintf('nu = %.1f', group.nu);
