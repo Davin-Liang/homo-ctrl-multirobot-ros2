@@ -33,6 +33,10 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
             'EmptyCsv', 'InvalidData', 'InvalidTime', 'isfinite(values)',
             'header_labels', "sprintf('Full Distance\\nMAE (m)')",
             "'Position', [100, 100, 1000, 540]",
+            'homogeneity_metrics_table.xlsx',
+            'homogeneity_metrics_table.csv',
+            'writetable(export_table, xlsx_path)',
+            "writetable(export_table, csv_path, 'Encoding', 'UTF-8')",
         )
         for token in required:
             self.assertIn(token, source)

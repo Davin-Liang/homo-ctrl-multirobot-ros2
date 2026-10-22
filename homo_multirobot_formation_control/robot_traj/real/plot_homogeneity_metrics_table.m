@@ -59,6 +59,12 @@ end
 summary_table = array2table(summary_values, 'VariableNames', metric_names, ...
     'RowNames', row_names);
 disp(summary_table);
+export_table = addvars(summary_table, nu_values', ...
+    'Before', 1, 'NewVariableNames', 'nu');
+xlsx_path = fullfile(script_dir, 'homogeneity_metrics_table.xlsx');
+csv_path = fullfile(script_dir, 'homogeneity_metrics_table.csv');
+writetable(export_table, xlsx_path);
+writetable(export_table, csv_path, 'Encoding', 'UTF-8');
 
 fig = figure('Color', 'w', 'Position', [100, 100, 1000, 540]);
 draw_metrics_table(fig, column_names, row_names, group_data);
