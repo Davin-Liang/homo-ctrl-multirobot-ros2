@@ -145,3 +145,55 @@ Expected: unittest passes. If Octave lacks uitable or exportgraphics, report tha
     git add homo_multirobot_formation_control/robot_traj/real/plot_homogeneity_metrics_table.m homo_multirobot_formation_control/test/test_plot_homogeneity_metrics_table.py
     git commit -m "导出齐次度指标表图片"
 
+### Task 4: Export editable Excel and CSV tables
+
+**Files:**
+- Modify: `homo_multirobot_formation_control/robot_traj/real/plot_homogeneity_metrics_table.m`
+- Modify: `homo_multirobot_formation_control/test/test_plot_homogeneity_metrics_table.py`
+
+**Interfaces:**
+- Produces: `homogeneity_metrics_table.xlsx` and UTF-8 `homogeneity_metrics_table.csv`, each with the `nu` first column and the same six formatted metric columns as `summary_table`.
+
+- [ ] **Step 1: Write the failing static test**
+
+Add the following required source strings:
+
+```python
+"homogeneity_metrics_table.xlsx",
+"homogeneity_metrics_table.csv",
+"writetable(export_table, xlsx_path)",
+"writetable(export_table, csv_path, 'Encoding', 'UTF-8')",
+```
+
+- [ ] **Step 2: Verify red**
+
+Run:
+
+```bash
+python3 -m unittest homo_multirobot_formation_control/test/test_plot_homogeneity_metrics_table.py -v
+```
+
+Expected: FAIL because neither editable output is produced.
+
+- [ ] **Step 3: Implement the two table exports**
+
+After building `summary_table`, create a table with the row names converted to its first variable, then export it:
+
+```matlab
+export_table = addvars(summary_table, nu_values', ...
+    'Before', 1, 'NewVariableNames', 'nu');
+xlsx_path = fullfile(script_dir, 'homogeneity_metrics_table.xlsx');
+csv_path = fullfile(script_dir, 'homogeneity_metrics_table.csv');
+writetable(export_table, xlsx_path);
+writetable(export_table, csv_path, 'Encoding', 'UTF-8');
+```
+
+- [ ] **Step 4: Verify green and commit**
+
+Run the Step 2 unittest command; expected: one passing test. Then run the MATLAB script, confirm both files appear beside it, inspect with `git diff --check`, and commit:
+
+```bash
+git add homo_multirobot_formation_control/robot_traj/real/plot_homogeneity_metrics_table.m homo_multirobot_formation_control/test/test_plot_homogeneity_metrics_table.py
+git commit -m "导出齐次度可编辑指标表"
+```
+
