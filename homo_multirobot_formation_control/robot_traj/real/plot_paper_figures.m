@@ -1,0 +1,289 @@
+% 绘制齐次控制与线性控制实物试验的 XY 轨迹及三类跟踪误差。
+% 如需更换对比数据，只修改以下实验目录名；目录需位于本脚本所在目录下。
+homogeneous_trial_dir = '6d_artstein_no_forw_vs_forw_20260922_112130';
+linear_trial_dir = '6d_artstein_lpc_vs_hpc(no_fora)_20260922_150051';
+no_compensation_trial_dir = '6d_map_artstein(no_artstein_no_forward)_20260928_152026';
+artstein_only_trial_dir = '6d_map_artstein(only_artstein)_20260928_153858';
+forward_only_trial_dir = '6d_map_artstein(only_forward)_20260928_165352';
+artstein_forward_trial_dir = '6d_artstein_no_forw_vs_forw_20260922_112130';
+font_size = 14;  % 图例、坐标轴刻度及标签的统一字号（pt）。
+line_width = 2.0;  % 所有轨迹与误差曲线的统一线宽。
+plot_sample_interval_s = 0.05;  % 绘图采样间隔（s）；0 表示绘制全部原始样本。
+ideal_radius_m = 1.0;  % 理想 Leader--Follower 间距（m）。
+
+% 脚本从自身所在位置寻找 raw.csv，因此可从任意 MATLAB 工作目录运行。
+script_dir = fileparts(mfilename('fullpath'));
+homogeneous = read_trial(script_dir, homogeneous_trial_dir, '齐次控制');
+linear = read_trial(script_dir, linear_trial_dir, '线性控制');
+no_compensation = read_trial(script_dir, no_compensation_trial_dir, '无补偿');
+artstein_only = read_trial(script_dir, artstein_only_trial_dir, '仅 Artstein 补偿');
+forward_only = read_trial(script_dir, forward_only_trial_dir, '仅前向预测');
+artstein_forward = read_trial(script_dir, artstein_forward_trial_dir, ...
+    'Artstein 补偿和前向预测');
+compensation_trials = {no_compensation, artstein_only, forward_only, ...
+    artstein_forward};
+compensation_labels = {'No compensation', 'Only Artstein', ...
+    'Only forward prediction', 'Artstein + forward prediction'};
+compensation_colors = [0.00, 0.45, 0.74; ...
+                       0.85, 0.33, 0.10; ...
+                       0.47, 0.67, 0.19; ...
+                       0.49, 0.18, 0.56];
+
+% 颜色表示控制器类型：蓝色为齐次控制，橙色为线性控制。
+% 线型表示机器人角色：虚线为 Leader，实线为 Follower。
+fig = figure('Color', 'w', 'Position', [100, 100, 760, 560]);
+hold on;
+
+homogeneous_color = [0.00, 0.45, 0.74];
+linear_color = [0.85, 0.33, 0.10];
+homogeneous_plot_indices = plot_sample_indices( ...
+    homogeneous.time_s, plot_sample_interval_s);
+linear_plot_indices = plot_sample_indices( ...
+    linear.time_s, plot_sample_interval_s);
+
+plot(homogeneous.leader_x_m(homogeneous_plot_indices), ...
+    homogeneous.leader_y_m(homogeneous_plot_indices), '--', ...
+    'Color', homogeneous_color, 'LineWidth', line_width);
+plot(homogeneous.follower_x_m(homogeneous_plot_indices), ...
+    homogeneous.follower_y_m(homogeneous_plot_indices), '-', ...
+    'Color', homogeneous_color, 'LineWidth', line_width);
+plot(linear.leader_x_m(linear_plot_indices), ...
+    linear.leader_y_m(linear_plot_indices), '--', ...
+    'Color', linear_color, 'LineWidth', line_width);
+plot(linear.follower_x_m(linear_plot_indices), ...
+    linear.follower_y_m(linear_plot_indices), '-', ...
+    'Color', linear_color, 'LineWidth', line_width);
+
+% 保持 x/y 等比例，避免轨迹形状在图中发生视觉失真。
+axis equal;
+box on;
+grid on;
+xlabel('x (m)');
+ylabel('y (m)');
+legend_handle = legend({'Homogeneous Leader', 'Homogeneous Follower', ...
+    'Linear Leader', 'Linear Follower'}, ...
+    'Location', 'best');
+set(legend_handle, 'Box', 'off', 'FontName', 'Times New Roman', ...
+    'FontSize', font_size);
+set(gca, 'FontName', 'Times New Roman', 'FontSize', font_size, ...
+    'LineWidth', 1, 'XColor', 'k', 'YColor', 'k');
+
+% 以 300 dpi PNG 输出到本脚本所在目录，便于直接插入文档。
+exportgraphics(fig, fullfile(script_dir, 'homogeneous_vs_linear_xy.png'), ...
+    'Resolution', 300);
+
+% 位置误差：记录器未保存离散期望编队点，故使用径向距离误差。
+position_error_homogeneous = abs(homogeneous.distance_m - ideal_radius_m);
+position_error_linear = abs(linear.distance_m - ideal_radius_m);
+plot_error_figure(homogeneous.time_s, position_error_homogeneous, ...
+    linear.time_s, position_error_linear, ...
+    '||e_p(t)|| (m)', script_dir, ...
+    'homogeneous_vs_linear_position_error.png', font_size, line_width, ...
+    plot_sample_interval_s);
+
+% 平移速度误差：两车 map 系平移速度向量之差的二范数。
+velocity_error_homogeneous = hypot( ...
+    homogeneous.follower_vx_map_ms - homogeneous.leader_vx_map_ms, ...
+    homogeneous.follower_vy_map_ms - homogeneous.leader_vy_map_ms);
+velocity_error_linear = hypot( ...
+    linear.follower_vx_map_ms - linear.leader_vx_map_ms, ...
+    linear.follower_vy_map_ms - linear.leader_vy_map_ms);
+plot_error_figure(homogeneous.time_s, velocity_error_homogeneous, ...
+    linear.time_s, velocity_error_linear, ...
+    '||e_v(t)|| (m/s)', script_dir, ...
+    'homogeneous_vs_linear_velocity_error.png', font_size, line_width, ...
+    plot_sample_interval_s);
+
+% 航向误差保持有符号，并包裹到 [-pi, pi] 以消除 2*pi 跳变。
+yaw_error_homogeneous = wrap_to_pi( ...
+    homogeneous.follower_yaw_rad - homogeneous.leader_yaw_rad);
+yaw_error_linear = wrap_to_pi( ...
+    linear.follower_yaw_rad - linear.leader_yaw_rad);
+plot_error_figure(homogeneous.time_s, yaw_error_homogeneous, ...
+    linear.time_s, yaw_error_linear, ...
+    'e_{\theta}(t) (rad)', script_dir, ...
+    'homogeneous_vs_linear_yaw_error.png', font_size, line_width, ...
+    plot_sample_interval_s);
+
+% 四种补偿方案的原始 map 系 XY 轨迹：同色表示同一方案，虚/实线区分 Leader/Follower。
+plot_four_compensation_xy( ...
+    compensation_trials, compensation_labels, compensation_colors, ...
+    script_dir, font_size, line_width, plot_sample_interval_s);
+
+% 四种补偿方案的三类误差曲线。
+compensation_position_errors = cellfun(@(trial) ...
+    abs(trial.distance_m - ideal_radius_m), compensation_trials, ...
+    'UniformOutput', false);
+compensation_velocity_errors = cellfun(@(trial) hypot( ...
+    trial.follower_vx_map_ms - trial.leader_vx_map_ms, ...
+    trial.follower_vy_map_ms - trial.leader_vy_map_ms), ...
+    compensation_trials, 'UniformOutput', false);
+compensation_yaw_errors = cellfun(@(trial) wrap_to_pi( ...
+    trial.follower_yaw_rad - trial.leader_yaw_rad), ...
+    compensation_trials, 'UniformOutput', false);
+plot_four_compensation_error(compensation_trials, compensation_position_errors, ...
+    compensation_labels, compensation_colors, '||e_p(t)|| (m)', ...
+    script_dir, 'four_compensation_position_error.png', font_size, line_width, ...
+    plot_sample_interval_s);
+plot_four_compensation_error(compensation_trials, compensation_velocity_errors, ...
+    compensation_labels, compensation_colors, '||e_v(t)|| (m/s)', ...
+    script_dir, 'four_compensation_velocity_error.png', font_size, line_width, ...
+    plot_sample_interval_s);
+plot_four_compensation_error(compensation_trials, compensation_yaw_errors, ...
+    compensation_labels, compensation_colors, 'e_{\theta}(t) (rad)', ...
+    script_dir, 'four_compensation_yaw_error.png', font_size, line_width, ...
+    plot_sample_interval_s);
+
+
+function trial = read_trial(script_dir, trial_dir, group_name)
+% 读取一个试验组，并在绘图前检查轨迹数据是否完整。
+csv_path = fullfile(script_dir, trial_dir, 'raw.csv');
+if ~isfile(csv_path)
+    error('plot_paper_figures:MissingCsv', ...
+        '%s组找不到文件: %s', group_name, csv_path);
+end
+
+trial = readtable(csv_path);
+% 使用原始 map 系位置、速度和航向列；本脚本不执行坐标对齐、平移或重采样。
+required_columns = {'time_s', 'leader_x_m', 'leader_y_m', ...
+    'leader_vx_map_ms', 'leader_vy_map_ms', 'leader_yaw_rad', ...
+    'follower_x_m', 'follower_y_m', 'follower_vx_map_ms', ...
+    'follower_vy_map_ms', 'follower_yaw_rad', 'distance_m'};
+missing_columns = required_columns(~ismember(required_columns, ...
+    trial.Properties.VariableNames));
+if ~isempty(missing_columns)
+    error('plot_paper_figures:MissingColumn', ...
+        '%s组的 raw.csv 缺少列: %s', group_name, ...
+        strjoin(missing_columns, ', '));
+end
+end
+
+
+function plot_error_figure(time_homogeneous, error_homogeneous, ...
+    time_linear, error_linear, y_label, script_dir, output_name, font_size, ...
+    line_width, plot_sample_interval_s)
+% 绘制一张齐次/线性控制误差对比图，并以 PNG 形式输出。
+fig = figure('Color', 'w', 'Position', [100, 100, 760, 560]);
+hold on;
+homogeneous_plot_indices = plot_sample_indices( ...
+    time_homogeneous, plot_sample_interval_s);
+linear_plot_indices = plot_sample_indices(time_linear, plot_sample_interval_s);
+plot(time_homogeneous(homogeneous_plot_indices), ...
+    error_homogeneous(homogeneous_plot_indices), '-', ...
+    'Color', [0.00, 0.45, 0.74], 'LineWidth', line_width);
+plot(time_linear(linear_plot_indices), error_linear(linear_plot_indices), '-', ...
+    'Color', [0.85, 0.33, 0.10], 'LineWidth', line_width);
+box on;
+grid on;
+xlim([min(time_homogeneous(1), time_linear(1)), ...
+    max(time_homogeneous(end), time_linear(end))]);
+xlabel('Time (s)');
+ylabel(y_label);
+legend_handle = legend({'Homogeneous', 'Linear'}, 'Location', 'best');
+set(legend_handle, 'Box', 'off', 'FontName', 'Times New Roman', ...
+    'FontSize', font_size);
+set(gca, 'FontName', 'Times New Roman', 'FontSize', font_size, ...
+    'LineWidth', 1, 'XColor', 'k', 'YColor', 'k');
+exportgraphics(fig, fullfile(script_dir, output_name), 'Resolution', 300);
+end
+
+
+function plot_four_compensation_xy(trials, labels, colors, script_dir, font_size, ...
+    line_width, plot_sample_interval_s)
+% 绘制四种补偿方案的 XY 轨迹。虚线为 Leader，实线为 Follower。
+fig = figure('Color', 'w', 'Position', [100, 100, 860, 620]);
+hold on;
+legend_entries = cell(1, 2 * numel(trials));
+for index = 1:numel(trials)
+    trial = trials{index};
+    plot_indices = plot_sample_indices(trial.time_s, plot_sample_interval_s);
+    plot(trial.leader_x_m(plot_indices), trial.leader_y_m(plot_indices), '--', ...
+        'Color', colors(index, :), 'LineWidth', line_width);
+    plot(trial.follower_x_m(plot_indices), trial.follower_y_m(plot_indices), '-', ...
+        'Color', colors(index, :), 'LineWidth', line_width);
+    legend_entries{2 * index - 1} = [labels{index}, ' Leader'];
+    legend_entries{2 * index} = [labels{index}, ' Follower'];
+end
+axis equal;
+box on;
+grid on;
+xlabel('x (m)');
+ylabel('y (m)');
+% 在绘图区上侧预留空白，使内部图例不遮挡八条轨迹。
+y_limits = ylim;
+ylim([y_limits(1), y_limits(2) + 0.15 * diff(y_limits)]);
+legend_handle = legend(legend_entries, 'Location', 'north', ...
+    'NumColumns', 2);
+set(legend_handle, 'Box', 'off', 'FontName', 'Times New Roman', ...
+    'FontSize', font_size);
+set(gca, 'FontName', 'Times New Roman', 'FontSize', font_size, ...
+    'LineWidth', 1, 'XColor', 'k', 'YColor', 'k');
+exportgraphics(fig, fullfile(script_dir, 'four_compensation_xy.png'), ...
+    'Resolution', 300);
+end
+
+
+function plot_four_compensation_error(trials, errors, labels, colors, ...
+    y_label, script_dir, output_name, font_size, line_width, plot_sample_interval_s)
+% 绘制四种补偿方案的同类误差曲线；误差由调用者按统一定义计算。
+fig = figure('Color', 'w', 'Position', [100, 100, 760, 560]);
+hold on;
+for index = 1:numel(trials)
+    plot_indices = plot_sample_indices( ...
+        trials{index}.time_s, plot_sample_interval_s);
+    plot(trials{index}.time_s(plot_indices), errors{index}(plot_indices), '-', ...
+        'Color', colors(index, :), 'LineWidth', line_width);
+end
+box on;
+grid on;
+x_start = min(cellfun(@(trial) trial.time_s(1), trials));
+x_end = max(cellfun(@(trial) trial.time_s(end), trials));
+xlim([x_start, x_end]);
+xlabel('Time (s)');
+ylabel(y_label);
+% 给内部顶部图例预留小段空间，避免覆盖误差曲线。
+y_limits = ylim;
+ylim([y_limits(1), y_limits(2) + 0.12 * diff(y_limits)]);
+legend_handle = legend(labels, 'Location', 'north', 'NumColumns', 2);
+set(legend_handle, 'Box', 'off', 'FontName', 'Times New Roman', ...
+    'FontSize', font_size);
+set(gca, 'FontName', 'Times New Roman', 'FontSize', font_size, ...
+    'LineWidth', 1, 'XColor', 'k', 'YColor', 'k');
+exportgraphics(fig, fullfile(script_dir, output_name), 'Resolution', 300);
+end
+
+
+function indices = plot_sample_indices(time_s, sample_interval_s)
+% 仅为绘图按时间间隔抽样；保留首末样本，且不改变原始数据。
+if ~isscalar(sample_interval_s) || ~isfinite(sample_interval_s) || ...
+        sample_interval_s < 0
+    error('plot_paper_figures:InvalidPlotSampleInterval', ...
+        'plot_sample_interval_s must be a finite value greater than or equal to zero.');
+end
+if sample_interval_s == 0 || numel(time_s) <= 2
+    indices = (1:numel(time_s))';
+    return;
+end
+
+indices = zeros(numel(time_s), 1);
+count = 1;
+indices(count) = 1;
+last_selected_time = time_s(1);
+for index = 2:numel(time_s)
+    if time_s(index) - last_selected_time >= sample_interval_s
+        count = count + 1;
+        indices(count) = index;
+        last_selected_time = time_s(index);
+    end
+end
+if indices(count) ~= numel(time_s)
+    count = count + 1;
+    indices(count) = numel(time_s);
+end
+indices = indices(1:count);
+end
+
+
+function wrapped_angle = wrap_to_pi(angle)
+wrapped_angle = atan2(sin(angle), cos(angle));
+end
