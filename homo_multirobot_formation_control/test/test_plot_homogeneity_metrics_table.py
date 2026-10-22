@@ -19,7 +19,8 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
             'full_distance_mae', 'steady_distance_mae',
             'full_yaw_rms', 'steady_yaw_rms',
             'full_velocity_mae', 'steady_velocity_mae',
-            'read_trial_metrics', 'wrap_to_pi', 'uitable',
+            'read_trial_metrics', 'wrap_to_pi', 'draw_metrics_table',
+            'axes', 'text(', 'rectangle(',
             'exportgraphics', 'homogeneity_metrics_table.png',
             'homogeneity_metrics_table.pdf',
             'time_s', 'distance_m', 'leader_vx_map_ms', 'leader_vy_map_ms',
@@ -29,6 +30,7 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
             'Full Yaw RMS (rad)', 'Steady Yaw RMS (rad)',
             'Full Velocity MAE (m/s)', 'Steady Velocity MAE (m/s)',
             "'Resolution', 300", 'repmat(struct', 'numel(group.trials) ~= 3',
+            'EmptyCsv', 'InvalidData', 'InvalidTime', 'isfinite(values)',
         )
         for token in required:
             self.assertIn(token, source)

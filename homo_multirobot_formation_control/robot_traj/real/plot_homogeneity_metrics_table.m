@@ -61,15 +61,53 @@ summary_table = array2table(summary_values, 'VariableNames', metric_names, ...
 disp(summary_table);
 
 fig = figure('Color', 'w', 'Position', [100, 100, 1600, 540]);
-uitable(fig, 'Data', group_data, 'ColumnName', column_names, ...
-    'RowName', row_names, 'Units', 'normalized', ...
-    'Position', [0, 0, 1, 1], 'FontName', 'Times New Roman', ...
-    'FontSize', 11, 'ColumnWidth', {200, 210, 185, 200, 205, 220});
+draw_metrics_table(fig, column_names, row_names, group_data);
 
 exportgraphics(fig, fullfile(script_dir, 'homogeneity_metrics_table.png'), ...
     'Resolution', 300);
 exportgraphics(fig, fullfile(script_dir, 'homogeneity_metrics_table.pdf'), ...
     'ContentType', 'vector');
+
+
+function draw_metrics_table(fig, column_names, row_names, group_data)
+row_count = size(group_data, 1);
+column_count = size(group_data, 2) + 1;
+ax = axes(fig, 'Position', [0.015, 0.04, 0.97, 0.92]);
+hold(ax, 'on');
+axis(ax, [0, column_count, 0, row_count + 1]);
+set(ax, 'YDir', 'reverse', 'Visible', 'off');
+
+for row = 0:row_count
+    for column = 0:column_count - 1
+        if row == 0
+            face_color = [0.88, 0.92, 0.97];
+        else
+            face_color = [1.0, 1.0, 1.0];
+        end
+        rectangle(ax, 'Position', [column, row, 1, 1], ...
+            'FaceColor', face_color, 'EdgeColor', [0.45, 0.45, 0.45]);
+    end
+end
+
+text(ax, 0.5, 0.5, 'Homogeneity degree', ...
+    'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+    'FontName', 'Times New Roman', 'FontWeight', 'bold', 'FontSize', 9);
+for column = 1:numel(column_names)
+    text(ax, column + 0.5, 0.5, strrep(column_names{column}, ' ', '\newline'), ...
+        'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+        'FontName', 'Times New Roman', 'FontWeight', 'bold', 'FontSize', 8);
+end
+for row = 1:row_count
+    text(ax, 0.5, row + 0.5, row_names{row}, ...
+        'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+        'FontName', 'Times New Roman', 'FontSize', 10);
+    for column = 1:size(group_data, 2)
+        text(ax, column + 0.5, row + 0.5, group_data{row, column}, ...
+            'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+            'FontName', 'Times New Roman', 'FontSize', 8);
+    end
+end
+end
 
 
 function metrics = read_trial_metrics(script_dir, trial_dir, group_nu, ...
@@ -91,6 +129,22 @@ if ~isempty(missing_columns)
     error('plot_homogeneity_metrics_table:MissingColumn', ...
         'nu=%.1f 文件 %s 缺少列: %s', group_nu, csv_path, ...
         strjoin(missing_columns, ', '));
+end
+if height(trial) == 0
+    error('plot_homogeneity_metrics_table:EmptyCsv', ...
+        'nu=%.1f 文件没有数据行: %s', group_nu, csv_path);
+end
+for column_index = 1:numel(required_columns)
+    values = trial.(required_columns{column_index});
+    if ~isnumeric(values) || any(~isfinite(values))
+        error('plot_homogeneity_metrics_table:InvalidData', ...
+            'nu=%.1f 文件 %s 的列 %s 含非有限数值。', group_nu, ...
+            csv_path, required_columns{column_index});
+    end
+end
+if any(diff(trial.time_s) < 0)
+    error('plot_homogeneity_metrics_table:InvalidTime', ...
+        'nu=%.1f 文件 %s 的 time_s 未单调递增。', group_nu, csv_path);
 end
 
 distance_error = abs(trial.distance_m - ideal_radius_m);

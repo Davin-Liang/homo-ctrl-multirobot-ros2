@@ -4,9 +4,9 @@
 
 **Goal:** Create a PNG/PDF table comparing six group-level position, yaw, and velocity metrics across the existing homogeneity-degree experiments.
 
-**Architecture:** One MATLAB script owns the explicit nu/trial mapping, reads raw.csv, aggregates three trials as mean ± sample standard deviation, prints a MATLAB table, and renders it through uitable. A Python unittest verifies the required mapping, metrics, and exports.
+**Architecture:** One MATLAB script owns the explicit nu/trial mapping, reads raw.csv, aggregates three trials as mean ± sample standard deviation, prints a MATLAB table, and renders it through graphics-native axes, rectangles, and text. A Python unittest verifies the required mapping, metrics, and exports.
 
-**Tech Stack:** MATLAB readtable/table/uitable/exportgraphics; Python unittest.
+**Tech Stack:** MATLAB readtable/table/axes/text/rectangle/exportgraphics; Python unittest.
 
 ## Global Constraints
 
@@ -128,7 +128,7 @@ Run the Task 1 unittest command. Expected: FAIL because labels and 300-dpi expor
 
 - [ ] **Step 3: Render the table**
 
-Create a white 1600-by-540 figure and a full-figure uitable. Use rows nu = %.1f and the six labels from Step 1. Display the formatted mean/std cells, print summary_table, and export with:
+Create a white 1600-by-540 figure. Draw the header and cells using graphics-native axes, rectangle, and text objects; use rows nu = %.1f and the six labels from Step 1. Display the formatted mean/std cells, print summary_table, and export with:
 
     exportgraphics(fig, fullfile(script_dir, 'homogeneity_metrics_table.png'), 'Resolution', 300);
     exportgraphics(fig, fullfile(script_dir, 'homogeneity_metrics_table.pdf'), 'ContentType', 'vector');
