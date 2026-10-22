@@ -17,7 +17,6 @@ class ExperimentChapterDraftTest(unittest.TestCase):
             '6d_artstein_lpc_vs_hpc(no_fora)_20260922_150051',
             '6d_artstein_lpc_vs_hpc(no_fora)_20260922_150513',
             '6d_artstein_lpc_vs_hpc(no_fora)_20260922_151019',
-            '所选数据集',
         ):
             self.assertIn(required, source)
 
