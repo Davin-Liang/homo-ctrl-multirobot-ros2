@@ -56,23 +56,23 @@ $$
 
 ## X.4 齐次控制与线性控制对比
 
-为比较广义齐次反馈与线性反馈的实际跟踪能力，两类控制器均选取三次独立实物试验计算组级指标，具体数据记录见附录 A。图 X、图 X、图 X 和图 X 分别对应 XY 轨迹、距离误差、速度差和相对航向误差，文件依次为 `homogeneous_vs_linear_xy.png`、`homogeneous_vs_linear_position_error.png`、`homogeneous_vs_linear_velocity_error.png` 和 `homogeneous_vs_linear_yaw_error.png`。
+为比较广义齐次反馈与线性反馈的实际跟踪能力，两类控制器均选取三次独立实物试验计算组级指标，具体数据记录见附录 A。图 X 至图 X 分别给出了 XY 轨迹、距离误差、速度差和相对航向误差的对比结果。
 
 量化结果表明，齐次控制在本组试验中显著减小了编队误差。齐次控制的全程距离 MAE 为 $0.0642\pm0.0002\ \mathrm{m}$，线性控制为 $0.4638\pm0.0069\ \mathrm{m}$；末 $10\ \mathrm{s}$ 距离 MAE 分别为 $0.0332\pm0.0027\ \mathrm{m}$ 与 $0.5346\pm0.0053\ \mathrm{m}$。相应地，全程速度差 MAE 从线性控制的 $0.2791\pm0.0021\ \mathrm{m/s}$ 降至 $0.0702\pm0.0029\ \mathrm{m/s}$，全程相对航向 RMS 从 $0.1271\pm0.0135\ \mathrm{rad}$ 降至 $0.0476\pm0.0035\ \mathrm{rad}$。
 
 从图 X 的 XY 轨迹可观察到，齐次控制下 Follower 轨迹与 Leader 运动保持更一致的相对关系；其余三幅误差图进一步表明，这种改进不仅体现在起始阶段，也延续到持续运动阶段。需要指出的是，本比较反映的是当前实物平台、给定增益和轨迹条件下的闭环性能，不能据此把所有线性控制器概括为无效，也不能忽略线性控制参数重新整定可能带来的影响。
 
-> **图 X 齐次控制与线性控制的 Leader--Follower XY 轨迹。** 文件：`homogeneous_vs_linear_xy.png`。
+> **图 X 齐次控制与线性控制的 Leader--Follower XY 轨迹。**
 
-> **图 X 齐次控制与线性控制的距离误差。** 文件：`homogeneous_vs_linear_position_error.png`。
+> **图 X 齐次控制与线性控制的距离误差。**
 
-> **图 X 齐次控制与线性控制的速度差。** 文件：`homogeneous_vs_linear_velocity_error.png`。
+> **图 X 齐次控制与线性控制的速度差。**
 
-> **图 X 齐次控制与线性控制的相对航向误差。** 文件：`homogeneous_vs_linear_yaw_error.png`。
+> **图 X 齐次控制与线性控制的相对航向误差。**
 
 ## X.5 延迟补偿方案消融实验
 
-为考察输入纯延迟补偿与执行器速度响应预测在所选数据集上的关联，比较无补偿、仅 Artstein 补偿、仅前向预测，以及 Artstein 补偿与前向预测同时启用四种实现。对应的轨迹和三类误差曲线分别见 `four_compensation_xy.png`、`four_compensation_position_error.png`、`four_compensation_velocity_error.png` 和 `four_compensation_yaw_error.png`。由于四组记录采集于不同日期，且原始 CSV 不保存完整的实验配置哈希，以下结果反映当前所选试验条件下的比较，不将其表述为严格受控的单因素因果实验。
+为考察输入纯延迟补偿与执行器速度响应预测在所选数据集上的关联，比较无补偿、仅 Artstein 补偿、仅前向预测，以及 Artstein 补偿与前向预测同时启用四种实现。对应的轨迹和三类误差曲线见图 X 至图 X。由于四组记录采集于不同日期，且原始 CSV 不保存完整的实验配置哈希，以下结果反映当前所选试验条件下的比较，不将其表述为严格受控的单因素因果实验。
 
 无补偿方案的全程距离 MAE 为 $0.1848\pm0.0300\ \mathrm{m}$，末 $10\ \mathrm{s}$ 距离 MAE 为 $0.1193\pm0.0305\ \mathrm{m}$。仅使用 Artstein 补偿后，这两项指标降至 $0.1276\pm0.0152\ \mathrm{m}$ 与 $0.1015\pm0.0419\ \mathrm{m}$，表明对输入历史进行补偿能够降低部分位置误差；但其全程相对航向 RMS 为 $0.2494\pm0.0186\ \mathrm{rad}$，高于无补偿方案的 $0.1611\pm0.0239\ \mathrm{rad}$，说明仅补偿纯延迟并不能保证所有状态通道同时改善。
 
@@ -80,13 +80,13 @@ $$
 
 因此，在所选数据集和当前标定参数下，前向预测与较小的稳态距离误差相关，Artstein 补偿与预测联合使用则在全程距离、速度同步与航向一致性之间呈现更均衡的综合表现。由于仅前向预测方案的末 $10\ \mathrm{s}$ 距离 MAE 略低于联合方案，不能简单宣称联合方案在所有单一指标上均最优；这些比较结果支持其在本实验条件下具有较优总体折中的判断。
 
-> **图 X 四种延迟补偿方案的 XY 轨迹。** 文件：`four_compensation_xy.png`。
+> **图 X 四种延迟补偿方案的 XY 轨迹。**
 
-> **图 X 四种延迟补偿方案的距离误差。** 文件：`four_compensation_position_error.png`。
+> **图 X 四种延迟补偿方案的距离误差。**
 
-> **图 X 四种延迟补偿方案的速度差。** 文件：`four_compensation_velocity_error.png`。
+> **图 X 四种延迟补偿方案的速度差。**
 
-> **图 X 四种延迟补偿方案的相对航向误差。** 文件：`four_compensation_yaw_error.png`。
+> **图 X 四种延迟补偿方案的相对航向误差。**
 
 ## X.6 本章小结
 
@@ -106,3 +106,16 @@ $$
 | 线性控制 | `6d_artstein_lpc_vs_hpc(no_fora)_20260922_150051` |
 | 线性控制 | `6d_artstein_lpc_vs_hpc(no_fora)_20260922_150513` |
 | 线性控制 | `6d_artstein_lpc_vs_hpc(no_fora)_20260922_151019` |
+
+## 附录 B 图表文件清单
+
+| 图表内容 | 文件名 |
+| --- | --- |
+| 齐次/线性控制 XY 轨迹 | `homogeneous_vs_linear_xy.png` |
+| 齐次/线性控制距离误差 | `homogeneous_vs_linear_position_error.png` |
+| 齐次/线性控制速度差 | `homogeneous_vs_linear_velocity_error.png` |
+| 齐次/线性控制相对航向误差 | `homogeneous_vs_linear_yaw_error.png` |
+| 四种补偿方案 XY 轨迹 | `four_compensation_xy.png` |
+| 四种补偿方案距离误差 | `four_compensation_position_error.png` |
+| 四种补偿方案速度差 | `four_compensation_velocity_error.png` |
+| 四种补偿方案相对航向误差 | `four_compensation_yaw_error.png` |
