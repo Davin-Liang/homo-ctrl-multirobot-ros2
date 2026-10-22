@@ -27,8 +27,11 @@ class PlotHomogeneityMetricsTableTest(unittest.TestCase):
             'EmptyCsv', 'InvalidData', 'InvalidTime', 'isfinite(values)',
             'homogeneity_metrics_table.xlsx',
             'homogeneity_metrics_table.csv',
-            'writetable(export_table, xlsx_path)',
-            "writetable(export_table, csv_path, 'Encoding', 'UTF-8')",
+            'writecell(export_cells, xlsx_path)',
+            "writecell(export_cells, csv_path, 'Encoding', 'UTF-8')",
+            '中文指标', '全程距离 MAE (m)', '末 10 s 距离 MAE (m)',
+            '全程相对航向 RMS (rad)', '末 10 s 相对航向 RMS (rad)',
+            '全程速度差 MAE (m/s)', '末 10 s 速度差 MAE (m/s)',
             "'%.4f ± %.4f'",
         )
         for token in required:
