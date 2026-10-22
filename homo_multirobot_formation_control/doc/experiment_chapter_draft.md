@@ -56,7 +56,7 @@ $$
 
 ## X.4 齐次控制与线性控制对比
 
-为比较广义齐次反馈与线性反馈的实际跟踪能力，分别选取两类控制器的三条实物记录计算组级指标。线性控制记录为 `6d_artstein_lpc_vs_hpc(no_fora)_20260922_150051`、`6d_artstein_lpc_vs_hpc(no_fora)_20260922_150513` 和 `6d_artstein_lpc_vs_hpc(no_fora)_20260922_151019`；齐次控制使用表 X 对应的三条基线记录。图 X、图 X、图 X 和图 X 分别对应 XY 轨迹、距离误差、速度差和相对航向误差，文件依次为 `homogeneous_vs_linear_xy.png`、`homogeneous_vs_linear_position_error.png`、`homogeneous_vs_linear_velocity_error.png` 和 `homogeneous_vs_linear_yaw_error.png`。
+为比较广义齐次反馈与线性反馈的实际跟踪能力，两类控制器均选取三次独立实物试验计算组级指标，具体数据记录见附录 A。图 X、图 X、图 X 和图 X 分别对应 XY 轨迹、距离误差、速度差和相对航向误差，文件依次为 `homogeneous_vs_linear_xy.png`、`homogeneous_vs_linear_position_error.png`、`homogeneous_vs_linear_velocity_error.png` 和 `homogeneous_vs_linear_yaw_error.png`。
 
 量化结果表明，齐次控制在本组试验中显著减小了编队误差。齐次控制的全程距离 MAE 为 $0.0642\pm0.0002\ \mathrm{m}$，线性控制为 $0.4638\pm0.0069\ \mathrm{m}$；末 $10\ \mathrm{s}$ 距离 MAE 分别为 $0.0332\pm0.0027\ \mathrm{m}$ 与 $0.5346\pm0.0053\ \mathrm{m}$。相应地，全程速度差 MAE 从线性控制的 $0.2791\pm0.0021\ \mathrm{m/s}$ 降至 $0.0702\pm0.0029\ \mathrm{m/s}$，全程相对航向 RMS 从 $0.1271\pm0.0135\ \mathrm{rad}$ 降至 $0.0476\pm0.0035\ \mathrm{rad}$。
 
@@ -93,3 +93,16 @@ $$
 实物实验表明，在本文的圆周 Leader--Follower 任务中，较负的齐次度设置能够获得较小的距离误差和速度失配；与所测试的线性基线相比，齐次反馈在位置、航向和速度同步指标上均表现出更好的跟踪性能。延迟补偿消融进一步表明，执行器前向预测能够显著降低稳态距离偏差，而 Artstein 补偿与前向预测联合使用可改善全程综合性能。
 
 上述结果验证了所提控制与补偿结构在实际采样、时延、噪声和执行器动态条件下的工程有效性。但理论部分的有限时间性质建立在无约束名义模型及相应齐次条件上；实际系统还包含离散采样、速度/加速度饱和、通信与执行器不确定性，故不宜据此宣称严格有限时间收敛。实验结果应被理解为对闭环跟踪性能和补偿收益的实证验证。
+
+## 附录 A 齐次/线性对比实验数据记录
+
+为便于复核 X.4 节的组级统计，齐次控制与线性控制各使用以下三条原始记录目录。
+
+| 控制器 | 原始记录目录 |
+| --- | --- |
+| 齐次控制 | `6d_artstein_no_forw_vs_forw_20260922_112130` |
+| 齐次控制 | `6d_artstein_no_forw_vs_forw_20260922_112637` |
+| 齐次控制 | `6d_artstein_no_forw_vs_forw_20260922_113126` |
+| 线性控制 | `6d_artstein_lpc_vs_hpc(no_fora)_20260922_150051` |
+| 线性控制 | `6d_artstein_lpc_vs_hpc(no_fora)_20260922_150513` |
+| 线性控制 | `6d_artstein_lpc_vs_hpc(no_fora)_20260922_151019` |
